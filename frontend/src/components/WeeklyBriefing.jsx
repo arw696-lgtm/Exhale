@@ -7,7 +7,7 @@ import CalendarConflicts from "./CalendarConflicts.jsx";
  * The Sunday Morning Weekly COO Briefing (Blueprint §9.1).
  * Top-level layout that stitches the three briefing sections together.
  */
-export default function WeeklyBriefing({ briefing }) {
+export default function WeeklyBriefing({ briefing, drafts = {}, onOpenDraft }) {
   const criticalCount = briefing.summary?.critical_count ?? briefing.critical_threats.length;
 
   return (
@@ -25,9 +25,17 @@ export default function WeeklyBriefing({ briefing }) {
             ⚠ {criticalCount} Critical Threat{criticalCount === 1 ? "" : "s"} Detected
           </h2>
           <div className="space-y-4">
-            {briefing.critical_threats.map((item) => (
-              <ThreatCard key={item.obligation_id} item={item} />
-            ))}
+            {briefing.critical_threats.map((item) => {
+              const id = item.obligation_id ?? item.obligation_node_id;
+              return (
+                <ThreatCard
+                  key={id}
+                  item={item}
+                  draft={drafts[id]}
+                  onOpenDraft={onOpenDraft}
+                />
+              );
+            })}
           </div>
         </section>
       )}

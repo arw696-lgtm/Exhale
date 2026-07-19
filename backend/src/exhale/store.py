@@ -17,6 +17,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 
+from exhale.actions import ActionDraft, ActionEngine, mark_obligation_resolved
 from exhale.graph import Edge, EdgeType, KnowledgeGraph, Node, NodeType
 from exhale.routing import RecordStatus, RoutingDecision, route_extraction
 from exhale.schemas import ExtractionPayload
@@ -63,6 +64,7 @@ class HouseholdStore:
     def __init__(self) -> None:
         self._graphs: dict[str, KnowledgeGraph] = {}
         self._ledger: dict[str, list[LedgerEntry]] = {}
+        self._profiles: dict[str, dict] = {}
         self._lock = threading.RLock()
 
     # -- graph access ---------------------------------------------------------
@@ -73,6 +75,36 @@ class HouseholdStore:
     def set_graph(self, family_id: str, graph: KnowledgeGraph) -> None:
         with self._lock:
             self._graphs[family_id] = graph
+
+    def set_profile(self, family_id: str, **profile) -> None:
+        with self._lock:
+            self._profiles.setdefault(family_id, {}).update(profile)
+
+    def profile(self, family_id: str) -> dict:
+        with self._lock:
+            return dict(self._profiles.get(family_id, {}))
+
+    # -- action layer (§6, §10) ----------------------------------------------
+    def drafts(self, family_id: str) -> list[ActionDraft]:
+        """Generate approvable action drafts for every open dependency gap."""
+
+        with self._lock:
+            graph = self._graphs.get(family_id)
+            if graph is None:
+                return []
+            parent = self._profiles.get(family_id, {}).get("parent_first_name", "there")
+            return ActionEngine(graph, parent_first_name=parent).draft_all()
+
+    def approve_action(
+        self, family_id: str, obligation_node_id: str, *, resolution: str = "COMPLETED"
+    ) -> None:
+        """Execute an approved action by resolving its obligation in the graph."""
+
+        with self._lock:
+            graph = self._graphs.get(family_id)
+            if graph is None:
+                raise KeyError(f"No graph for family {family_id!r}")
+            mark_obligation_resolved(graph, obligation_node_id, resolution=resolution)
 
     def ledger(self, family_id: str) -> list[LedgerEntry]:
         with self._lock:

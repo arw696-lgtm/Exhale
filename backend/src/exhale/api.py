@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from exhale import __version__
 from exhale.briefing import build_weekly_briefing
@@ -27,6 +28,7 @@ from exhale.store import HouseholdStore
 
 store = HouseholdStore()
 seed_demo(store)
+store.set_profile(DEMO_FAMILY_ID, parent_first_name="Andrew")
 
 app = FastAPI(
     title="Exhale API",
@@ -81,6 +83,40 @@ def get_ledger(family_id: str) -> dict:
     """Return the extraction ledger (routing outcomes + provenance)."""
 
     return {"family_id": family_id, "entries": [e.to_dict() for e in store.ledger(family_id)]}
+
+
+@app.get("/v1/families/{family_id}/drafts")
+def get_drafts(family_id: str) -> dict:
+    """Layer 6 — recommended, rendered action drafts for each open gap (§6, §10)."""
+
+    drafts = store.drafts(family_id)
+    return {
+        "family_id": family_id,
+        "drafts": [d.model_dump(mode="json") for d in drafts],
+    }
+
+
+class ApproveActionRequest(BaseModel):
+    obligation_node_id: str
+    resolution: str = "COMPLETED"
+
+
+@app.post("/v1/families/{family_id}/actions/approve")
+def approve_action(family_id: str, req: ApproveActionRequest) -> dict:
+    """Execute an approved draft: resolve its obligation in the graph (§6)."""
+
+    try:
+        store.approve_action(
+            family_id, req.obligation_node_id, resolution=req.resolution
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "family_id": family_id,
+        "obligation_node_id": req.obligation_node_id,
+        "stage": "EXECUTED",
+        "resolution": req.resolution,
+    }
 
 
 @app.get("/v1/demo/briefing")

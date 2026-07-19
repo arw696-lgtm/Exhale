@@ -28,3 +28,32 @@ export async function fetchBriefing(familyId = DEMO_FAMILY) {
     return { briefing: briefingFixture, source: "fixture" };
   }
 }
+
+/**
+ * Fetch the Layer 6 action drafts for a family, keyed by obligation id for easy
+ * lookup from a briefing card. Returns an empty map if the API is unreachable.
+ *
+ * @returns {Promise<Record<string, object>>}
+ */
+export async function fetchDrafts(familyId = DEMO_FAMILY) {
+  try {
+    const res = await fetch(`${API_BASE}/v1/families/${familyId}/drafts`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { drafts } = await res.json();
+    return Object.fromEntries(drafts.map((d) => [d.obligation_node_id, d]));
+  } catch (err) {
+    console.warn("Exhale drafts unreachable:", err.message);
+    return {};
+  }
+}
+
+/** Approve a drafted action; resolves the obligation on the backend. */
+export async function approveAction(obligationNodeId, familyId = DEMO_FAMILY) {
+  const res = await fetch(`${API_BASE}/v1/families/${familyId}/actions/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ obligation_node_id: obligationNodeId }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}

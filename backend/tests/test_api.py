@@ -75,6 +75,48 @@ def test_ledger_endpoint():
     assert len(r.json()["entries"]) == 1
 
 
+def test_demo_drafts_are_generated():
+    r = client.get(f"/v1/families/{DEMO_FAMILY_ID}/drafts")
+    assert r.status_code == 200
+    drafts = r.json()["drafts"]
+    assert len(drafts) >= 2
+    critical = [d for d in drafts if d["threat_level"] == "CRITICAL"]
+    assert critical, "demo household should surface at least one critical draft"
+    assert critical[0]["requires_approval"] is True
+    assert "CRITICAL THREAT" in critical[0]["body"]
+    # Personalized with the demo family's parent name.
+    assert "Hey Andrew" in critical[0]["body"]
+
+
+def test_approve_action_resolves_gap_and_updates_briefing():
+    fam = "family_approve_api"
+    client.post(f"/v1/families/{fam}/extractions", json={
+        "extracted_event": "Field Trip Permission Slip",
+        "target_person_name": "Olivia",
+        "event_date": "2026-08-25",
+        "deadline_date": "2026-08-01",
+        "action_required": True,
+        "confidence_score": 0.97,
+    })
+    drafts = client.get(f"/v1/families/{fam}/drafts").json()["drafts"]
+    assert len(drafts) == 1
+    obligation_id = drafts[0]["obligation_node_id"]
+
+    r = client.post(f"/v1/families/{fam}/actions/approve",
+                    json={"obligation_node_id": obligation_id})
+    assert r.status_code == 200
+    assert r.json()["stage"] == "EXECUTED"
+
+    # After execution the gap is gone.
+    assert client.get(f"/v1/families/{fam}/drafts").json()["drafts"] == []
+
+
+def test_approve_unknown_obligation_is_404():
+    r = client.post(f"/v1/families/{DEMO_FAMILY_ID}/actions/approve",
+                    json={"obligation_node_id": "ob_does_not_exist"})
+    assert r.status_code == 404
+
+
 def test_invalid_confidence_rejected_by_validation():
     r = client.post("/v1/families/x/extractions", json={
         "extracted_event": "x",

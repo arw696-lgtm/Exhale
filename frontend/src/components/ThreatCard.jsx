@@ -5,9 +5,11 @@ import { threatPresentation, components } from "../brand/tokens.js";
  * A single critical-threat card (Blueprint §8.3, §9.1).
  * Uses a solid vertical Looming Amber indicator bar along the left boundary.
  */
-export default function ThreatCard({ item }) {
+export default function ThreatCard({ item, draft, onOpenDraft }) {
   const preset = threatPresentation[item.threat_level] ?? threatPresentation.CRITICAL;
   const tomorrow = item.hours_until_deadline <= 36;
+  const primaryLabel = draft?.primary_action_label ?? item.primary_action ?? "Review Draft";
+  const obligationId = item.obligation_id ?? item.obligation_node_id;
 
   return (
     <article
@@ -53,11 +55,13 @@ export default function ThreatCard({ item }) {
             {item.secondary_action}
           </button>
         )}
-        {item.primary_action && (
-          <button className="rounded-full bg-sanctuary-navy px-4 py-1.5 font-micro text-sm font-semibold text-white transition hover:opacity-90">
-            {item.primary_action} →
-          </button>
-        )}
+        <button
+          onClick={() => onOpenDraft?.(obligationId)}
+          disabled={!draft && !onOpenDraft}
+          className="rounded-full bg-sanctuary-navy px-4 py-1.5 font-micro text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+        >
+          {primaryLabel} →
+        </button>
       </div>
     </article>
   );

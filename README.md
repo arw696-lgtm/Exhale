@@ -21,7 +21,7 @@ core, testable layers of the architecture.
 
 | Layer | Responsibility | In this repo |
 |------|----------------|--------------|
-| 6 · Action | Suggest → Draft → Execute | Briefing actions (frontend) |
+| 6 · Action | Suggest → Draft → Execute | `backend/.../actions.py`, `templates.py` |
 | 5 · Prediction | Contextual foresight | `backend/.../forgetting_engine.py` |
 | 4 · Memory | Recurring patterns & ledgers | graph properties / ledger table |
 | 3 · Knowledge Graph | Entities & relationships | `backend/.../graph.py`, `db/schema.sql` |
@@ -35,8 +35,9 @@ Exhale/
 ├── backend/            Python analytical core + HTTP service
 │   ├── src/exhale/     schemas · routing · graph · forgetting_engine ·
 │   │                   briefing · store · seed · api (FastAPI) ·
-│   │                   crypto · secure (Zero-Knowledge Core)
-│   ├── tests/          pytest suite (61 tests)
+│   │                   crypto · secure (Zero-Knowledge Core) ·
+│   │                   actions · templates (Action engine)
+│   ├── tests/          pytest suite (80 tests)
 │   └── examples/       end-to-end demo pipeline
 ├── db/
 │   └── schema.sql      Zero-Knowledge encrypted storage schema (§5.3)
@@ -51,7 +52,7 @@ Exhale/
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 61 passing
+python -m pytest             # 80 passing
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -66,6 +67,8 @@ Key endpoints (see `src/exhale/api.py`):
 | `POST` | `/v1/families/{fid}/extractions` | ingest → route (§3.3) → graph |
 | `GET` | `/v1/families/{fid}/briefing` | Weekly COO Briefing (§9.1) |
 | `GET` | `/v1/families/{fid}/ledger` | extraction ledger + provenance |
+| `GET` | `/v1/families/{fid}/drafts` | recommended action drafts (§6, §10) |
+| `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
 
 ### Frontend
 
@@ -103,6 +106,16 @@ Risk Score = Likelihood of Forgetting (P_f) × Impact of Forgetting (I_f)
 
 and stratifies it into 🔴 CRITICAL (high-impact, ≤ 36h), 🟡 IMPORTANT
 (≤ 14 days), or 🔵 ADVISORY.
+
+**Action engine (§6, §10).** Each gap advances along the controlled-autonomy
+path `Observe → Recommend → Draft → Execute with Approval → Autonomous`. The
+engine infers the action type (sign form / request record / purchase supplies /
+resolve conflict), renders the matching §10 template — a CRITICAL gap becomes a
+PUSH "Critical Deadline Alarm", an IMPORTANT gap a briefing "Dependency Gap"
+element — and stops at the approval gate. Approving executes the draft and
+resolves the obligation in the graph, so it drops out of the next briefing. The
+frontend surfaces this: the briefing's "Review & Sign Draft" button opens the
+rendered draft in a modal with an approve action.
 
 ## Security — Zero-Knowledge Core (§5)
 
