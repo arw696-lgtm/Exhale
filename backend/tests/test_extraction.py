@@ -11,13 +11,13 @@ from exhale.routing import ConfidenceBand, classify_confidence
 REF = date(2026, 7, 19)  # a Sunday
 
 
-def _msg(subject, body, *, domain=None, attachments=()):
+def _msg(subject, body, *, domain=None, attachments=(), received=None):
     return RawMessage(
         source_id="msg_1",
         channel="fixture",
         subject=subject,
         body=body,
-        received_at=datetime(2026, 7, 19, tzinfo=timezone.utc),
+        received_at=received or datetime(2026, 7, 19, tzinfo=timezone.utc),
         sender=f"noreply@{domain}" if domain else None,
         sender_domain=domain,
         attachments=attachments,
@@ -118,6 +118,56 @@ def test_reschedule_picks_new_confirmed_date_not_canceled_one():
     payload = extract_payload(raw, _ctx())
     assert payload is not None
     assert payload.event_date == date(2026, 7, 30)  # not the canceled 2026-07-09
+
+
+def test_next_week_resolves_to_following_monday_of_send_date():
+    # Real-world pattern: "Your Camp Session Begins Next Week" — previously
+    # skipped entirely because "next week" carried no resolvable date.
+    raw = _msg(
+        "Camp is next week!",
+        "Your Camp Session Begins Next Week. Please read the details.",
+        received=datetime(2026, 7, 13, tzinfo=timezone.utc),  # a Monday
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 7, 20)  # Monday of the following week
+
+
+def test_relative_dates_resolve_on_message_timeline_not_scan_time():
+    # "tomorrow" in an email sent July 10 means July 11 — even when the retro
+    # scan runs on July 19.
+    raw = _msg(
+        "Form reminder",
+        "The field form is due tomorrow.",
+        received=datetime(2026, 7, 10, tzinfo=timezone.utc),
+    )
+    payload = extract_payload(raw, _ctx())  # ctx reference date is July 19
+    assert payload is not None
+    assert payload.deadline_date == date(2026, 7, 11)
+
+
+def test_recent_slash_date_stays_in_current_year():
+    # "Camp this Week 7/13" received 7/12 must resolve to 2026-07-13, not roll
+    # forward to 2027 (the year-rollover bug found in the live Gmail scan).
+    raw = _msg(
+        "ISLA Camp this Week 7/13",
+        "Registration for the upcoming week closed on Wednesday.",
+        received=datetime(2026, 7, 12, tzinfo=timezone.utc),
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 7, 13)
+
+
+def test_this_weekend_resolves_to_saturday():
+    raw = _msg(
+        "Tournament",
+        "The tournament is this weekend.",
+        received=datetime(2026, 7, 15, tzinfo=timezone.utc),  # a Wednesday
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 7, 18)  # that week's Saturday
 
 
 def test_footer_noise_does_not_break_extraction():

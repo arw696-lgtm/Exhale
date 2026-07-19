@@ -65,6 +65,8 @@ _DATE_PATTERNS = [
     re.compile(rf"\b(?:{_MONTHS})\.?\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?\b", re.I),
     re.compile(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b"),                      # 8/25 or 8/25/2026
     re.compile(r"\b(?:tomorrow|today|tonight)\b", re.I),
+    re.compile(r"\b(?:next|this)\s+week(?:end)?\b", re.I),                # next week / this weekend
+    re.compile(r"\bnext\s+month\b", re.I),
     re.compile(r"\b(?:mon|tues|wednes|thurs|fri|satur|sun)day\b", re.I),
 ]
 _YEAR_RE = re.compile(r"\b\d{4}\b")
@@ -90,13 +92,22 @@ class _DateHit:
 def _resolve_token(token: str, reference: date) -> tuple[date, bool] | None:
     """Parse a single date token → (date, explicit?) or None."""
 
-    low = token.strip().lower()
+    low = re.sub(r"\s+", " ", token.strip().lower())
     ref_dt = datetime(reference.year, reference.month, reference.day)
 
-    if low in ("today", "tonight"):
+    if low in ("today", "tonight", "this week"):
         return reference, False
     if low == "tomorrow":
         return reference + timedelta(days=1), False
+    if low == "next week":
+        # The Monday of the following week.
+        return reference + timedelta(days=7 - reference.weekday()), False
+    if low in ("this weekend", "next weekend"):
+        saturday = reference + timedelta(days=(5 - reference.weekday()) % 7)
+        return saturday + (timedelta(days=7) if low.startswith("next") else timedelta()), False
+    if low == "next month":
+        year, month = (reference.year + 1, 1) if reference.month == 12 else (reference.year, reference.month + 1)
+        return date(year, month, 1), False
     if low in _WEEKDAYS:
         target = _WEEKDAYS.index(low)
         delta = (target - reference.weekday()) % 7
@@ -169,7 +180,10 @@ def extract_payload(raw: RawMessage, ctx: ExtractionContext | None = None) -> Ex
     if not corpus.strip():
         return None
 
-    hits = _find_dates(corpus, ctx.reference_date)
+    # Resolve dates on the *message's* timeline: "tomorrow" in an email sent
+    # last week means the day after it was sent, not the day after the scan.
+    reference = raw.received_at.date() if raw.received_at else ctx.reference_date
+    hits = _find_dates(corpus, reference)
     if not hits:
         return None
 
