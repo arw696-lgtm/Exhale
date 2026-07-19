@@ -32,14 +32,15 @@ core, testable layers of the architecture.
 
 ```
 Exhale/
-├── backend/            Python analytical core (Pydantic, dependency-light)
-│   ├── src/exhale/     schemas · routing · graph · forgetting_engine · briefing
-│   ├── tests/          pytest suite (31 tests)
+├── backend/            Python analytical core + HTTP service
+│   ├── src/exhale/     schemas · routing · graph · forgetting_engine ·
+│   │                   briefing · store · seed · api (FastAPI)
+│   ├── tests/          pytest suite (43 tests)
 │   └── examples/       end-to-end demo pipeline
 ├── db/
 │   └── schema.sql      Zero-Knowledge encrypted storage schema (§5.3)
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
-    └── src/            brand tokens · briefing components
+    └── src/            brand tokens · briefing components · API client
 ```
 
 ## Quick start
@@ -48,10 +49,22 @@ Exhale/
 
 ```bash
 cd backend
-pip install -e ".[dev]"      # or: pip install pydantic pytest
-python -m pytest             # 31 passing
+pip install -e ".[dev]"      # analytical core + API + test deps
+python -m pytest             # 43 passing
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
+
+# Run the HTTP service (seeds a demo household at startup):
+PYTHONPATH=src uvicorn exhale.api:app --reload    # http://localhost:8000
 ```
+
+Key endpoints (see `src/exhale/api.py`):
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | liveness |
+| `POST` | `/v1/families/{fid}/extractions` | ingest → route (§3.3) → graph |
+| `GET` | `/v1/families/{fid}/briefing` | Weekly COO Briefing (§9.1) |
+| `GET` | `/v1/families/{fid}/ledger` | extraction ledger + provenance |
 
 ### Frontend
 
@@ -61,6 +74,10 @@ npm install
 npm run dev                  # Sunday COO Briefing at localhost:5173
 npm run build
 ```
+
+The UI fetches a live briefing from the backend (`VITE_EXHALE_API`, default
+`http://localhost:8000`) and falls back to a bundled fixture when the API is
+unreachable, so it always renders.
 
 ## The analytical core
 

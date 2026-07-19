@@ -14,6 +14,12 @@ export default function DependencyWatch({ watchItems = [], completed = [] }) {
         </h2>
       </header>
 
+      {completed.length === 0 && watchItems.length === 0 && (
+        <p className="font-micro text-sm text-sage-release">
+          ✓ No open prerequisites — every tracked dependency is clear.
+        </p>
+      )}
+
       <ul className="space-y-3">
         {completed.map((c) => (
           <li key={c.title} className="flex items-start gap-3 font-micro text-sm">
