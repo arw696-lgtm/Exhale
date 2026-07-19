@@ -16,12 +16,18 @@ out of the box. Run with::
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from exhale import __version__
 from exhale.briefing import build_weekly_briefing
+from exhale.connectors.base import RawMessage
+from exhale.connectors.memory import FixtureConnector
+from exhale.extraction import ExtractionContext
+from exhale.retro_scan import run_retro_scan
 from exhale.schemas import ExtractionPayload
 from exhale.seed import DEMO_FAMILY_ID, seed_demo
 from exhale.store import HouseholdStore
@@ -116,6 +122,65 @@ def approve_action(family_id: str, req: ApproveActionRequest) -> dict:
         "obligation_node_id": req.obligation_node_id,
         "stage": "EXECUTED",
         "resolution": req.resolution,
+    }
+
+
+class RawMessageIn(BaseModel):
+    """A raw, unstructured item pushed in from a Layer 1 connector/agent."""
+
+    source_id: str
+    channel: str = "upload"
+    subject: str = ""
+    body: str = ""
+    received_at: datetime | None = None
+    sender: str | None = None
+    sender_domain: str | None = None
+    attachment_text: str | None = None
+
+
+class ScanRequest(BaseModel):
+    """Batch of raw messages to run through the 6-month retro scan (§6)."""
+
+    messages: list[RawMessageIn]
+    known_children: list[str] = Field(default_factory=list)
+    days: int = 180
+
+
+def _to_raw(msg: RawMessageIn) -> RawMessage:
+    from exhale.connectors.base import Attachment
+
+    attachments = ()
+    if msg.attachment_text:
+        attachments = (Attachment(filename="attachment", mime_type="text/plain",
+                                  text=msg.attachment_text),)
+    return RawMessage(
+        source_id=msg.source_id,
+        channel=msg.channel,
+        subject=msg.subject,
+        body=msg.body,
+        received_at=msg.received_at or datetime.now(timezone.utc),
+        sender=msg.sender,
+        sender_domain=msg.sender_domain,
+        attachments=attachments,
+    )
+
+
+@app.post("/v1/families/{family_id}/scan")
+def scan_household(family_id: str, req: ScanRequest) -> dict:
+    """Run raw connector messages through extract → route → graph, return a
+    Household Assessment Snapshot (Blueprint §3, §6)."""
+
+    connector = FixtureConnector(_to_raw(m) for m in req.messages)
+    ctx = ExtractionContext(known_children=req.known_children)
+    result = run_retro_scan(connector, store, family_id, ctx, days=req.days)
+    return {
+        "family_id": family_id,
+        "scanned": result.scanned,
+        "extracted": result.extracted,
+        "committed": result.committed,
+        "pending": result.pending,
+        "rejected": result.rejected,
+        "snapshot": result.snapshot,
     }
 
 

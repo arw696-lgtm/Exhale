@@ -25,8 +25,8 @@ core, testable layers of the architecture.
 | 5 · Prediction | Contextual foresight | `backend/.../forgetting_engine.py` |
 | 4 · Memory | Recurring patterns & ledgers | graph properties / ledger table |
 | 3 · Knowledge Graph | Entities & relationships | `backend/.../graph.py`, `db/schema.sql` |
-| 2 · Extraction | Unstructured → structured JSON | `backend/.../schemas.py`, `routing.py` |
-| 1 · Data Collection | Gmail, Calendar, Photos, PDFs | connectors (roadmap) |
+| 2 · Extraction | Unstructured → structured JSON | `backend/.../extraction.py`, `schemas.py`, `routing.py` |
+| 1 · Data Collection | Gmail, Calendar, Photos, PDFs | `backend/.../connectors/`, `retro_scan.py` |
 
 ## Repository layout
 
@@ -36,8 +36,9 @@ Exhale/
 │   ├── src/exhale/     schemas · routing · graph · forgetting_engine ·
 │   │                   briefing · store · seed · api (FastAPI) ·
 │   │                   crypto · secure (Zero-Knowledge Core) ·
-│   │                   actions · templates (Action engine)
-│   ├── tests/          pytest suite (80 tests)
+│   │                   actions · templates (Action engine) ·
+│   │                   extraction · retro_scan · connectors/ (Data Collection)
+│   ├── tests/          pytest suite (98 tests)
 │   └── examples/       end-to-end demo pipeline
 ├── db/
 │   └── schema.sql      Zero-Knowledge encrypted storage schema (§5.3)
@@ -52,7 +53,7 @@ Exhale/
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 80 passing
+python -m pytest             # 98 passing
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -69,6 +70,7 @@ Key endpoints (see `src/exhale/api.py`):
 | `GET` | `/v1/families/{fid}/ledger` | extraction ledger + provenance |
 | `GET` | `/v1/families/{fid}/drafts` | recommended action drafts (§6, §10) |
 | `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
+| `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 
 ### Frontend
 
@@ -84,6 +86,17 @@ The UI fetches a live briefing from the backend (`VITE_EXHALE_API`, default
 unreachable, so it always renders.
 
 ## The analytical core
+
+**Data collection & extraction (§2 Layer 1–2, §3).** Connectors
+(`connectors/`) pull raw items from any channel and normalize them to a
+channel-agnostic `RawMessage`. The extraction engine (`extraction.py`) cleanses
+the text (§3.1), then derives the event, dates, deadline, responsible person,
+and a calibrated confidence score using deterministic regex + `dateutil` +
+keyword heuristics — designed as a drop-in interface an LLM extractor can
+replace. The 6-month retro scan (`retro_scan.py`) runs this over a household's
+history and emits the cold-start **Household Assessment Snapshot** (§6). Any
+source — including an agent pulling real Gmail/Calendar — feeds the same
+pipeline by wrapping items as `RawMessage`s.
 
 **Extraction contract (§3.2).** Every noisy input maps to a validated
 `ExtractionPayload`; optional entities fail cleanly to `null` rather than being

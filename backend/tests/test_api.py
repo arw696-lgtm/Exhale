@@ -117,6 +117,41 @@ def test_approve_unknown_obligation_is_404():
     assert r.status_code == 404
 
 
+def test_scan_endpoint_ingests_raw_and_returns_snapshot():
+    fam = "family_scan_api"
+    body = {
+        "known_children": ["Olivia", "Leo"],
+        "messages": [
+            {
+                "source_id": "raw1",
+                "channel": "gmail",
+                "subject": "Field Trip Permission Slip",
+                "body": "Please sign and return the slip for Olivia. Trip on "
+                        "August 25, 2026. Forms due by July 20, 2026.",
+                "sender_domain": "powerschool.com",
+            },
+            {
+                "source_id": "raw2",
+                "channel": "gmail",
+                "subject": "Just hi",
+                "body": "Nothing scheduled here.",
+            },
+        ],
+    }
+    r = client.post(f"/v1/families/{fam}/scan", json=body)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["scanned"] == 2
+    assert data["extracted"] == 1  # second message has no date
+    assert data["snapshot"]["obligation_count"] == 1
+    titles = [o["title"] for o in data["snapshot"]["forgotten_obligations"]]
+    assert "Field Trip Permission Slip" in titles
+
+    # The scanned obligation now shows up as a real briefing gap + draft.
+    assert client.get(f"/v1/families/{fam}/briefing").status_code == 200
+    assert len(client.get(f"/v1/families/{fam}/drafts").json()["drafts"]) == 1
+
+
 def test_invalid_confidence_rejected_by_validation():
     r = client.post("/v1/families/x/extractions", json={
         "extracted_event": "x",
