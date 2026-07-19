@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS family_secure_nodes (
     cryptographic_nonce     VARCHAR(24) NOT NULL,
     key_verification_tag    VARCHAR(32) NOT NULL,
 
+    -- KEK-wrapped ephemeral Data Encryption Key (envelope token, §5.2 step 3):
+    -- base64(dek_nonce || wrapped_dek_ciphertext || gcm_tag).
+    wrapped_dek             VARCHAR(96) NOT NULL,
+
     created_at              TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at              TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
@@ -69,6 +73,7 @@ CREATE TABLE IF NOT EXISTS family_secure_edges (
     encrypted_payload_blob  TEXT,
     cryptographic_nonce     VARCHAR(24),
     key_verification_tag    VARCHAR(32),
+    wrapped_dek             VARCHAR(96),
 
     confidence_score        NUMERIC(4, 3) NOT NULL DEFAULT 1.000
         CHECK (confidence_score >= 0 AND confidence_score <= 1),
@@ -114,6 +119,7 @@ CREATE TABLE IF NOT EXISTS extraction_ledger (
     encrypted_payload_blob  TEXT NOT NULL,
     cryptographic_nonce     VARCHAR(24) NOT NULL,
     key_verification_tag    VARCHAR(32) NOT NULL,
+    wrapped_dek             VARCHAR(96) NOT NULL,
 
     created_at              TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 

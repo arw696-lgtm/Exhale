@@ -34,8 +34,9 @@ core, testable layers of the architecture.
 Exhale/
 ├── backend/            Python analytical core + HTTP service
 │   ├── src/exhale/     schemas · routing · graph · forgetting_engine ·
-│   │                   briefing · store · seed · api (FastAPI)
-│   ├── tests/          pytest suite (43 tests)
+│   │                   briefing · store · seed · api (FastAPI) ·
+│   │                   crypto · secure (Zero-Knowledge Core)
+│   ├── tests/          pytest suite (61 tests)
 │   └── examples/       end-to-end demo pipeline
 ├── db/
 │   └── schema.sql      Zero-Knowledge encrypted storage schema (§5.3)
@@ -50,7 +51,7 @@ Exhale/
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 43 passing
+python -m pytest             # 61 passing
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -103,12 +104,28 @@ Risk Score = Likelihood of Forgetting (P_f) × Impact of Forgetting (I_f)
 and stratifies it into 🔴 CRITICAL (high-impact, ≤ 36h), 🟡 IMPORTANT
 (≤ 14 days), or 🔵 ADVISORY.
 
-## Security
+## Security — Zero-Knowledge Core (§5)
 
-Exhale operates under a **Zero-Knowledge Core**. Data is encrypted client-side
-(PBKDF2-derived KEK → AES-GCM-256 DEK envelope). The persistence engine stores
-only encrypted payloads, nonces, and KEK-wrapped tokens, with blind indexes for
-querying. See `db/schema.sql`.
+Data is encrypted **client-side** before it ever reaches the persistence engine,
+which stores only ciphertext:
+
+- **KEK derivation** — a 256-bit Key Encrypting Key from the household passphrase
+  + per-family salt via PBKDF2-HMAC-SHA256 (600k iterations).
+- **Envelope encryption** — each payload is sealed with a fresh ephemeral DEK
+  (AES-GCM-256); the DEK is then wrapped with the KEK. The cloud sees only the
+  encrypted blob, nonces, wrapped-DEK token, and auth tag.
+- **Blind index** — keyed HMAC of a normalized value enables equality lookups
+  without leaking plaintext; deterministic per-family, different across families.
+
+Implemented in `backend/src/exhale/crypto.py` and bridged to the graph model in
+`secure.py`; the output maps 1:1 onto `db/schema.sql`. See it end-to-end:
+
+```bash
+cd backend && PYTHONPATH=src python examples/demo_zero_knowledge.py
+```
+
+Round-trip, tamper detection (`InvalidTag`), wrong-key rejection, and blind-index
+determinism are covered by `tests/test_crypto.py` and `tests/test_secure.py`.
 
 ## Brand system (§8)
 
