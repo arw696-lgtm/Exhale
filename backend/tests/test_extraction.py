@@ -107,6 +107,19 @@ def test_attachment_text_is_part_of_corpus():
     assert payload.target_person_name == "Leo"
 
 
+def test_reschedule_picks_new_confirmed_date_not_canceled_one():
+    # Real-world pattern: a reschedule notice lists the canceled date first, then
+    # the new confirmed date. The confirmed date must win.
+    raw = _msg(
+        "Appointment Rescheduled",
+        "Your appointment on Thursday July 09, 2026 at 11:10 AM has been canceled. "
+        "Your new appointment is confirmed for Thursday July 30, 2026 10:30 AM.",
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 7, 30)  # not the canceled 2026-07-09
+
+
 def test_footer_noise_does_not_break_extraction():
     raw = _msg(
         "Picture Day",

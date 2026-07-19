@@ -36,6 +36,14 @@ _ACTION_VERBS = (
     "sign", "submit", "return", "pay", "rsvp", "register", "bring", "complete",
     "upload", "confirm", "renew", "schedule", "fill out", "send in", "permission",
 )
+# Cues that mark the *authoritative* event date when a message carries several
+# (e.g. a reschedule notice: an old canceled date and a new confirmed one). A
+# date preceded by one of these wins over other event dates. (Data-driven: real
+# appointment-reschedule emails list the canceled date first.)
+_EVENT_CONFIRM_CUES = (
+    "confirmed for", "rescheduled", "new appointment", "moved to", "now on",
+    "new time", "new date", "reschedule to",
+)
 # Sender domains that strongly imply a real household obligation (§6).
 DEFAULT_TRUSTED_DOMAINS: dict[str, float] = {
     "powerschool.com": 1.0,
@@ -76,6 +84,7 @@ class _DateHit:
     value: date
     is_deadline: bool
     explicit: bool  # a real calendar date (vs a fuzzy weekday/relative token)
+    confirmed: bool = False  # preceded by an authoritative-date cue (§ reschedules)
 
 
 def _resolve_token(token: str, reference: date) -> tuple[date, bool] | None:
@@ -121,13 +130,16 @@ def _find_dates(text: str, reference: date) -> list[_DateHit]:
             if resolved is None:
                 continue
             value, explicit = resolved
-            window = text[max(0, m.start() - 32): m.start()].lower()
-            is_deadline = any(cue in window for cue in _DEADLINE_CUES)
+            window = text[max(0, m.start() - 40): m.start()].lower()
+            confirmed = any(cue in window for cue in _EVENT_CONFIRM_CUES)
+            # A confirmed/authoritative date is an event, never a deadline.
+            is_deadline = (not confirmed) and any(cue in window for cue in _DEADLINE_CUES)
             key = (value, int(is_deadline))
             if key in seen:
                 continue
             seen.add(key)
-            hits.append(_DateHit(value=value, is_deadline=is_deadline, explicit=explicit))
+            hits.append(_DateHit(value=value, is_deadline=is_deadline,
+                                 explicit=explicit, confirmed=confirmed))
     return hits
 
 
@@ -162,8 +174,11 @@ def extract_payload(raw: RawMessage, ctx: ExtractionContext | None = None) -> Ex
         return None
 
     deadlines = sorted((h for h in hits if h.is_deadline), key=lambda h: h.value)
-    # Prefer an explicit calendar date for the event, then the earliest.
-    events = sorted((h for h in hits if not h.is_deadline), key=lambda h: (not h.explicit, h.value))
+    # Prefer a confirmed/authoritative date, then an explicit calendar date, then earliest.
+    events = sorted(
+        (h for h in hits if not h.is_deadline),
+        key=lambda h: (not h.confirmed, not h.explicit, h.value),
+    )
 
     if events:
         event_hit = events[0]
