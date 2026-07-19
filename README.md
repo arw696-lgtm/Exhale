@@ -1,0 +1,162 @@
+# Exhale
+
+**The Trusted Second Brain and Predictive Chief of Staff for Modern Households.**
+
+Exhale is an AI-powered household operating system designed to eliminate the
+invisible cognitive burden of managing family life. Rather than asking families
+to remember everything, Exhale passively collects household information, builds a
+private **Family Knowledge Graph**, detects implicit obligations, predicts
+downstream preparation chains, and surfaces operational risks *before* they
+become disruptions.
+
+> Reactive tools: **User Remembers → Manually Enters Task → Static Reminder**
+> Exhale: **System Discovers → Predicts Dependencies → Alerts → User Reviews & Acts**
+
+This repository is the production-blueprint foundation (v2.0). It implements the
+core, testable layers of the architecture.
+
+---
+
+## Architecture (6 Layers)
+
+| Layer | Responsibility | In this repo |
+|------|----------------|--------------|
+| 6 · Action | Suggest → Draft → Execute | `backend/.../actions.py`, `templates.py` |
+| 5 · Prediction | Contextual foresight | `backend/.../forgetting_engine.py` |
+| 4 · Memory | Recurring patterns & ledgers | graph properties / ledger table |
+| 3 · Knowledge Graph | Entities & relationships | `backend/.../graph.py`, `db/schema.sql` |
+| 2 · Extraction | Unstructured → structured JSON | `backend/.../extraction.py`, `schemas.py`, `routing.py` |
+| 1 · Data Collection | Gmail, Calendar, Photos, PDFs | `backend/.../connectors/`, `retro_scan.py` |
+
+## Repository layout
+
+```
+Exhale/
+├── backend/            Python analytical core + HTTP service
+│   ├── src/exhale/     schemas · routing · graph · forgetting_engine ·
+│   │                   briefing · store · seed · api (FastAPI) ·
+│   │                   crypto · secure (Zero-Knowledge Core) ·
+│   │                   actions · templates (Action engine) ·
+│   │                   extraction · retro_scan · connectors/ (Data Collection)
+│   ├── tests/          pytest suite (98 tests)
+│   └── examples/       end-to-end demo pipeline
+├── db/
+│   └── schema.sql      Zero-Knowledge encrypted storage schema (§5.3)
+└── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
+    └── src/            brand tokens · briefing components · API client
+```
+
+## Quick start
+
+### Backend
+
+```bash
+cd backend
+pip install -e ".[dev]"      # analytical core + API + test deps
+python -m pytest             # 98 passing
+PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
+
+# Run the HTTP service (seeds a demo household at startup):
+PYTHONPATH=src uvicorn exhale.api:app --reload    # http://localhost:8000
+```
+
+Key endpoints (see `src/exhale/api.py`):
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | liveness |
+| `POST` | `/v1/families/{fid}/extractions` | ingest → route (§3.3) → graph |
+| `GET` | `/v1/families/{fid}/briefing` | Weekly COO Briefing (§9.1) |
+| `GET` | `/v1/families/{fid}/ledger` | extraction ledger + provenance |
+| `GET` | `/v1/families/{fid}/drafts` | recommended action drafts (§6, §10) |
+| `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
+| `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev                  # Sunday COO Briefing at localhost:5173
+npm run build
+```
+
+The UI fetches a live briefing from the backend (`VITE_EXHALE_API`, default
+`http://localhost:8000`) and falls back to a bundled fixture when the API is
+unreachable, so it always renders.
+
+## The analytical core
+
+**Data collection & extraction (§2 Layer 1–2, §3).** Connectors
+(`connectors/`) pull raw items from any channel and normalize them to a
+channel-agnostic `RawMessage`. The extraction engine (`extraction.py`) cleanses
+the text (§3.1), then derives the event, dates, deadline, responsible person,
+and a calibrated confidence score using deterministic regex + `dateutil` +
+keyword heuristics — designed as a drop-in interface an LLM extractor can
+replace. The 6-month retro scan (`retro_scan.py`) runs this over a household's
+history and emits the cold-start **Household Assessment Snapshot** (§6). Any
+source — including an agent pulling real Gmail/Calendar — feeds the same
+pipeline by wrapping items as `RawMessage`s.
+
+**Extraction contract (§3.2).** Every noisy input maps to a validated
+`ExtractionPayload`; optional entities fail cleanly to `null` rather than being
+guessed.
+
+**Confidence routing (§3.3).**
+
+| Band | Score | Outcome |
+|------|-------|---------|
+| High | ≥ 0.92 | Commit to graph, schedule tracking |
+| Medium | 0.70–0.91 | `PENDING_VERIFICATION`, UI review |
+| Low | < 0.70 | Rejected; request clearer artifact |
+
+**Forgetting Engine (§7).** From a confirmed anchor event it traces
+`DEPENDS_ON` chains, scoring each unresolved prerequisite:
+
+```
+Risk Score = Likelihood of Forgetting (P_f) × Impact of Forgetting (I_f)
+```
+
+and stratifies it into 🔴 CRITICAL (high-impact, ≤ 36h), 🟡 IMPORTANT
+(≤ 14 days), or 🔵 ADVISORY.
+
+**Action engine (§6, §10).** Each gap advances along the controlled-autonomy
+path `Observe → Recommend → Draft → Execute with Approval → Autonomous`. The
+engine infers the action type (sign form / request record / purchase supplies /
+resolve conflict), renders the matching §10 template — a CRITICAL gap becomes a
+PUSH "Critical Deadline Alarm", an IMPORTANT gap a briefing "Dependency Gap"
+element — and stops at the approval gate. Approving executes the draft and
+resolves the obligation in the graph, so it drops out of the next briefing. The
+frontend surfaces this: the briefing's "Review & Sign Draft" button opens the
+rendered draft in a modal with an approve action.
+
+## Security — Zero-Knowledge Core (§5)
+
+Data is encrypted **client-side** before it ever reaches the persistence engine,
+which stores only ciphertext:
+
+- **KEK derivation** — a 256-bit Key Encrypting Key from the household passphrase
+  + per-family salt via PBKDF2-HMAC-SHA256 (600k iterations).
+- **Envelope encryption** — each payload is sealed with a fresh ephemeral DEK
+  (AES-GCM-256); the DEK is then wrapped with the KEK. The cloud sees only the
+  encrypted blob, nonces, wrapped-DEK token, and auth tag.
+- **Blind index** — keyed HMAC of a normalized value enables equality lookups
+  without leaking plaintext; deterministic per-family, different across families.
+
+Implemented in `backend/src/exhale/crypto.py` and bridged to the graph model in
+`secure.py`; the output maps 1:1 onto `db/schema.sql`. See it end-to-end:
+
+```bash
+cd backend && PYTHONPATH=src python examples/demo_zero_knowledge.py
+```
+
+Round-trip, tamper detection (`InvalidTag`), wrong-key rejection, and blind-index
+determinism are covered by `tests/test_crypto.py` and `tests/test_secure.py`.
+
+## Brand system (§8)
+
+60% Sanctuary Navy `#1A2B4C` · 20% Sage Release `#7C9D96` ·
+10% Looming Amber `#E29578` · 10% Pure Breath `#F8F9FA`.
+Type: Instrument Serif (display) · Inter Tight (interface) · Plus Jakarta Sans
+(micro-data). Encoded in `frontend/src/brand/tokens.js` and
+`frontend/tailwind.config.js`.

@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  background-color: #f8f9fa; /* Pure Breath — clutter isolation (§8) */
+  color: #1a2b4c; /* Sanctuary Navy */
+  -webkit-font-smoothing: antialiased;
+}

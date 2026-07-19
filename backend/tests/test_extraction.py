@@ -1,0 +1,181 @@
+"""Tests for the Layer 2 extraction engine (§3)."""
+
+from datetime import date, datetime, timezone
+
+import pytest
+
+from exhale.connectors.base import Attachment, RawMessage
+from exhale.extraction import ExtractionContext, extract_payload
+from exhale.routing import ConfidenceBand, classify_confidence
+
+REF = date(2026, 7, 19)  # a Sunday
+
+
+def _msg(subject, body, *, domain=None, attachments=(), received=None):
+    return RawMessage(
+        source_id="msg_1",
+        channel="fixture",
+        subject=subject,
+        body=body,
+        received_at=received or datetime(2026, 7, 19, tzinfo=timezone.utc),
+        sender=f"noreply@{domain}" if domain else None,
+        sender_domain=domain,
+        attachments=attachments,
+    )
+
+
+def _ctx(children=("Olivia", "Leo")):
+    return ExtractionContext(known_children=list(children), reference_date=REF)
+
+
+def test_full_signal_school_email_is_high_confidence():
+    raw = _msg(
+        "West High Field Trip Permission Slip",
+        "Please sign and return the permission slip for Olivia's field trip. "
+        "The trip is on August 25, 2026. Forms are due by July 24, 2026.",
+        domain="powerschool.com",
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 8, 25)
+    assert payload.deadline_date == date(2026, 7, 24)
+    assert payload.target_person_name == "Olivia"
+    assert payload.action_required is True
+    assert classify_confidence(payload.confidence_score) is ConfidenceBand.HIGH
+    assert payload.source_document_name == "West High Field Trip Permission Slip"
+    assert payload.source_reference == "msg_1"
+
+
+def test_medium_confidence_when_untrusted_and_no_deadline():
+    raw = _msg(
+        "Volunteer Signup",
+        "Please register for the fall festival happening on October 3, 2026.",
+        domain="gmail.com",
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 10, 3)
+    assert payload.deadline_date is None
+    assert classify_confidence(payload.confidence_score) is ConfidenceBand.MEDIUM
+
+
+def test_low_confidence_for_vague_relative_date():
+    raw = _msg("Reminder", "See you on Monday.")
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 7, 20)  # next Monday
+    assert classify_confidence(payload.confidence_score) is ConfidenceBand.LOW
+
+
+def test_no_date_returns_none():
+    assert extract_payload(_msg("Hello", "Just checking in, nothing scheduled."), _ctx()) is None
+
+
+def test_deadline_only_email_uses_deadline_as_event_date():
+    raw = _msg("Tuition", "Tuition payment is due by 9/1/2026.")
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 9, 1)
+    assert payload.deadline_date == date(2026, 9, 1)
+    assert payload.action_required is True  # deadline implies action
+
+
+def test_tomorrow_resolves_relative_to_reference():
+    raw = _msg("Form", "The field form is due tomorrow.")
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.deadline_date == date(2026, 7, 20)
+
+
+def test_person_defaults_to_none_when_no_known_child_present():
+    raw = _msg("Notice", "The assembly is on September 9, 2026.")
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.target_person_name is None
+
+
+def test_attachment_text_is_part_of_corpus():
+    raw = _msg(
+        "See attached",
+        "Details attached.",
+        attachments=(Attachment(filename="slip.pdf", mime_type="application/pdf",
+                                 text="Sign and return by August 1, 2026 for Leo."),),
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.deadline_date == date(2026, 8, 1)
+    assert payload.target_person_name == "Leo"
+
+
+def test_reschedule_picks_new_confirmed_date_not_canceled_one():
+    # Real-world pattern: a reschedule notice lists the canceled date first, then
+    # the new confirmed date. The confirmed date must win.
+    raw = _msg(
+        "Appointment Rescheduled",
+        "Your appointment on Thursday July 09, 2026 at 11:10 AM has been canceled. "
+        "Your new appointment is confirmed for Thursday July 30, 2026 10:30 AM.",
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 7, 30)  # not the canceled 2026-07-09
+
+
+def test_next_week_resolves_to_following_monday_of_send_date():
+    # Real-world pattern: "Your Camp Session Begins Next Week" — previously
+    # skipped entirely because "next week" carried no resolvable date.
+    raw = _msg(
+        "Camp is next week!",
+        "Your Camp Session Begins Next Week. Please read the details.",
+        received=datetime(2026, 7, 13, tzinfo=timezone.utc),  # a Monday
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 7, 20)  # Monday of the following week
+
+
+def test_relative_dates_resolve_on_message_timeline_not_scan_time():
+    # "tomorrow" in an email sent July 10 means July 11 — even when the retro
+    # scan runs on July 19.
+    raw = _msg(
+        "Form reminder",
+        "The field form is due tomorrow.",
+        received=datetime(2026, 7, 10, tzinfo=timezone.utc),
+    )
+    payload = extract_payload(raw, _ctx())  # ctx reference date is July 19
+    assert payload is not None
+    assert payload.deadline_date == date(2026, 7, 11)
+
+
+def test_recent_slash_date_stays_in_current_year():
+    # "Camp this Week 7/13" received 7/12 must resolve to 2026-07-13, not roll
+    # forward to 2027 (the year-rollover bug found in the live Gmail scan).
+    raw = _msg(
+        "ISLA Camp this Week 7/13",
+        "Registration for the upcoming week closed on Wednesday.",
+        received=datetime(2026, 7, 12, tzinfo=timezone.utc),
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 7, 13)
+
+
+def test_this_weekend_resolves_to_saturday():
+    raw = _msg(
+        "Tournament",
+        "The tournament is this weekend.",
+        received=datetime(2026, 7, 15, tzinfo=timezone.utc),  # a Wednesday
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 7, 18)  # that week's Saturday
+
+
+def test_footer_noise_does_not_break_extraction():
+    raw = _msg(
+        "Picture Day",
+        "Picture day is on September 4, 2026.\nUnsubscribe here to opt out.\n"
+        "© 2026 School District. All rights reserved.",
+    )
+    payload = extract_payload(raw, _ctx())
+    assert payload is not None
+    assert payload.event_date == date(2026, 9, 4)
