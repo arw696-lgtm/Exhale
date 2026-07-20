@@ -40,8 +40,14 @@ def run_retro_scan(
     *,
     days: float = RETRO_SCAN_DAYS,
     now: datetime | None = None,
+    extractor=extract_payload,
 ) -> RetroScanResult:
-    """Run the retro scan and return counts + a Household Assessment Snapshot."""
+    """Run the retro scan and return counts + a Household Assessment Snapshot.
+
+    ``extractor`` is any callable with the ``extract_payload`` interface —
+    the deterministic default, or the LLM-backed hybrid from
+    :mod:`exhale.extraction_llm`.
+    """
 
     now = now or datetime.now(timezone.utc)
     since = now - timedelta(days=days)
@@ -50,7 +56,7 @@ def run_retro_scan(
     result = RetroScanResult(family_id=family_id)
     for raw in connector.fetch(since=since):
         result.scanned += 1
-        payload = extract_payload(raw, ctx)
+        payload = extractor(raw, ctx)
         if payload is None:
             continue
         result.extracted += 1
@@ -74,6 +80,7 @@ def run_incremental_sync(
     ctx: ExtractionContext | None = None,
     *,
     now: datetime | None = None,
+    extractor=extract_payload,
 ) -> RetroScanResult:
     """Sync only what's new since the last run (Blueprint §2 Layer 1).
 
@@ -90,7 +97,9 @@ def run_incremental_sync(
     else:
         days = RETRO_SCAN_DAYS
 
-    result = run_retro_scan(connector, store, family_id, ctx, days=days, now=now)
+    result = run_retro_scan(
+        connector, store, family_id, ctx, days=days, now=now, extractor=extractor
+    )
     store.set_profile(family_id, last_sync_at=now.isoformat())
     return result
 
