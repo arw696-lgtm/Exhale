@@ -13,7 +13,7 @@ value (e.g. a person's name) to support equality lookups without leakage.
 from __future__ import annotations
 
 from exhale.crypto import EncryptedEnvelope, blind_index, decrypt_payload, encrypt_payload
-from exhale.graph import Node, NodeType
+from exhale.graph import Edge, EdgeType, Node, NodeType
 
 
 def encrypt_node(
@@ -57,4 +57,42 @@ def decrypt_node(row: dict, kek: bytes) -> Node:
         sub_type=sealed.get("sub_type"),
         properties=sealed.get("properties", {}),
         metadata=sealed.get("metadata", {}),
+    )
+
+
+def encrypt_edge(edge: Edge, family_id: str, kek: bytes) -> dict:
+    """Return a ``family_secure_edges`` row dict for ``edge``.
+
+    Topology (type, endpoints) and routing metadata stay cleartext so the
+    engine can traverse graph shape; edge ``properties`` are sealed.
+    """
+
+    envelope = encrypt_payload({"properties": edge.properties}, kek)
+    return {
+        "edge_id": edge.edge_id,
+        "family_id": family_id,
+        "edge_type": edge.type.value,
+        "source_node_id": edge.source_node_id,
+        "target_node_id": edge.target_node_id,
+        "confidence_score": edge.metadata.confidence_score,
+        "verified_by_user": edge.metadata.verified_by_user,
+        **envelope.to_columns(),
+    }
+
+
+def decrypt_edge(row: dict, kek: bytes) -> Edge:
+    """Reconstruct an :class:`Edge` from a ``family_secure_edges`` row dict."""
+
+    envelope = EncryptedEnvelope.from_columns(row)
+    sealed = decrypt_payload(envelope, kek)
+    return Edge(
+        edge_id=row["edge_id"],
+        type=EdgeType(row["edge_type"]),
+        source_node_id=row["source_node_id"],
+        target_node_id=row["target_node_id"],
+        properties=sealed.get("properties", {}),
+        metadata={
+            "confidence_score": float(row["confidence_score"]),
+            "verified_by_user": row["verified_by_user"],
+        },
     )

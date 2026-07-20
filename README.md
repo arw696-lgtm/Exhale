@@ -24,7 +24,7 @@ core, testable layers of the architecture.
 | 6 · Action | Suggest → Draft → Execute | `backend/.../actions.py`, `templates.py` |
 | 5 · Prediction | Contextual foresight | `backend/.../forgetting_engine.py` |
 | 4 · Memory | Recurring patterns & ledgers | graph properties / ledger table |
-| 3 · Knowledge Graph | Entities & relationships | `backend/.../graph.py`, `db/schema.sql` |
+| 3 · Knowledge Graph | Entities & relationships | `backend/.../graph.py`, `persistence.py`, `sql/schema.sql` |
 | 2 · Extraction | Unstructured → structured JSON | `backend/.../extraction.py`, `schemas.py`, `routing.py` |
 | 1 · Data Collection | Gmail, Calendar, Photos, PDFs | `backend/.../connectors/`, `retro_scan.py` |
 
@@ -37,11 +37,11 @@ Exhale/
 │   │                   briefing · store · seed · api (FastAPI) ·
 │   │                   crypto · secure (Zero-Knowledge Core) ·
 │   │                   actions · templates (Action engine) ·
-│   │                   extraction · retro_scan · connectors/ (Data Collection)
-│   ├── tests/          pytest suite (98 tests)
+│   │                   extraction · retro_scan · connectors/ (Data Collection) ·
+│   │                   persistence (encrypted Postgres store) ·
+│   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
+│   ├── tests/          pytest suite (110 tests)
 │   └── examples/       end-to-end demo pipeline
-├── db/
-│   └── schema.sql      Zero-Knowledge encrypted storage schema (§5.3)
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
 ```
@@ -53,12 +53,27 @@ Exhale/
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 98 passing
+python -m pytest             # 110 passing (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
 PYTHONPATH=src uvicorn exhale.api:app --reload    # http://localhost:8000
 ```
+
+**Persistence.** Without configuration the service uses a volatile in-memory
+store. Point it at Postgres and every family's graph, ledger, and profile is
+persisted **encrypted at rest** (envelope encryption per §5; the database holds
+only ciphertext plus graph topology) and survives restarts:
+
+```bash
+export EXHALE_DATABASE_URL="postgresql://user:pass@localhost:5432/exhale"
+export EXHALE_MASTER_SECRET="a-long-random-secret"   # protects per-family keys
+PYTHONPATH=src uvicorn exhale.api:app
+```
+
+The store bootstraps its own schema (`src/exhale/sql/schema.sql`) on startup.
+Per-family KEKs are derived from the master secret + a per-family random salt;
+swapping in true client-side key custody later only replaces the keyring.
 
 Key endpoints (see `src/exhale/api.py`):
 
@@ -144,7 +159,7 @@ which stores only ciphertext:
   without leaking plaintext; deterministic per-family, different across families.
 
 Implemented in `backend/src/exhale/crypto.py` and bridged to the graph model in
-`secure.py`; the output maps 1:1 onto `db/schema.sql`. See it end-to-end:
+`secure.py`; the output maps 1:1 onto `src/exhale/sql/schema.sql`. See it end-to-end:
 
 ```bash
 cd backend && PYTHONPATH=src python examples/demo_zero_knowledge.py

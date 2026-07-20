@@ -15,6 +15,14 @@ CREATE TABLE IF NOT EXISTS families (
     -- We persist only the salt + a verification tag to validate the passphrase.
     kek_salt        BYTEA        NOT NULL,
     kek_verify_tag  VARCHAR(64)  NOT NULL,
+
+    -- Encrypted household profile (parent name, preferences) — same envelope
+    -- layout as node payloads. Nullable: a family may have no profile yet.
+    encrypted_profile_blob  TEXT,
+    profile_nonce           VARCHAR(24),
+    profile_tag             VARCHAR(32),
+    profile_wrapped_dek     VARCHAR(96),
+
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -115,6 +123,9 @@ CREATE TABLE IF NOT EXISTS extraction_ledger (
     source_channel          VARCHAR(32),   -- gmail | msgraph | webcal | upload | voice
     source_reference        VARCHAR(256),  -- opaque message/file id
     source_document_name    VARCHAR(256),
+
+    -- The OBLIGATION node created when a HIGH-confidence record committed.
+    obligation_node_id      VARCHAR(64),
 
     encrypted_payload_blob  TEXT NOT NULL,
     cryptographic_nonce     VARCHAR(24) NOT NULL,

@@ -32,9 +32,35 @@ from exhale.schemas import ExtractionPayload
 from exhale.seed import DEMO_FAMILY_ID, seed_demo
 from exhale.store import HouseholdStore
 
-store = HouseholdStore()
-seed_demo(store)
-store.set_profile(DEMO_FAMILY_ID, parent_first_name="Andrew")
+def _build_store() -> HouseholdStore:
+    """Choose the store backend from the environment.
+
+    ``EXHALE_DATABASE_URL`` set → encrypted Postgres persistence (§5.3);
+    unset → volatile in-memory store (dev/tests).
+    """
+
+    import os
+
+    dsn = os.environ.get("EXHALE_DATABASE_URL")
+    if not dsn:
+        return HouseholdStore()
+    from exhale.persistence import PersistentHouseholdStore
+
+    master_secret = os.environ.get("EXHALE_MASTER_SECRET")
+    if not master_secret:
+        raise RuntimeError(
+            "EXHALE_MASTER_SECRET must be set when EXHALE_DATABASE_URL is used — "
+            "it protects every family's encryption keys."
+        )
+    return PersistentHouseholdStore(dsn, master_secret)
+
+
+store = _build_store()
+# Seed the demo household only if absent, so state (e.g. approved obligations)
+# survives service restarts under the persistent backend.
+if not store.graph(DEMO_FAMILY_ID).nodes:
+    seed_demo(store)
+    store.set_profile(DEMO_FAMILY_ID, parent_first_name="Andrew")
 
 app = FastAPI(
     title="Exhale API",
