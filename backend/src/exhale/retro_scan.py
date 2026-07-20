@@ -38,7 +38,7 @@ def run_retro_scan(
     family_id: str,
     ctx: ExtractionContext | None = None,
     *,
-    days: int = RETRO_SCAN_DAYS,
+    days: float = RETRO_SCAN_DAYS,
     now: datetime | None = None,
 ) -> RetroScanResult:
     """Run the retro scan and return counts + a Household Assessment Snapshot."""
@@ -64,6 +64,34 @@ def run_retro_scan(
             result.rejected += 1
 
     result.snapshot = _build_snapshot(store, family_id, result, now=now)
+    return result
+
+
+def run_incremental_sync(
+    connector: Connector,
+    store: HouseholdStore,
+    family_id: str,
+    ctx: ExtractionContext | None = None,
+    *,
+    now: datetime | None = None,
+) -> RetroScanResult:
+    """Sync only what's new since the last run (Blueprint §2 Layer 1).
+
+    The last-sync watermark lives in the family profile, so under the
+    persistent store it survives restarts. First run falls back to the full
+    6-month retro scan window.
+    """
+
+    now = now or datetime.now(timezone.utc)
+    last = store.profile(family_id).get("last_sync_at")
+    if last:
+        since = datetime.fromisoformat(last)
+        days = max((now - since).total_seconds() / 86400.0, 0.0)
+    else:
+        days = RETRO_SCAN_DAYS
+
+    result = run_retro_scan(connector, store, family_id, ctx, days=days, now=now)
+    store.set_profile(family_id, last_sync_at=now.isoformat())
     return result
 
 

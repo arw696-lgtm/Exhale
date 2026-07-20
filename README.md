@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (110 tests)
+│   ├── tests/          pytest suite (116 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -53,7 +53,7 @@ Exhale/
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 110 passing (incl. Postgres integration when reachable)
+python -m pytest             # 116 passing (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -86,6 +86,14 @@ Key endpoints (see `src/exhale/api.py`):
 | `GET` | `/v1/families/{fid}/drafts` | recommended action drafts (§6, §10) |
 | `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
+| `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
+
+**Live Gmail.** `connectors/gmail.py` speaks the Gmail REST API directly
+(OAuth: `EXHALE_GMAIL_ACCESS_TOKEN`, or `EXHALE_GMAIL_REFRESH_TOKEN` +
+`EXHALE_GMAIL_CLIENT_ID` + `EXHALE_GMAIL_CLIENT_SECRET` for automatic token
+renewal). Syncs are incremental: the last-sync watermark is stored in the
+family profile — persisted and encrypted under the Postgres backend — so each
+run only pulls what's new; the first run covers the 180-day retro window.
 
 ### Frontend
 

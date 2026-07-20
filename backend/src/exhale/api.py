@@ -27,7 +27,7 @@ from exhale.briefing import build_weekly_briefing
 from exhale.connectors.base import RawMessage
 from exhale.connectors.memory import FixtureConnector
 from exhale.extraction import ExtractionContext
-from exhale.retro_scan import run_retro_scan
+from exhale.retro_scan import run_incremental_sync, run_retro_scan
 from exhale.schemas import ExtractionPayload
 from exhale.seed import DEMO_FAMILY_ID, seed_demo
 from exhale.store import HouseholdStore
@@ -199,6 +199,63 @@ def scan_household(family_id: str, req: ScanRequest) -> dict:
     connector = FixtureConnector(_to_raw(m) for m in req.messages)
     ctx = ExtractionContext(known_children=req.known_children)
     result = run_retro_scan(connector, store, family_id, ctx, days=req.days)
+    return {
+        "family_id": family_id,
+        "scanned": result.scanned,
+        "extracted": result.extracted,
+        "committed": result.committed,
+        "pending": result.pending,
+        "rejected": result.rejected,
+        "snapshot": result.snapshot,
+    }
+
+
+class GmailSyncRequest(BaseModel):
+    known_children: list[str] = Field(default_factory=list)
+
+
+def _gmail_connector_from_env():
+    """Build a GmailConnector from environment credentials, or ``None``.
+
+    Either ``EXHALE_GMAIL_ACCESS_TOKEN``, or the OAuth refresh trio
+    ``EXHALE_GMAIL_REFRESH_TOKEN`` + ``EXHALE_GMAIL_CLIENT_ID`` +
+    ``EXHALE_GMAIL_CLIENT_SECRET``.
+    """
+
+    import os
+
+    access = os.environ.get("EXHALE_GMAIL_ACCESS_TOKEN")
+    refresh = os.environ.get("EXHALE_GMAIL_REFRESH_TOKEN")
+    if not access and not refresh:
+        return None
+    from exhale.connectors.gmail import GmailConnector
+
+    return GmailConnector(
+        access_token=access,
+        refresh_token=refresh,
+        client_id=os.environ.get("EXHALE_GMAIL_CLIENT_ID"),
+        client_secret=os.environ.get("EXHALE_GMAIL_CLIENT_SECRET"),
+    )
+
+
+@app.post("/v1/families/{family_id}/sync/gmail")
+def sync_gmail(family_id: str, req: GmailSyncRequest) -> dict:
+    """Pull new Gmail messages through extract → route → graph (§1, §2 Layer 1).
+
+    Incremental: only messages since the last sync (watermark persisted in the
+    family profile); first run covers the 180-day retro window.
+    """
+
+    connector = _gmail_connector_from_env()
+    if connector is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Gmail is not configured. Set EXHALE_GMAIL_ACCESS_TOKEN, or "
+                   "EXHALE_GMAIL_REFRESH_TOKEN + EXHALE_GMAIL_CLIENT_ID + "
+                   "EXHALE_GMAIL_CLIENT_SECRET.",
+        )
+    ctx = ExtractionContext(known_children=req.known_children)
+    result = run_incremental_sync(connector, store, family_id, ctx)
     return {
         "family_id": family_id,
         "scanned": result.scanned,
