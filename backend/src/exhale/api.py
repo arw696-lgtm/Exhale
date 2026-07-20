@@ -67,8 +67,17 @@ def _build_auth_store():
     return PostgresAuthStore(dsn)
 
 
+def _build_extractor():
+    """Deterministic extractor by default; LLM hybrid when configured (§3)."""
+
+    from exhale.extraction_llm import extractor_from_env
+
+    return extractor_from_env()
+
+
 store = _build_store()
 auth_store = _build_auth_store()
+pipeline_extractor = _build_extractor()
 # Seed the demo household only if absent, so state (e.g. approved obligations)
 # survives service restarts under the persistent backend.
 if not store.graph(DEMO_FAMILY_ID).nodes:
@@ -319,7 +328,9 @@ def scan_household(req: ScanRequest, family_id: str = Depends(require_family_acc
 
     connector = FixtureConnector(_to_raw(m) for m in req.messages)
     ctx = ExtractionContext(known_children=req.known_children)
-    result = run_retro_scan(connector, store, family_id, ctx, days=req.days)
+    result = run_retro_scan(
+        connector, store, family_id, ctx, days=req.days, extractor=pipeline_extractor
+    )
     return {
         "family_id": family_id,
         "scanned": result.scanned,
@@ -376,7 +387,9 @@ def sync_gmail(req: GmailSyncRequest, family_id: str = Depends(require_family_ac
                    "EXHALE_GMAIL_CLIENT_SECRET.",
         )
     ctx = ExtractionContext(known_children=req.known_children)
-    result = run_incremental_sync(connector, store, family_id, ctx)
+    result = run_incremental_sync(
+        connector, store, family_id, ctx, extractor=pipeline_extractor
+    )
     return {
         "family_id": family_id,
         "scanned": result.scanned,

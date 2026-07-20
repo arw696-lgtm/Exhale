@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (129 tests)
+│   ├── tests/          pytest suite (142 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 129 passing (incl. Postgres integration when reachable)
+python -m pytest             # 142 passing (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -109,6 +109,14 @@ another family gets 403. Enforcement defaults ON when a database is configured
 Passwords are PBKDF2 (600k iterations); session tokens are stored only as
 SHA-256 hashes. A spouse or caregiver joins the same family by signing up with
 its invite code (§13.2).
+
+**LLM extraction (optional).** Set `EXHALE_LLM_EXTRACTOR=1` (plus Anthropic API
+credentials) and the pipeline upgrades to a hybrid: the deterministic engine
+still handles anything it extracts at HIGH confidence for free, and Claude
+(`claude-opus-4-8`, structured outputs — override with `EXHALE_LLM_MODEL`) reads
+the messages the heuristics can't: prose reschedules, implicit obligations, odd
+phrasings. If the API is unreachable the deterministic result stands — the
+pipeline never breaks. See `src/exhale/extraction_llm.py`.
 
 **Live Gmail.** `connectors/gmail.py` speaks the Gmail REST API directly
 (OAuth: `EXHALE_GMAIL_ACCESS_TOKEN`, or `EXHALE_GMAIL_REFRESH_TOKEN` +
