@@ -7,16 +7,51 @@ import CalendarConflicts from "./CalendarConflicts.jsx";
  * The Sunday Morning Weekly COO Briefing (Blueprint §9.1).
  * Top-level layout that stitches the three briefing sections together.
  */
-export default function WeeklyBriefing({ briefing, drafts = {}, onOpenDraft }) {
+export default function WeeklyBriefing({ briefing, drafts = {}, onOpenDraft, user, inviteCode, onLogout }) {
   const criticalCount = briefing.summary?.critical_count ?? briefing.critical_threats.length;
+  const isAllClear =
+    criticalCount === 0 &&
+    (briefing.dependency_watch?.length ?? 0) === 0 &&
+    (briefing.completed?.length ?? 0) === 0 &&
+    (briefing.calendar_conflicts?.length ?? 0) === 0;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
+      {/* Account row */}
+      {user && (
+        <div className="mb-4 flex items-center justify-between font-micro text-xs text-sanctuary-navy/60">
+          <span>
+            {user.display_name}'s household
+            {inviteCode && (
+              <span className="ml-2 rounded-full bg-sage-release/15 px-2 py-0.5 font-semibold text-sanctuary-navy/70">
+                invite code: {inviteCode}
+              </span>
+            )}
+          </span>
+          <button onClick={onLogout} className="underline-offset-2 hover:underline">
+            Log out
+          </button>
+        </div>
+      )}
+
       {/* Masthead */}
       <header className="mb-8 flex flex-col gap-1 border-b border-sanctuary-navy/10 pb-6 sm:flex-row sm:items-baseline sm:justify-between">
         <h1 className="font-display text-4xl italic text-sanctuary-navy">Exhale Briefing</h1>
         <p className="font-micro text-sm text-sanctuary-navy/60">{briefing.week_of}</p>
       </header>
+
+      {/* Fresh-household hero */}
+      {isAllClear && (
+        <section className="mb-8 rounded-card bg-white p-8 text-center shadow-card">
+          <p className="font-display text-2xl italic text-sanctuary-navy">
+            All clear. Breathe out.
+          </p>
+          <p className="mx-auto mt-3 max-w-md font-micro text-sm text-sanctuary-navy/60">
+            Your household graph is empty so far. Connect Gmail or forward a school
+            email, and Exhale will start catching obligations before they catch you.
+          </p>
+        </section>
+      )}
 
       {/* Critical threats */}
       {criticalCount > 0 && (

@@ -58,8 +58,10 @@ def test_ingest_low_confidence_rejected_and_no_briefing():
     }
     r = client.post(f"/v1/families/{fam}/extractions", json=payload)
     assert r.json()["routing"]["status"] == "REJECTED"
-    # Nothing committed -> no graph -> 404 briefing.
-    assert client.get(f"/v1/families/{fam}/briefing").status_code == 404
+    # Nothing committed -> empty graph -> a valid all-clear briefing.
+    r2 = client.get(f"/v1/families/{fam}/briefing")
+    assert r2.status_code == 200
+    assert r2.json()["summary"]["total_gaps"] == 0
 
 
 def test_ledger_endpoint():

@@ -222,12 +222,13 @@ def ingest_extraction(payload: ExtractionPayload, family_id: str = Depends(requi
 
 @app.get("/v1/families/{family_id}/briefing")
 def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
-    """Assemble the family's Weekly COO Briefing from the current graph."""
+    """Assemble the family's Weekly COO Briefing from the current graph.
 
-    graph = store.graph(family_id)
-    if not graph.nodes:
-        raise HTTPException(status_code=404, detail=f"No graph for family {family_id!r}")
-    return build_weekly_briefing(graph)
+    A family with no graph yet (fresh signup) gets a valid all-clear briefing,
+    not an error — the empty state is a real product state.
+    """
+
+    return build_weekly_briefing(store.graph(family_id))
 
 
 @app.get("/v1/families/{family_id}/ledger")
