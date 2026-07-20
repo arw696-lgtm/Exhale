@@ -103,16 +103,25 @@ class PersistentHouseholdStore(HouseholdStore):
                 "SELECT kek_salt, kek_verify_tag FROM families WHERE family_id = %s",
                 (family_id,),
             ).fetchone()
-            if row is not None:
+            if row is not None and bytes(row[0]):
                 return self._keyring.kek_for(family_id, bytes(row[0]), row[1])
 
             salt = generate_salt()
             kek = self._keyring.kek_for(family_id, salt)
-            self._conn.execute(
-                "INSERT INTO families (family_id, kek_salt, kek_verify_tag) "
-                "VALUES (%s, %s, %s) ON CONFLICT (family_id) DO NOTHING",
-                (family_id, salt, kek_verification_tag(kek)),
-            )
+            if row is None:
+                self._conn.execute(
+                    "INSERT INTO families (family_id, kek_salt, kek_verify_tag) "
+                    "VALUES (%s, %s, %s) ON CONFLICT (family_id) DO NOTHING",
+                    (family_id, salt, kek_verification_tag(kek)),
+                )
+            else:
+                # Row pre-created by signup (auth layer) with keys pending —
+                # finish cryptographic initialization now.
+                self._conn.execute(
+                    "UPDATE families SET kek_salt = %s, kek_verify_tag = %s "
+                    "WHERE family_id = %s",
+                    (salt, kek_verification_tag(kek), family_id),
+                )
             return kek
 
     # -- hydration -------------------------------------------------------------

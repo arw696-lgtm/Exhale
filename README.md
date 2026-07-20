@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (116 tests)
+│   ├── tests/          pytest suite (129 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -48,12 +48,24 @@ Exhale/
 
 ## Quick start
 
+### Full stack in Docker
+
+```bash
+cp .env.example .env    # set POSTGRES_PASSWORD and EXHALE_MASTER_SECRET
+docker compose up --build
+# Web UI: http://localhost:8080   API: http://localhost:8000
+```
+
+Postgres + encrypted persistence + auth enforcement come up together; the web
+bundle is built with `EXHALE_PUBLIC_API_URL` (set it to your machine's LAN
+address to open Exhale on a phone).
+
 ### Backend
 
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 116 passing (incl. Postgres integration when reachable)
+python -m pytest             # 129 passing (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -87,6 +99,16 @@ Key endpoints (see `src/exhale/api.py`):
 | `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 | `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
+| `POST` | `/v1/auth/signup` | create account (+ new family, or join via invite code) |
+| `POST` | `/v1/auth/login` / `logout` | session tokens (opaque bearer, hashed at rest) |
+| `GET` | `/v1/me` | current user + family invite code |
+
+**Auth.** Every `/v1/families/{id}/*` route is family-scoped: a valid token for
+another family gets 403. Enforcement defaults ON when a database is configured
+(override with `EXHALE_REQUIRE_AUTH=0/1`); the in-memory dev mode stays open.
+Passwords are PBKDF2 (600k iterations); session tokens are stored only as
+SHA-256 hashes. A spouse or caregiver joins the same family by signing up with
+its invite code (§13.2).
 
 **Live Gmail.** `connectors/gmail.py` speaks the Gmail REST API directly
 (OAuth: `EXHALE_GMAIL_ACCESS_TOKEN`, or `EXHALE_GMAIL_REFRESH_TOKEN` +

@@ -18,11 +18,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from exhale import __version__
+from exhale.auth import AuthError, InMemoryAuthStore, User
 from exhale.briefing import build_weekly_briefing
 from exhale.connectors.base import RawMessage
 from exhale.connectors.memory import FixtureConnector
@@ -55,12 +56,60 @@ def _build_store() -> HouseholdStore:
     return PersistentHouseholdStore(dsn, master_secret)
 
 
+def _build_auth_store():
+    import os
+
+    dsn = os.environ.get("EXHALE_DATABASE_URL")
+    if not dsn:
+        return InMemoryAuthStore()
+    from exhale.auth import PostgresAuthStore
+
+    return PostgresAuthStore(dsn)
+
+
 store = _build_store()
+auth_store = _build_auth_store()
 # Seed the demo household only if absent, so state (e.g. approved obligations)
 # survives service restarts under the persistent backend.
 if not store.graph(DEMO_FAMILY_ID).nodes:
     seed_demo(store)
     store.set_profile(DEMO_FAMILY_ID, parent_first_name="Andrew")
+
+
+# --- auth plumbing ------------------------------------------------------------
+def _auth_required() -> bool:
+    """Enforcement flag, read per-request so deployments and tests control it.
+
+    Defaults ON when a database is configured (production posture), OFF for the
+    in-memory dev mode. Override either way with EXHALE_REQUIRE_AUTH=1/0.
+    """
+
+    import os
+
+    flag = os.environ.get("EXHALE_REQUIRE_AUTH")
+    if flag is not None:
+        return flag.strip().lower() in ("1", "true", "yes")
+    return bool(os.environ.get("EXHALE_DATABASE_URL"))
+
+
+def current_user(authorization: str | None = Header(default=None)) -> User | None:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    return auth_store.user_for_token(authorization.split(" ", 1)[1])
+
+
+def require_family_access(
+    family_id: str, user: User | None = Depends(current_user)
+) -> str:
+    """Guard for /v1/families/{family_id}/* — the token's family must match."""
+
+    if user is not None:
+        if user.family_id != family_id:
+            raise HTTPException(status_code=403, detail="Not a member of this family")
+        return family_id
+    if _auth_required():
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return family_id
 
 app = FastAPI(
     title="Exhale API",
@@ -82,8 +131,79 @@ def health() -> dict:
     return {"status": "ok", "product": "Exhale", "version": __version__}
 
 
+# --- auth endpoints -----------------------------------------------------------
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+    display_name: str
+    invite_code: str | None = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+def _session_response(user: User, token: str) -> dict:
+    return {
+        "token": token,
+        "user": {
+            "user_id": user.user_id,
+            "email": user.email,
+            "display_name": user.display_name,
+            "family_id": user.family_id,
+        },
+        "invite_code": auth_store.invite_code_for(user.family_id),
+    }
+
+
+@app.post("/v1/auth/signup")
+def signup(req: SignupRequest) -> dict:
+    """Create an account. Without an invite code a new family is created; with
+    one, the user joins that family (the caregiver invite loop, §13.2)."""
+
+    try:
+        user, token = auth_store.signup(
+            req.email, req.password, req.display_name, invite_code=req.invite_code
+        )
+    except (AuthError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if req.invite_code is None:
+        store.set_profile(user.family_id, parent_first_name=req.display_name)
+    return _session_response(user, token)
+
+
+@app.post("/v1/auth/login")
+def login(req: LoginRequest) -> dict:
+    try:
+        user, token = auth_store.login(req.email, req.password)
+    except AuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    return _session_response(user, token)
+
+
+@app.post("/v1/auth/logout")
+def logout(authorization: str | None = Header(default=None)) -> dict:
+    if authorization and authorization.lower().startswith("bearer "):
+        auth_store.revoke_token(authorization.split(" ", 1)[1])
+    return {"status": "logged_out"}
+
+
+@app.get("/v1/me")
+def me(user: User | None = Depends(current_user)) -> dict:
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return {
+        "user_id": user.user_id,
+        "email": user.email,
+        "display_name": user.display_name,
+        "family_id": user.family_id,
+        "invite_code": auth_store.invite_code_for(user.family_id),
+    }
+
+
 @app.post("/v1/families/{family_id}/extractions")
-def ingest_extraction(family_id: str, payload: ExtractionPayload) -> dict:
+def ingest_extraction(payload: ExtractionPayload, family_id: str = Depends(require_family_access)) -> dict:
     """Route an extraction through the confidence matrix and update the graph."""
 
     entry = store.ingest(family_id, payload)
@@ -101,7 +221,7 @@ def ingest_extraction(family_id: str, payload: ExtractionPayload) -> dict:
 
 
 @app.get("/v1/families/{family_id}/briefing")
-def get_briefing(family_id: str) -> dict:
+def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     """Assemble the family's Weekly COO Briefing from the current graph."""
 
     graph = store.graph(family_id)
@@ -111,14 +231,14 @@ def get_briefing(family_id: str) -> dict:
 
 
 @app.get("/v1/families/{family_id}/ledger")
-def get_ledger(family_id: str) -> dict:
+def get_ledger(family_id: str = Depends(require_family_access)) -> dict:
     """Return the extraction ledger (routing outcomes + provenance)."""
 
     return {"family_id": family_id, "entries": [e.to_dict() for e in store.ledger(family_id)]}
 
 
 @app.get("/v1/families/{family_id}/drafts")
-def get_drafts(family_id: str) -> dict:
+def get_drafts(family_id: str = Depends(require_family_access)) -> dict:
     """Layer 6 — recommended, rendered action drafts for each open gap (§6, §10)."""
 
     drafts = store.drafts(family_id)
@@ -134,7 +254,7 @@ class ApproveActionRequest(BaseModel):
 
 
 @app.post("/v1/families/{family_id}/actions/approve")
-def approve_action(family_id: str, req: ApproveActionRequest) -> dict:
+def approve_action(req: ApproveActionRequest, family_id: str = Depends(require_family_access)) -> dict:
     """Execute an approved draft: resolve its obligation in the graph (§6)."""
 
     try:
@@ -192,7 +312,7 @@ def _to_raw(msg: RawMessageIn) -> RawMessage:
 
 
 @app.post("/v1/families/{family_id}/scan")
-def scan_household(family_id: str, req: ScanRequest) -> dict:
+def scan_household(req: ScanRequest, family_id: str = Depends(require_family_access)) -> dict:
     """Run raw connector messages through extract → route → graph, return a
     Household Assessment Snapshot (Blueprint §3, §6)."""
 
@@ -239,7 +359,7 @@ def _gmail_connector_from_env():
 
 
 @app.post("/v1/families/{family_id}/sync/gmail")
-def sync_gmail(family_id: str, req: GmailSyncRequest) -> dict:
+def sync_gmail(req: GmailSyncRequest, family_id: str = Depends(require_family_access)) -> dict:
     """Pull new Gmail messages through extract → route → graph (§1, §2 Layer 1).
 
     Incremental: only messages since the last sync (watermark persisted in the

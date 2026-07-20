@@ -143,6 +143,34 @@ def test_wrong_master_secret_fails_loudly(store, family_id):
         imposter.close()
 
 
+def test_auth_survives_restart_and_family_keys_initialize(store, family_id):
+    from exhale.auth import PostgresAuthStore
+
+    auth = PostgresAuthStore(DSN)
+    email = f"{family_id}@example.com"
+    user, token = auth.signup(email, "password123", "Andrew")
+
+    # Auth pre-creates the family row with pending keys; the household store
+    # must finish cryptographic initialization on first data write.
+    entry = store.ingest(user.family_id, _payload())
+    assert entry.obligation_node_id is not None
+
+    # "Restart" both stores: session and data both survive.
+    auth2 = PostgresAuthStore(DSN)
+    reborn = PersistentHouseholdStore(DSN, MASTER)
+    try:
+        restored = auth2.user_for_token(token)
+        assert restored is not None and restored.family_id == user.family_id
+        assert entry.obligation_node_id in reborn.graph(user.family_id).nodes
+        # Second parent joins via invite code into the same family.
+        code = auth2.invite_code_for(user.family_id)
+        spouse, _ = auth2.signup(f"spouse_{email}", "password123", "Alicia",
+                                 invite_code=code)
+        assert spouse.family_id == user.family_id
+    finally:
+        reborn.close()
+
+
 def test_families_are_cryptographically_isolated(store, family_id):
     other = f"fam_{uuid.uuid4().hex[:10]}"
     store.ingest(family_id, _payload())
