@@ -24,7 +24,7 @@ core, testable layers of the architecture.
 | 6 · Action | Suggest → Draft → Execute | `backend/.../actions.py`, `templates.py` |
 | 5 · Prediction | Contextual foresight | `backend/.../forgetting_engine.py` |
 | 4 · Memory | Recurring patterns & ledgers | graph properties / ledger table |
-| 3 · Knowledge Graph | Entities & relationships | `backend/.../graph.py`, `db/schema.sql` |
+| 3 · Knowledge Graph | Entities & relationships | `backend/.../graph.py`, `persistence.py`, `sql/schema.sql` |
 | 2 · Extraction | Unstructured → structured JSON | `backend/.../extraction.py`, `schemas.py`, `routing.py` |
 | 1 · Data Collection | Gmail, Calendar, Photos, PDFs | `backend/.../connectors/`, `retro_scan.py` |
 
@@ -37,28 +37,55 @@ Exhale/
 │   │                   briefing · store · seed · api (FastAPI) ·
 │   │                   crypto · secure (Zero-Knowledge Core) ·
 │   │                   actions · templates (Action engine) ·
-│   │                   extraction · retro_scan · connectors/ (Data Collection)
-│   ├── tests/          pytest suite (98 tests)
+│   │                   extraction · retro_scan · connectors/ (Data Collection) ·
+│   │                   persistence (encrypted Postgres store) ·
+│   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
+│   ├── tests/          pytest suite (129 tests)
 │   └── examples/       end-to-end demo pipeline
-├── db/
-│   └── schema.sql      Zero-Knowledge encrypted storage schema (§5.3)
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
 ```
 
 ## Quick start
 
+### Full stack in Docker
+
+```bash
+cp .env.example .env    # set POSTGRES_PASSWORD and EXHALE_MASTER_SECRET
+docker compose up --build
+# Web UI: http://localhost:8080   API: http://localhost:8000
+```
+
+Postgres + encrypted persistence + auth enforcement come up together; the web
+bundle is built with `EXHALE_PUBLIC_API_URL` (set it to your machine's LAN
+address to open Exhale on a phone).
+
 ### Backend
 
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 98 passing
+python -m pytest             # 129 passing (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
 PYTHONPATH=src uvicorn exhale.api:app --reload    # http://localhost:8000
 ```
+
+**Persistence.** Without configuration the service uses a volatile in-memory
+store. Point it at Postgres and every family's graph, ledger, and profile is
+persisted **encrypted at rest** (envelope encryption per §5; the database holds
+only ciphertext plus graph topology) and survives restarts:
+
+```bash
+export EXHALE_DATABASE_URL="postgresql://user:pass@localhost:5432/exhale"
+export EXHALE_MASTER_SECRET="a-long-random-secret"   # protects per-family keys
+PYTHONPATH=src uvicorn exhale.api:app
+```
+
+The store bootstraps its own schema (`src/exhale/sql/schema.sql`) on startup.
+Per-family KEKs are derived from the master secret + a per-family random salt;
+swapping in true client-side key custody later only replaces the keyring.
 
 Key endpoints (see `src/exhale/api.py`):
 
@@ -71,6 +98,24 @@ Key endpoints (see `src/exhale/api.py`):
 | `GET` | `/v1/families/{fid}/drafts` | recommended action drafts (§6, §10) |
 | `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
+| `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
+| `POST` | `/v1/auth/signup` | create account (+ new family, or join via invite code) |
+| `POST` | `/v1/auth/login` / `logout` | session tokens (opaque bearer, hashed at rest) |
+| `GET` | `/v1/me` | current user + family invite code |
+
+**Auth.** Every `/v1/families/{id}/*` route is family-scoped: a valid token for
+another family gets 403. Enforcement defaults ON when a database is configured
+(override with `EXHALE_REQUIRE_AUTH=0/1`); the in-memory dev mode stays open.
+Passwords are PBKDF2 (600k iterations); session tokens are stored only as
+SHA-256 hashes. A spouse or caregiver joins the same family by signing up with
+its invite code (§13.2).
+
+**Live Gmail.** `connectors/gmail.py` speaks the Gmail REST API directly
+(OAuth: `EXHALE_GMAIL_ACCESS_TOKEN`, or `EXHALE_GMAIL_REFRESH_TOKEN` +
+`EXHALE_GMAIL_CLIENT_ID` + `EXHALE_GMAIL_CLIENT_SECRET` for automatic token
+renewal). Syncs are incremental: the last-sync watermark is stored in the
+family profile — persisted and encrypted under the Postgres backend — so each
+run only pulls what's new; the first run covers the 180-day retro window.
 
 ### Frontend
 
@@ -144,7 +189,7 @@ which stores only ciphertext:
   without leaking plaintext; deterministic per-family, different across families.
 
 Implemented in `backend/src/exhale/crypto.py` and bridged to the graph model in
-`secure.py`; the output maps 1:1 onto `db/schema.sql`. See it end-to-end:
+`secure.py`; the output maps 1:1 onto `src/exhale/sql/schema.sql`. See it end-to-end:
 
 ```bash
 cd backend && PYTHONPATH=src python examples/demo_zero_knowledge.py

@@ -15,8 +15,53 @@ CREATE TABLE IF NOT EXISTS families (
     -- We persist only the salt + a verification tag to validate the passphrase.
     kek_salt        BYTEA        NOT NULL,
     kek_verify_tag  VARCHAR(64)  NOT NULL,
+
+    -- Encrypted household profile (parent name, preferences) — same envelope
+    -- layout as node payloads. Nullable: a family may have no profile yet.
+    encrypted_profile_blob  TEXT,
+    profile_nonce           VARCHAR(24),
+    profile_tag             VARCHAR(32),
+    profile_wrapped_dek     VARCHAR(96),
+
+    -- Caregiver invite loop (§13.2): joining this family at signup.
+    invite_code     VARCHAR(16) UNIQUE,
+
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- -----------------------------------------------------------------------------
+-- Accounts & sessions (Part 3 — auth layer)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+    user_id         VARCHAR(64)  PRIMARY KEY,
+    email           VARCHAR(256) NOT NULL UNIQUE,
+    display_name    VARCHAR(128) NOT NULL,
+    family_id       VARCHAR(64)  NOT NULL,
+
+    -- PBKDF2-HMAC-SHA256 (600k iterations); hex-encoded digest + salt.
+    password_hash   CHAR(64)     NOT NULL,
+    password_salt   CHAR(32)     NOT NULL,
+
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_users_family
+        FOREIGN KEY (family_id) REFERENCES families (family_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_family ON users (family_id);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    -- SHA-256 of the opaque bearer token; the token itself is never stored.
+    token_hash      CHAR(64)     PRIMARY KEY,
+    user_id         VARCHAR(64)  NOT NULL,
+    expires_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_sessions_user
+        FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON auth_sessions (user_id);
 
 -- -----------------------------------------------------------------------------
 -- End-to-end encrypted graph NODES (Blueprint §5.3 verbatim contract)
@@ -116,6 +161,9 @@ CREATE TABLE IF NOT EXISTS extraction_ledger (
     source_reference        VARCHAR(256),  -- opaque message/file id
     source_document_name    VARCHAR(256),
 
+    -- The OBLIGATION node created when a HIGH-confidence record committed.
+    obligation_node_id      VARCHAR(64),
+
     encrypted_payload_blob  TEXT NOT NULL,
     cryptographic_nonce     VARCHAR(24) NOT NULL,
     key_verification_tag    VARCHAR(32) NOT NULL,
@@ -129,3 +177,19 @@ CREATE TABLE IF NOT EXISTS extraction_ledger (
 
 CREATE INDEX IF NOT EXISTS idx_ledger_status
     ON extraction_ledger (family_id, record_status);
+
+-- -----------------------------------------------------------------------------
+-- Idempotent migrations — bring databases created from earlier schema versions
+-- up to date. CREATE TABLE IF NOT EXISTS never alters existing tables, so every
+-- column added after v1 is repeated here as ADD COLUMN IF NOT EXISTS.
+-- (Migration-added columns are nullable; fresh creates carry the constraints.)
+-- -----------------------------------------------------------------------------
+ALTER TABLE families              ADD COLUMN IF NOT EXISTS encrypted_profile_blob TEXT;
+ALTER TABLE families              ADD COLUMN IF NOT EXISTS profile_nonce VARCHAR(24);
+ALTER TABLE families              ADD COLUMN IF NOT EXISTS profile_tag VARCHAR(32);
+ALTER TABLE families              ADD COLUMN IF NOT EXISTS profile_wrapped_dek VARCHAR(96);
+ALTER TABLE families              ADD COLUMN IF NOT EXISTS invite_code VARCHAR(16) UNIQUE;
+ALTER TABLE family_secure_nodes   ADD COLUMN IF NOT EXISTS wrapped_dek VARCHAR(96);
+ALTER TABLE family_secure_edges   ADD COLUMN IF NOT EXISTS wrapped_dek VARCHAR(96);
+ALTER TABLE extraction_ledger     ADD COLUMN IF NOT EXISTS wrapped_dek VARCHAR(96);
+ALTER TABLE extraction_ledger     ADD COLUMN IF NOT EXISTS obligation_node_id VARCHAR(64);

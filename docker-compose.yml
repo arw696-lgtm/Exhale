@@ -1,0 +1,56 @@
+# Exhale — full stack: Postgres + API + web UI.
+#
+#   cp .env.example .env      # then edit the secrets
+#   docker compose up --build
+#
+# Web UI:  http://localhost:8080     API: http://localhost:8000
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: exhale
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - exhale_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      EXHALE_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/exhale
+      EXHALE_MASTER_SECRET: ${EXHALE_MASTER_SECRET:?set EXHALE_MASTER_SECRET in .env}
+      # Auth enforcement defaults ON when a database is configured.
+      EXHALE_REQUIRE_AUTH: ${EXHALE_REQUIRE_AUTH:-1}
+      # Optional live Gmail ingestion (see README):
+      EXHALE_GMAIL_ACCESS_TOKEN: ${EXHALE_GMAIL_ACCESS_TOKEN:-}
+      EXHALE_GMAIL_REFRESH_TOKEN: ${EXHALE_GMAIL_REFRESH_TOKEN:-}
+      EXHALE_GMAIL_CLIENT_ID: ${EXHALE_GMAIL_CLIENT_ID:-}
+      EXHALE_GMAIL_CLIENT_SECRET: ${EXHALE_GMAIL_CLIENT_SECRET:-}
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Where the *browser* reaches the API. For LAN/phone access replace
+        # localhost with the host machine's address and rebuild.
+        VITE_EXHALE_API: ${EXHALE_PUBLIC_API_URL:-http://localhost:8000}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  exhale_pgdata:
