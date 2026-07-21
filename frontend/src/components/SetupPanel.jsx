@@ -30,7 +30,7 @@ const EMPTY_CG = {
 };
 
 export default function SetupPanel({ familyId, onSaved }) {
-  const [child, setChild] = useState("");
+  const [children, setChildren] = useState([""]);
   const [caregivers, setCaregivers] = useState([{ ...EMPTY_CG }, { ...EMPTY_CG }]);
   const [school, setSchool] = useState({ name: "", first: "", last: "" });
   const [busy, setBusy] = useState(false);
@@ -38,21 +38,28 @@ export default function SetupPanel({ familyId, onSaved }) {
 
   const setCg = (i, patch) =>
     setCaregivers((cgs) => cgs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  const setChildName = (i, name) =>
+    setChildren((cs) => cs.map((c, j) => (j === i ? name : c)));
 
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
+    const kids = children.map((c) => c.trim()).filter(Boolean);
     const named = caregivers.filter((c) => c.name.trim());
-    if (!child.trim() || named.length === 0) {
-      setError("Name the child and at least one caregiver.");
+    if (kids.length === 0 || named.length === 0) {
+      setError("Name at least one child and one caregiver.");
       return;
     }
     if (named.some((c) => c.works && c.days.length === 0)) {
       setError("Pick at least one workday for each caregiver who works a schedule.");
       return;
     }
+    const schoolIn =
+      school.name.trim() && school.first && school.last
+        ? { name: school.name.trim(), first_day: school.first, last_day: school.last }
+        : null;
     const model = {
-      recipient: { name: child.trim() },
+      children: kids.map((name) => ({ recipient: { name }, school: schoolIn })),
       caregivers: named.map((c) => ({
         name: c.name.trim(),
         role: c.role,
@@ -62,10 +69,6 @@ export default function SetupPanel({ familyId, onSaved }) {
           : null,
         events: [],
       })),
-      school:
-        school.name.trim() && school.first && school.last
-          ? { name: school.name.trim(), first_day: school.first, last_day: school.last }
-          : null,
     };
     setBusy(true);
     try {
@@ -97,10 +100,28 @@ export default function SetupPanel({ familyId, onSaved }) {
       <form onSubmit={submit} className="space-y-4 font-micro text-sm">
         <div>
           <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/50">
-            Child who needs supervision
+            Children who need supervision
           </label>
-          <input className={input} value={child} placeholder="e.g. Stevie"
-                 onChange={(e) => setChild(e.target.value)} />
+          <div className="space-y-2">
+            {children.map((name, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input className={input} value={name}
+                       placeholder={i === 0 ? "e.g. Stevie" : "Another child"}
+                       onChange={(e) => setChildName(i, e.target.value)} />
+                {children.length > 1 && (
+                  <button type="button" aria-label={`Remove child ${i + 1}`}
+                          onClick={() => setChildren((cs) => cs.filter((_, j) => j !== i))}
+                          className="text-sanctuary-navy/40 hover:text-looming-amber">
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={() => setChildren((cs) => [...cs, ""])}
+                  className="mt-2 text-xs font-medium text-sanctuary-navy/60 underline-offset-2 hover:underline">
+            + Add another child
+          </button>
         </div>
 
         {caregivers.map((cg, i) => (
@@ -173,6 +194,11 @@ export default function SetupPanel({ familyId, onSaved }) {
           <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/50">
             School year (optional — or snap the calendar later)
           </label>
+          <p className="mb-2 text-xs text-sanctuary-navy/50">
+            Applies to every child above. Different schools or a non-school-age
+            kid? Save now, then snap each school's calendar photo to set them
+            per child.
+          </p>
           <input className={input} value={school.name} placeholder="School name"
                  onChange={(e) => setSchool({ ...school, name: e.target.value })} />
           <div className="mt-2 flex items-center gap-2 text-sanctuary-navy/70">

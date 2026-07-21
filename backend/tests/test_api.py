@@ -255,8 +255,8 @@ def test_coverage_model_saves_then_care_gaps_surfaces_concert_sitter_gaps():
     fam = "family_coverage_model"
     r = client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
     assert r.status_code == 200
-    assert r.json()["recipient"] == "Stevie"
-    assert r.json()["school"] == "ISLA"
+    assert r.json()["children"] == ["Stevie"]
+    assert r.json()["schools"] == {"Stevie": "ISLA"}
 
     r2 = client.get(f"/v1/families/{fam}/care-gaps",
                     params={"from": "2026-09-01", "to": "2026-10-31"})

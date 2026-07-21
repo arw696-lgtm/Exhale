@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from exhale.coverage import (
     Caregiver,
@@ -20,6 +20,7 @@ from exhale.coverage import (
     CareProgram,
     CareRecipient,
     CoverageEngine,
+    FamilyCoverage,
     SchoolCalendar,
     WorkPattern,
 )
@@ -72,13 +73,43 @@ class CareRecipientIn(BaseModel):
     supervised_end: time = time(22, 0)
 
 
-class CoverageModelIn(BaseModel):
-    """A household's full care-coverage configuration."""
+class ChildIn(BaseModel):
+    """One supervised child: their hours, their school, their programs."""
 
     recipient: CareRecipientIn
-    caregivers: list[CaregiverIn]
     school: SchoolCalendarIn | None = None
     care_programs: list[CareProgramIn] = Field(default_factory=list)
+
+
+class CoverageModelIn(BaseModel):
+    """A household's full care-coverage configuration.
+
+    Canonical shape: ``children`` (any number of kids) over a shared
+    ``caregivers`` roster. The original single-child fields (``recipient`` /
+    ``school`` / ``care_programs``) remain accepted for stored profiles and
+    older clients — a validator folds them into a one-entry ``children`` list
+    and clears them, so every parsed model has exactly one shape.
+    """
+
+    children: list[ChildIn] = Field(default_factory=list)
+    caregivers: list[CaregiverIn]
+    # Legacy single-child fields — normalized into `children`, then cleared.
+    recipient: CareRecipientIn | None = None
+    school: SchoolCalendarIn | None = None
+    care_programs: list[CareProgramIn] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _normalize_children(self) -> "CoverageModelIn":
+        if not self.children:
+            if self.recipient is None:
+                raise ValueError("coverage model needs at least one child "
+                                 "(children=[...] or the legacy recipient field)")
+            self.children = [ChildIn(recipient=self.recipient, school=self.school,
+                                     care_programs=self.care_programs)]
+        self.recipient = None
+        self.school = None
+        self.care_programs = []
+        return self
 
 
 # --- Pydantic -> engine dataclasses -----------------------------------------------
@@ -130,25 +161,41 @@ def _school(s: SchoolCalendarIn) -> SchoolCalendar:
     )
 
 
-def build_engine(model: CoverageModelIn, *, now: datetime | None = None) -> CoverageEngine:
-    """Reconstruct a live :class:`CoverageEngine` from stored config."""
+def build_engines(model: CoverageModelIn, *, now: datetime | None = None) -> list[CoverageEngine]:
+    """One live :class:`CoverageEngine` per child, over the shared caregivers."""
 
-    recipient = CareRecipient(
-        name=model.recipient.name,
-        supervised_start=model.recipient.supervised_start,
-        supervised_end=model.recipient.supervised_end,
-    )
-    programs = tuple(
-        CareProgram(name=p.name, dates={d: (w[0], w[1]) for d, w in p.dates.items()})
-        for p in model.care_programs
-    )
-    return CoverageEngine(
-        recipient,
-        [_caregiver(c) for c in model.caregivers],
-        school=_school(model.school) if model.school else None,
-        care_programs=programs,
-        now=now,
-    )
+    caregivers = [_caregiver(c) for c in model.caregivers]
+    engines: list[CoverageEngine] = []
+    for child in model.children:
+        recipient = CareRecipient(
+            name=child.recipient.name,
+            supervised_start=child.recipient.supervised_start,
+            supervised_end=child.recipient.supervised_end,
+        )
+        programs = tuple(
+            CareProgram(name=p.name, dates={d: (w[0], w[1]) for d, w in p.dates.items()})
+            for p in child.care_programs
+        )
+        engines.append(CoverageEngine(
+            recipient,
+            caregivers,
+            school=_school(child.school) if child.school else None,
+            care_programs=programs,
+            now=now,
+        ))
+    return engines
+
+
+def build_family(model: CoverageModelIn, *, now: datetime | None = None) -> FamilyCoverage:
+    """The whole household's coverage: merged care gaps, intersected work windows."""
+
+    return FamilyCoverage(build_engines(model, now=now))
+
+
+def build_engine(model: CoverageModelIn, *, now: datetime | None = None) -> CoverageEngine:
+    """The first (or only) child's engine — the single-child compatibility path."""
+
+    return build_engines(model, now=now)[0]
 
 
 def default_range(days: int = 14) -> tuple[date, date]:
