@@ -1,6 +1,6 @@
 # Exhale — Full Project Scope & Status
 
-*As of 2026-07-21 · 12 PRs merged · 338 tests (330 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
+*As of 2026-07-21 · 15 PRs merged · 363 tests (355 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
 
 This is the complete map of the project: what Exhale is, what has been built,
 the design laws it runs on, and — most importantly for gap analysis — an honest
@@ -20,6 +20,24 @@ isn't sure, learns the family's rhythms, and — with permission — acts.
 The founding constraint, learned from live failures on real family data:
 **a household brain that guesses loses trust and dies.** Every subsystem is
 therefore built on the credibility discipline (see §4).
+
+### 1.1 The second-family thesis
+
+Exhale is being built inside one real household first, and that is a strategy,
+not a limitation: every design law in §4 was forced by a live failure on this
+family's actual data, which is evidence no synthetic test set produces. The
+thesis is that the machinery is family-shaped, not Ward-shaped — obligations
+arriving by email and photo, coverage gaps around school hours and work
+schedules, one parent asking "when can I actually work this week?" — and that
+what's genuinely specific to this household lives in configuration (the
+coverage model, learned rules, connected calendars), not in code. The honest
+qualifier: that thesis is **untested until a second family runs it**, and the
+gate is deliberate — §5C (security audit, invite-only signup, hosting, Google
+verification) is the checklist that must clear before a family we don't share
+a dinner table with is invited in. So the answer to "is this a product or a
+family tool?" is: a family tool being run hard enough to earn the right to be
+a product — and "not yet" stays the answer until §5C says otherwise.
+*(Founder's voice to refine — this paragraph states the intent as built.)*
 
 ## 2. Architecture (blueprint v2.0, six layers + cross-cutting)
 
@@ -166,12 +184,12 @@ therefore built on the credibility discipline (see §4).
 ### A. Functional gaps (product would feel these)
 | Gap | Notes |
 |---|---|
-| **No notification/push channel** | The briefing is pull-only. A 🔴 critical care gap tomorrow cannot *reach* anyone (no email/SMS/push). Arguably the largest remaining product gap. |
+| ~~No notification/push channel~~ **Closed** | Email alerts for 🔴 items shipped (`notify.py`): alert-once keys, one digest per cycle, runs with auto-sync. SMS/push remain unbuilt. |
 | **Single-child coverage model** | `CareRecipient` is singular; a two-kid family can't model both children's supervision needs yet. |
 | **No edit/delete for scheduled events** | Calendar write is create-only; no two-way sync (moving/cancelling an Exhale-written event isn't tracked). |
 | **Email thread / conversation state** | Extraction treats messages independently; a reschedule thread isn't linked into one evolving obligation (partially mitigated by anchors + corroboration). |
 | **Coverage-model editing UI** | The setup form creates; there is no UI to *edit* an existing model (re-running setup or API only). |
-| **Work-pattern flexibility** | Setup UI assumes M–F patterns; irregular/shift schedules need the API. |
+| ~~Work-pattern flexibility~~ **Closed** | Setup UI now takes any weekday combination (shift/weekend schedules); truly irregular week-to-week hours still come from calendar sync. |
 | **Care programs (e.g. Aventuras) have no UI** | API-only; no form to enter non-school-day care dates. |
 | **Recurring event writes** | `/schedule` writes single events only (no RRULE creation). |
 | **Timezone is effectively single-household** | `America/Chicago` defaults in several places; fine for the founding family, not multi-region ready. |
@@ -191,8 +209,8 @@ therefore built on the credibility discipline (see §4).
 | **Google restricted-scope verification** | Gmail scope requires Google's security review (CASA) to exceed ~100 test users; Calendar is lighter. Company-level, one-time. |
 | **Security audit** | Well-tested, never audited. Fine for the founding family; required before strangers. |
 | **Client-side key custody** | KEKs derive from a server master secret; true device-held keys are a designed-for swap (§5.1) not yet done. |
-| **Open signup** | Anyone with the URL can create an (isolated) family; no invite-gate flag yet. |
-| **Rate limiting / abuse controls** | None. |
+| ~~Open signup~~ **Closed** | `EXHALE_INVITE_ONLY=1` requires an invite code; `EXHALE_BOOTSTRAP_INVITE` lets the operator mint new families. |
+| ~~Rate limiting~~ **Basic** | Per-IP sliding-window limit on auth/OAuth endpoints (`EXHALE_RATE_LIMIT_PER_MINUTE`, in-memory, single-process). Broader abuse controls (captcha, lockout, per-account limits) unbuilt. |
 | **Backups / disaster recovery** | Nothing automated. |
 | **Ledger growth** | Append-only with full-graph rewrite persistence; fine at family scale, needs upsert strategy at scale. |
 | **Observability** | Logs only; no metrics/alerting. |
@@ -206,8 +224,7 @@ therefore built on the credibility discipline (see §4).
 
 ## 6. Suggested priority order for the next phase
 
-1. **Notifications** (email first — closes the "can Exhale reach me" gap and
-   makes 🔴 items real).
+1. ~~**Notifications**~~ Done — email alerts shipped; SMS/push when demand appears.
 2. **Deploy pack + hosting** (everything else compounds once it's live).
 3. **Multi-child coverage** (small model change, big correctness win).
 4. **Founder config tasks** (interleaved — each one lights up a built system).

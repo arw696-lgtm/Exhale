@@ -123,11 +123,13 @@ def _replay_ics(store, family_id: str, profile: dict, config: dict) -> dict:
     return {"synced_busy_events": len(events)}
 
 
-def run_cycle(store, extractor) -> dict:
+def run_cycle(store, extractor, notifier=None) -> dict:
     """One full pass over every family: replay remembered syncs, report results.
 
     Never raises for a family's failure — each unit is caught individually so a
-    broken feed can't stall the rest.
+    broken feed can't stall the rest. When a ``notifier`` is supplied, the pass
+    ends with a notification cycle — freshly synced data is exactly when new
+    🔴 items appear, so the alert email goes out the same beat.
     """
 
     report: dict = {"started_at": datetime.now().isoformat(), "families": {}}
@@ -155,17 +157,27 @@ def run_cycle(store, extractor) -> dict:
                 log.warning("auto-sync %s/%s failed: %s", family_id, name, exc)
                 family_report[name] = {"error": str(exc)}
         report["families"][family_id] = family_report
+
+    if notifier is not None:
+        from exhale.notify import run_notification_cycle
+
+        try:
+            report["notifications"] = run_notification_cycle(store, notifier)
+        except Exception as exc:  # noqa: BLE001 — alerts must never break syncing
+            log.warning("notification cycle failed: %s", exc)
+            report["notifications"] = {"error": str(exc)}
     return report
 
 
 class AutoSyncScheduler:
     """A daemon thread that runs :func:`run_cycle` every ``interval_minutes``."""
 
-    def __init__(self, store, extractor, interval_minutes: float) -> None:
+    def __init__(self, store, extractor, interval_minutes: float, notifier=None) -> None:
         if interval_minutes <= 0:
             raise ValueError("interval_minutes must be positive")
         self.store = store
         self.extractor = extractor
+        self.notifier = notifier
         self.interval_minutes = interval_minutes
         self.cycles_run = 0
         self.last_report: dict | None = None
@@ -175,7 +187,8 @@ class AutoSyncScheduler:
     def _loop(self) -> None:
         while not self._stop.wait(self.interval_minutes * 60):
             try:
-                self.last_report = run_cycle(self.store, self.extractor)
+                self.last_report = run_cycle(self.store, self.extractor,
+                                             notifier=self.notifier)
             except Exception:  # noqa: BLE001 — the loop itself must survive
                 log.exception("auto-sync cycle crashed")
             self.cycles_run += 1
@@ -205,6 +218,9 @@ def scheduler_from_env(store, extractor) -> AutoSyncScheduler | None:
         minutes = 0.0
     if minutes <= 0:
         return None
-    scheduler = AutoSyncScheduler(store, extractor, minutes)
+    from exhale.notify import notifier_from_env
+
+    scheduler = AutoSyncScheduler(store, extractor, minutes,
+                                  notifier=notifier_from_env())
     scheduler.start()
     return scheduler

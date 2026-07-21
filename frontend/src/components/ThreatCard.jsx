@@ -1,5 +1,6 @@
 import React from "react";
 import { threatPresentation, components } from "../brand/tokens.js";
+import WhyTrace from "./WhyTrace.jsx";
 
 /**
  * A single critical-threat card (Blueprint §8.3, §9.1).
@@ -48,6 +49,8 @@ export default function ThreatCard({ item, draft, onOpenDraft }) {
           </div>
         )}
       </dl>
+
+      <WhyTrace why={item.why} />
 
       <div className="mt-4 flex flex-wrap gap-2">
         {item.secondary_action && (

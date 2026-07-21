@@ -186,6 +186,41 @@ app.add_middleware(
 )
 
 
+# --- rate limiting (auth + OAuth surfaces) -------------------------------------
+from exhale.ratelimit import RateLimiter  # noqa: E402
+
+rate_limiter = RateLimiter()
+# The unauthenticated (or credential-bearing) surfaces worth throttling.
+_RATE_LIMITED_PREFIXES = ("/v1/auth", "/v1/oauth")
+
+
+def _rate_limit_per_minute() -> int:
+    """Requests allowed per client IP per minute (0 disables). Read per-request
+    so tests and deployments control it without a restart."""
+
+    import os
+
+    raw = os.environ.get("EXHALE_RATE_LIMIT_PER_MINUTE", "60").strip()
+    try:
+        return int(raw)
+    except ValueError:
+        return 60
+
+
+@app.middleware("http")
+async def _rate_limit(request, call_next):
+    if request.url.path.startswith(_RATE_LIMITED_PREFIXES):
+        from fastapi.responses import JSONResponse
+
+        client = request.client.host if request.client else "unknown"
+        if not rate_limiter.allow(client, _rate_limit_per_minute()):
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests — wait a minute and retry."},
+            )
+    return await call_next(request)
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "product": "Exhale", "version": __version__}
@@ -217,18 +252,51 @@ def _session_response(user: User, token: str) -> dict:
     }
 
 
+def _invite_only() -> bool:
+    """When EXHALE_INVITE_ONLY is set, nobody creates a family without a code —
+    the posture for a hosted deployment that isn't open to the public yet."""
+
+    import os
+
+    return os.environ.get("EXHALE_INVITE_ONLY", "").strip().lower() in ("1", "true", "yes")
+
+
+def _is_bootstrap_invite(code: str | None) -> bool:
+    """True when ``code`` is the operator's EXHALE_BOOTSTRAP_INVITE — the one
+    code that mints a *new* family even under invite-only."""
+
+    import hmac
+    import os
+
+    expected = os.environ.get("EXHALE_BOOTSTRAP_INVITE")
+    return bool(code and expected and hmac.compare_digest(code, expected))
+
+
 @app.post("/v1/auth/signup")
 def signup(req: SignupRequest) -> dict:
     """Create an account. Without an invite code a new family is created; with
-    one, the user joins that family (the caregiver invite loop, §13.2)."""
+    one, the user joins that family (the caregiver invite loop, §13.2).
+
+    Under EXHALE_INVITE_ONLY a code is mandatory: a family's own code joins
+    that family, and the operator's bootstrap code creates a fresh family."""
+
+    invite_code = req.invite_code
+    if _is_bootstrap_invite(invite_code):
+        invite_code = None  # bootstrap → create a new family
+    elif _invite_only() and not invite_code:
+        raise HTTPException(
+            status_code=403,
+            detail="Signups are invite-only right now. Ask a family member for "
+                   "their invite code.",
+        )
 
     try:
         user, token = auth_store.signup(
-            req.email, req.password, req.display_name, invite_code=req.invite_code
+            req.email, req.password, req.display_name, invite_code=invite_code
         )
     except (AuthError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if req.invite_code is None:
+    if invite_code is None:
         store.set_profile(user.family_id, parent_first_name=req.display_name)
     return _session_response(user, token)
 
@@ -693,6 +761,88 @@ def set_autonomy(
     current.update(updates)
     store.set_profile(family_id, autonomy=current)
     return {"family_id": family_id, "settings": autonomy_settings(store.profile(family_id))}
+
+
+# --- outbound notifications (🔴 critical-alert emails) ------------------------------
+class NotificationPrefs(BaseModel):
+    email: str | None = None  # None switches alerts off for the family
+
+
+@app.get("/v1/families/{family_id}/notifications")
+def get_notifications(family_id: str = Depends(require_family_access)) -> dict:
+    """Where (and whether) this family gets 🔴 critical-alert emails."""
+
+    from exhale.notify import SmtpConfig
+
+    profile = store.profile(family_id)
+    return {
+        "family_id": family_id,
+        "email": profile.get("notify_email"),
+        # Honest about the transport: an address with no SMTP configured
+        # means alerts are armed but cannot leave the building yet.
+        "smtp_configured": SmtpConfig.from_env() is not None,
+        "alerts_sent": len(profile.get("notified_alerts") or []),
+    }
+
+
+@app.put("/v1/families/{family_id}/notifications")
+def set_notifications(
+    req: NotificationPrefs, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Opt the family in (set an address) or out (null) of critical alerts."""
+
+    email = (req.email or "").strip() or None
+    if email and "@" not in email:
+        raise HTTPException(status_code=400, detail="That doesn't look like an email address")
+    store.set_profile(family_id, notify_email=email)
+    return get_notifications(family_id)
+
+
+@app.post("/v1/families/{family_id}/notifications/test")
+def send_test_notification(family_id: str = Depends(require_family_access)) -> dict:
+    """Prove the pipe: send a test email to the family's notify address."""
+
+    from exhale.notify import notifier_from_env
+
+    notifier = notifier_from_env()
+    if notifier is None:
+        raise HTTPException(
+            status_code=503,
+            detail="SMTP is not configured (set EXHALE_SMTP_HOST and "
+                   "EXHALE_SMTP_FROM on the server).",
+        )
+    to = store.profile(family_id).get("notify_email")
+    if not to:
+        raise HTTPException(
+            status_code=400,
+            detail="Set a notification email first (PUT /notifications).",
+        )
+    notifier.send(
+        to,
+        subject="Exhale: test notification",
+        body="This is a test from your Exhale household brain. "
+             "Critical alerts will arrive at this address — each one exactly once.",
+    )
+    return {"sent_to": to}
+
+
+@app.post("/v1/families/{family_id}/notifications/run")
+def run_notifications_now(family_id: str = Depends(require_family_access)) -> dict:
+    """Run one notification pass for this family right now (dev/ops lever;
+    the auto-sync scheduler does this automatically each cycle)."""
+
+    from exhale.notify import find_critical_alerts, notifier_from_env, run_notification_cycle
+
+    notifier = notifier_from_env()
+    if notifier is None:
+        # No transport — still useful: report what *would* alert.
+        pending = find_critical_alerts(store, family_id)
+        return {"smtp_configured": False, "pending_alerts": [a["line"] for a in pending]}
+    report = run_notification_cycle(store, notifier)
+    return {"smtp_configured": True,
+            "notified": report["notified"].get(family_id, 0),
+            "skipped": report["skipped"].get(family_id),
+            "error": report["errors"].get(family_id)}
 
 
 class ScheduleRequest(BaseModel):

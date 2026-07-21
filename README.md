@@ -117,6 +117,7 @@ Key endpoints (see `src/exhale/api.py`):
 | `POST` | `/v1/families/{fid}/sync/ics/upload` | import a `.ics` file's contents directly (no hosting) |
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 | `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
+| `GET`/`PUT` | `/v1/families/{fid}/notifications` (+ `/test`, `/run`) | where 🔴 critical alerts get emailed (each exactly once) |
 | `POST` | `/v1/auth/signup` | create account (+ new family, or join via invite code) |
 | `POST` | `/v1/auth/login` / `logout` | session tokens (opaque bearer, hashed at rest) |
 | `GET` | `/v1/me` | current user + family invite code |
@@ -126,7 +127,17 @@ another family gets 403. Enforcement defaults ON when a database is configured
 (override with `EXHALE_REQUIRE_AUTH=0/1`); the in-memory dev mode stays open.
 Passwords are PBKDF2 (600k iterations); session tokens are stored only as
 SHA-256 hashes. A spouse or caregiver joins the same family by signing up with
-its invite code (§13.2).
+its invite code (§13.2). For a hosted deployment set `EXHALE_INVITE_ONLY=1`:
+signups then require a code (a family's own code joins it; the operator's
+`EXHALE_BOOTSTRAP_INVITE` mints a new family). Auth and OAuth endpoints carry a
+per-IP rate limit (`EXHALE_RATE_LIMIT_PER_MINUTE`, default 60, `0` = off).
+
+**Critical-alert email (`notify.py`).** The briefing is pull; 🔴 items also
+*push*. Configure SMTP (`EXHALE_SMTP_HOST/PORT/USER/PASSWORD/FROM/TLS`), have a
+family set a notify address, and every auto-sync cycle ends by emailing each
+family its **new** critical items — one digest per cycle, each alert exactly
+once (sent keys persist in the encrypted profile), every line carrying its
+source. No SMTP config → the feature is simply off.
 
 **LLM extraction (optional).** Set `EXHALE_LLM_EXTRACTOR=1` (plus Anthropic API
 credentials) and the pipeline upgrades to a hybrid: the deterministic engine

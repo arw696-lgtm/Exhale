@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { threatPresentation } from "../brand/tokens.js";
 import { scheduleEvent } from "../data/api.js";
+import WhyTrace from "./WhyTrace.jsx";
 
 /**
  * Care Watch section — child-supervision gaps from the Care-Coverage Engine.
@@ -82,6 +83,7 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
                 </span>
               </div>
               <p className="mt-1 text-sanctuary-navy/70">{gap.reason}</p>
+              <WhyTrace basis={gap.basis} />
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button className="rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-1.5 font-medium text-sanctuary-navy transition hover:bg-sage-release/20">
                   → {gap.suggested_action}

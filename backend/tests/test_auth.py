@@ -133,3 +133,57 @@ def test_api_signup_validation_errors():
     r = client.post("/v1/auth/signup", json={
         "email": "dup@example.com", "password": "password123", "display_name": "X"})
     assert r.status_code == 400
+
+
+# --- invite-only posture --------------------------------------------------------
+def test_invite_only_blocks_codeless_signup(monkeypatch):
+    monkeypatch.setenv("EXHALE_INVITE_ONLY", "1")
+    r = client.post("/v1/auth/signup", json={
+        "email": "stranger@example.com", "password": "password123",
+        "display_name": "Stranger"})
+    assert r.status_code == 403
+    assert "invite" in r.json()["detail"].lower()
+
+
+def test_invite_only_family_code_still_joins(monkeypatch):
+    parent = _signup(email="gate-parent@example.com")
+    monkeypatch.setenv("EXHALE_INVITE_ONLY", "1")
+    spouse = _signup(email="gate-spouse@example.com", name="Alicia",
+                     invite_code=parent["invite_code"])
+    assert spouse["user"]["family_id"] == parent["user"]["family_id"]
+
+
+def test_bootstrap_invite_mints_a_new_family(monkeypatch):
+    monkeypatch.setenv("EXHALE_INVITE_ONLY", "1")
+    monkeypatch.setenv("EXHALE_BOOTSTRAP_INVITE", "founders-key")
+    session = _signup(email="second-family@example.com", name="Nora",
+                      invite_code="founders-key")
+    # A fresh family, not a join — and the founder's profile is seeded.
+    from exhale.api import store
+    fam = session["user"]["family_id"]
+    assert store.profile(fam).get("parent_first_name") == "Nora"
+    # A wrong guess at the bootstrap code is still refused.
+    r = client.post("/v1/auth/signup", json={
+        "email": "guesser@example.com", "password": "password123",
+        "display_name": "G", "invite_code": "founders-kee"})
+    assert r.status_code == 400  # unknown invite code
+
+
+# --- rate limiting ---------------------------------------------------------------
+def test_auth_rate_limit_trips_and_excludes_other_routes(monkeypatch):
+    monkeypatch.setenv("EXHALE_RATE_LIMIT_PER_MINUTE", "3")
+    bad_login = {"email": "nobody@example.com", "password": "wrong-password"}
+    codes = [client.post("/v1/auth/login", json=bad_login).status_code
+             for _ in range(4)]
+    assert codes[:3] == [401, 401, 401]
+    assert codes[3] == 429
+    # Non-auth surfaces are untouched by the limiter.
+    assert client.get("/health").status_code == 200
+
+
+def test_rate_limit_zero_disables(monkeypatch):
+    monkeypatch.setenv("EXHALE_RATE_LIMIT_PER_MINUTE", "0")
+    bad_login = {"email": "nobody@example.com", "password": "wrong-password"}
+    codes = [client.post("/v1/auth/login", json=bad_login).status_code
+             for _ in range(10)]
+    assert set(codes) == {401}

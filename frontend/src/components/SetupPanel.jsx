@@ -5,11 +5,21 @@ import { saveCoverageModel } from "../data/api.js";
  * Household Setup — the onboarding form for the coverage model.
  *
  * Turns "PUT a JSON document" into a form a parent can fill in two minutes:
- * the child who needs looking after, the caregivers (with an optional M–F work
- * pattern), and optionally the school year. Shown when the household has no
- * coverage model yet; once saved, Care Watch and work windows light up.
+ * the child who needs looking after, the caregivers (with an optional work
+ * pattern on whichever days they actually work — nurses, retail, and shift
+ * workers aren't Mon–Fri), and optionally the school year. Shown when the
+ * household has no coverage model yet; once saved, Care Watch and work
+ * windows light up.
  */
-const EMPTY_CG = { name: "", role: "PARENT", works: false, start: "07:30", end: "16:30" };
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const EMPTY_CG = {
+  name: "",
+  role: "PARENT",
+  works: false,
+  days: [0, 1, 2, 3, 4], // default Mon–Fri; any combination is valid
+  start: "07:30",
+  end: "16:30",
+};
 
 export default function SetupPanel({ familyId, onSaved }) {
   const [child, setChild] = useState("");
@@ -29,14 +39,18 @@ export default function SetupPanel({ familyId, onSaved }) {
       setError("Name the child and at least one caregiver.");
       return;
     }
+    if (named.some((c) => c.works && c.days.length === 0)) {
+      setError("Pick at least one workday for each caregiver who works a schedule.");
+      return;
+    }
     const model = {
       recipient: { name: child.trim() },
       caregivers: named.map((c) => ({
         name: c.name.trim(),
         role: c.role,
         work_pattern: c.works
-          ? { weekdays: [0, 1, 2, 3, 4], start: `${c.start}:00`, end: `${c.end}:00`,
-              basis: "INFERRED" }
+          ? { weekdays: [...c.days].sort((a, b) => a - b),
+              start: `${c.start}:00`, end: `${c.end}:00`, basis: "INFERRED" }
           : null,
         events: [],
       })),
@@ -91,16 +105,46 @@ export default function SetupPanel({ familyId, onSaved }) {
             <label className="mt-2 flex items-center gap-2 text-sanctuary-navy/70">
               <input type="checkbox" checked={cg.works}
                      onChange={(e) => setCg(i, { works: e.target.checked })} />
-              Works a regular Mon–Fri schedule
+              Works a regular schedule
             </label>
             {cg.works && (
-              <div className="mt-2 flex items-center gap-2 text-sanctuary-navy/70">
-                <input type="time" value={cg.start} className={input}
-                       onChange={(e) => setCg(i, { start: e.target.value })} />
-                <span>to</span>
-                <input type="time" value={cg.end} className={input}
-                       onChange={(e) => setCg(i, { end: e.target.value })} />
-              </div>
+              <>
+                <div className="mt-2 flex flex-wrap gap-1.5" role="group"
+                     aria-label={`Workdays for caregiver ${i + 1}`}>
+                  {DAY_LABELS.map((label, day) => {
+                    const on = cg.days.includes(day);
+                    return (
+                      <button key={day} type="button" aria-pressed={on}
+                        onClick={() =>
+                          setCg(i, {
+                            days: on
+                              ? cg.days.filter((d) => d !== day)
+                              : [...cg.days, day],
+                          })
+                        }
+                        className={
+                          "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
+                          (on
+                            ? "border-sage-release/60 bg-sage-release/20 text-sanctuary-navy"
+                            : "border-sanctuary-navy/15 text-sanctuary-navy/50 hover:bg-sanctuary-navy/5")
+                        }>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 flex items-center gap-2 text-sanctuary-navy/70">
+                  <input type="time" value={cg.start} className={input}
+                         onChange={(e) => setCg(i, { start: e.target.value })} />
+                  <span>to</span>
+                  <input type="time" value={cg.end} className={input}
+                         onChange={(e) => setCg(i, { end: e.target.value })} />
+                </div>
+                <p className="mt-1.5 text-xs text-sanctuary-navy/50">
+                  Tap the days they work — shift and weekend schedules welcome. Same
+                  hours each workday; sync their calendar for anything irregular.
+                </p>
+              </>
             )}
           </div>
         ))}

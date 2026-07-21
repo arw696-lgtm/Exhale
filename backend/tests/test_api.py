@@ -827,3 +827,60 @@ def test_photo_reupload_skips_duplicates(monkeypatch):
     assert r2.json()["extracted"] == 0 and r2.json()["duplicates_skipped"] == 1
     ledger = client.get(f"/v1/families/{fam}/ledger").json()["entries"]
     assert len(ledger) == 1
+
+
+def test_briefing_items_carry_why_trace():
+    fam = "fam_why_trace"
+    client.post(f"/v1/families/{fam}/extractions", json={
+        "extracted_event": "Permission slip due",
+        "target_person_name": "Stevie",
+        "event_date": "2026-09-10",
+        "deadline_date": "2026-09-01",
+        "action_required": True,
+        "confidence_score": 0.97,
+        "artifact_tier": "CONFIRMATION",
+        "source_document_name": "Subject: Field trip forms",
+        "source_reference": "gmail_msg_777",
+    })
+    items = [item for section in ("critical_threats", "dependency_watch", "advisories")
+             for item in client.get(f"/v1/families/{fam}/briefing").json()[section]]
+    (item,) = items
+    assert item["why"]["source_document_name"] == "Subject: Field trip forms"
+    assert item["why"]["artifact_tier"] == "CONFIRMATION"
+    assert item["why"]["event_date_origin"] == "OBSERVED"
+
+
+def test_notification_prefs_roundtrip():
+    fam = "fam_notify_prefs"
+    r = client.get(f"/v1/families/{fam}/notifications")
+    assert r.json() == {"family_id": fam, "email": None,
+                        "smtp_configured": False, "alerts_sent": 0}
+
+    r = client.put(f"/v1/families/{fam}/notifications", json={"email": "andy@test"})
+    assert r.json()["email"] == "andy@test"
+    # Opt back out with null.
+    r = client.put(f"/v1/families/{fam}/notifications", json={"email": None})
+    assert r.json()["email"] is None
+    # Garbage is refused, not stored.
+    assert client.put(f"/v1/families/{fam}/notifications",
+                      json={"email": "not-an-address"}).status_code == 400
+
+
+def test_notification_test_send_requires_smtp_and_address(monkeypatch):
+    monkeypatch.delenv("EXHALE_SMTP_HOST", raising=False)
+    fam = "fam_notify_test"
+    assert client.post(f"/v1/families/{fam}/notifications/test").status_code == 503
+
+    monkeypatch.setenv("EXHALE_SMTP_HOST", "smtp.test")
+    monkeypatch.setenv("EXHALE_SMTP_FROM", "alerts@exhale.test")
+    # SMTP configured but no address on file yet -> 400 with guidance.
+    assert client.post(f"/v1/families/{fam}/notifications/test").status_code == 400
+
+
+def test_notification_run_reports_pending_without_smtp(monkeypatch):
+    monkeypatch.delenv("EXHALE_SMTP_HOST", raising=False)
+    from exhale.seed import DEMO_FAMILY_ID
+    r = client.post(f"/v1/families/{DEMO_FAMILY_ID}/notifications/run")
+    body = r.json()
+    assert body["smtp_configured"] is False
+    assert any(line.startswith("🔴") for line in body["pending_alerts"])
