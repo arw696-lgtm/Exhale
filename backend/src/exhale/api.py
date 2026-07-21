@@ -511,11 +511,17 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     next two weeks rides along.
     """
 
+    from exhale.memory import learn_rules
+    from exhale.waiting import build_waiting_watch
+
     profile = store.profile(family_id)
+    waiting_items = profile.get("waiting_on") or []
     return build_weekly_briefing(
         store.graph(family_id),
         coverage=build_coverage(profile),
         care_watch=_care_watch_for(profile),
+        learned_rules=[r.to_dict() for r in learn_rules(store.ledger(family_id))],
+        waiting_on=build_waiting_watch(waiting_items) if waiting_items else None,
     )
 
 
@@ -631,6 +637,58 @@ def dismiss_extraction(
     dismissed.add(extraction_id)
     store.set_profile(family_id, dismissed_extractions=sorted(dismissed))
     return {"family_id": family_id, "extraction_id": extraction_id, "status": "dismissed"}
+
+
+# --- Waiting-On ledger: the ball is in someone else's court -------------------------
+class WaitingItemIn(BaseModel):
+    """Someone owes the family a response."""
+
+    who: str
+    about: str
+    since: date | None = None  # defaults to today
+    channel: str | None = None  # email / phone / app …
+
+
+@app.get("/v1/families/{family_id}/waiting")
+def get_waiting(family_id: str = Depends(require_family_access)) -> dict:
+    """Open waits, staleness-stratified (a week of silence → time to nudge)."""
+
+    from exhale.waiting import build_waiting_watch
+
+    return {"family_id": family_id,
+            **build_waiting_watch(store.profile(family_id).get("waiting_on") or [])}
+
+
+@app.post("/v1/families/{family_id}/waiting")
+def add_waiting(
+    req: WaitingItemIn, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Track a new wait ("Hennepin County owes us the arborist follow-up")."""
+
+    from exhale.waiting import new_item
+
+    items = list(store.profile(family_id).get("waiting_on") or [])
+    item = new_item(req.who, req.about, since=req.since, channel=req.channel)
+    items.append(item)
+    store.set_profile(family_id, waiting_on=items)
+    return {"family_id": family_id, **item}
+
+
+@app.post("/v1/families/{family_id}/waiting/{item_id}/resolve")
+def resolve_waiting(
+    item_id: str, family_id: str = Depends(require_family_access)
+) -> dict:
+    """They responded — mark the wait resolved (kept in the record)."""
+
+    from exhale.waiting import resolve_item
+
+    items = list(store.profile(family_id).get("waiting_on") or [])
+    try:
+        items = resolve_item(items, item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    store.set_profile(family_id, waiting_on=items)
+    return {"family_id": family_id, "item_id": item_id, "status": "resolved"}
 
 
 class MissingSourceIn(BaseModel):

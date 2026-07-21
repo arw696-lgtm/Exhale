@@ -36,6 +36,8 @@ def build_weekly_briefing(
     week_label: str | None = None,
     coverage: dict | None = None,
     care_watch: dict | None = None,
+    learned_rules: list[dict] | None = None,
+    waiting_on: dict | None = None,
 ) -> dict:
     """Assemble the Weekly COO Briefing payload from a family's graph.
 
@@ -76,4 +78,8 @@ def build_weekly_briefing(
         "advisories": advisory,
         "coverage": coverage if coverage is not None else build_coverage(None),
         "care_watch": care_watch,
+        # Layer-4 memory: recurring rules the ledger has taught (with evidence).
+        "learned_rules": learned_rules or [],
+        # Threads where the ball is in someone else's court (None = none tracked).
+        "waiting_on": waiting_on,
     }

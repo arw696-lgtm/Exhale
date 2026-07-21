@@ -6,6 +6,8 @@ import CareWatch from "./CareWatch.jsx";
 import ConnectionsPanel from "./ConnectionsPanel.jsx";
 import PhotoDrop from "./PhotoDrop.jsx";
 import ReviewQueue from "./ReviewQueue.jsx";
+import SetupPanel from "./SetupPanel.jsx";
+import WaitingOn from "./WaitingOn.jsx";
 import WorkWindowsPanel from "./WorkWindowsPanel.jsx";
 
 /**
@@ -92,11 +94,35 @@ export default function WeeklyBriefing({
         </section>
       )}
 
+      {/* Household setup — shown until a coverage model exists */}
+      {live && briefing.care_watch == null && (
+        <SetupPanel familyId={familyId} onSaved={onRefresh} />
+      )}
+
       {/* Review Queue — items held for a human yes/no (live backend only) */}
       {live && <ReviewQueue familyId={familyId} onChanged={onRefresh} />}
 
       {/* Care Watch — child-supervision gaps */}
       <CareWatch careWatch={briefing.care_watch} />
+
+      {/* Waiting On — threads where the ball is in someone else's court */}
+      {live && <WaitingOn familyId={familyId} />}
+
+      {/* Learned rules — the household's recurring rhythms, with evidence */}
+      {(briefing.learned_rules?.length ?? 0) > 0 && (
+        <section className="mb-8 rounded-card bg-white p-5 shadow-card">
+          <h2 className="mb-3 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+            🧠 Patterns Exhale Has Learned
+          </h2>
+          <ul className="space-y-2">
+            {briefing.learned_rules.map((rule) => (
+              <li key={rule.kind + rule.subject} className="border-l-2 border-sage-release/60 pl-3 font-micro text-sm text-sanctuary-navy/80">
+                {rule.detail}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Photo ingestion + work windows (live backend only) */}
       {live && <PhotoDrop familyId={familyId} onChanged={onRefresh} />}

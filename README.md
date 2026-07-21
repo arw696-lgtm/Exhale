@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (305 tests)
+│   ├── tests/          pytest suite (322 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 305 tests (incl. Postgres integration when reachable)
+python -m pytest             # 322 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -107,6 +107,7 @@ Key endpoints (see `src/exhale/api.py`):
 | `PUT` | `/v1/families/{fid}/coverage-model` | configure the care-coverage model (child, caregivers, school) |
 | `GET` | `/v1/families/{fid}/care-gaps` | child-supervision gaps over a range (Care Watch) |
 | `GET` | `/v1/families/{fid}/work-windows` | a caregiver's best open work windows (intent side of coverage) |
+| `GET`/`POST` | `/v1/families/{fid}/waiting` (+ `/{id}/resolve`) | Waiting-On ledger: replies someone owes the family |
 | `POST` | `/v1/families/{fid}/sync/calendar` | pull a caregiver's Google Calendar busy blocks into the model |
 | `POST` | `/v1/families/{fid}/sync/outlook` | pull a caregiver's Outlook/Office 365 calendar (Microsoft Graph) |
 | `POST` | `/v1/families/{fid}/sync/ics` | pull a published iCloud/Outlook/Google `.ics` feed (no OAuth) |
@@ -164,6 +165,21 @@ family's own connected tokens, falling back to the single-tenant `EXHALE_GMAIL_*
 / `EXHALE_GCAL_*` env vars. `GET /connections` reports what's linked. Read-only
 scopes only. Fully testable without a real Google account (the token exchange
 takes an injectable client; state signing is pure).
+
+**Layer-4 memory (`memory.py`).** The graph remembers facts; the memory engine
+learns *patterns* — the implicit rhythms no single email states. Two
+deterministic detectors mine the extraction ledger: **weekly cadence** ("ISLA
+Camp recurs on Mondays") and **deadline lead** ("registration closes 5 days
+before — always a Wednesday", the exact rule the founding household discovered
+by missing it). A rule requires multiple witnesses, never averages inconsistent
+samples, dedupes resends, and cites its evidence — the credibility discipline
+applied to learning. Learned rules ride on every briefing.
+
+**Waiting-On ledger (`waiting.py`).** Conversations where the ball is in
+someone else's court — a promised reply that could quietly die ("the county
+said they'd contact the arborist…"). Open waits stratify by silence: fresh =
+🔵, a week = 🟡 time-to-nudge, two weeks = 🔴 the-thread-is-dying. Resolved
+items are kept, marked — signal, not erasure.
 
 **Review queue (the human side of "asks when unsure").** Anything the pipeline
 holds at `PENDING_VERIFICATION` — a reminder-tier artifact, an inferred date —

@@ -185,6 +185,36 @@ export async function fetchWorkWindows(caregiver, familyId = DEMO_FAMILY) {
   return body;
 }
 
+// --- coverage model (household setup) -----------------------------------------
+export async function saveCoverageModel(model, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(`/v1/families/${familyId}/coverage-model`, {
+    method: "PUT",
+    body: JSON.stringify(model),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
+// --- waiting-on ledger ---------------------------------------------------------
+export async function fetchWaiting(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/waiting`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export function addWaiting({ who, about, channel }, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/waiting`, { who, about, channel });
+}
+
+export function resolveWaiting(itemId, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/waiting/${itemId}/resolve`);
+}
+
 // --- connections (OAuth) -----------------------------------------------------
 /** What providers this family has connected, or null when unavailable. */
 export async function fetchConnections(familyId = DEMO_FAMILY) {
