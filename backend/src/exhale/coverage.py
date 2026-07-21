@@ -80,6 +80,18 @@ def _overlaps(a: _Interval, b: _Interval) -> bool:
     return a[0] < b[1] and b[0] < a[1]
 
 
+def _intersect(a: list[_Interval], b: list[_Interval]) -> list[_Interval]:
+    """Every overlapping stretch shared by the two interval sets."""
+
+    out: list[_Interval] = []
+    for a0, a1 in a:
+        for b0, b1 in b:
+            lo, hi = max(a0, b0), min(a1, b1)
+            if lo < hi:
+                out.append((lo, hi))
+    return _union(out)
+
+
 # --- inputs -----------------------------------------------------------------------
 @dataclass(frozen=True)
 class CareRecipient:
@@ -237,6 +249,31 @@ class CareGap:
         }
 
 
+@dataclass(frozen=True)
+class WorkWindow:
+    """A stretch a caregiver could use for their own work — an INTENT match.
+
+    The forward, want-driven side of the coverage math: the child is covered by
+    someone/something else, so this caregiver is free to work.
+    """
+
+    caregiver_name: str
+    start: datetime
+    end: datetime
+    duration_hours: float
+    child_covered_by: tuple[str, ...]  # what frees the caregiver (school, other parent…)
+
+    def to_dict(self) -> dict:
+        return {
+            "caregiver": self.caregiver_name,
+            "date": self.start.date().isoformat(),
+            "start": self.start.isoformat(),
+            "end": self.end.isoformat(),
+            "duration_hours": round(self.duration_hours, 2),
+            "child_covered_by": list(self.child_covered_by),
+        }
+
+
 class CoverageEngine:
     """Computes care gaps for a recipient across a date range."""
 
@@ -288,6 +325,81 @@ class CoverageEngine:
             day += timedelta(days=1)
         gaps.sort(key=lambda g: g.start)
         return gaps
+
+    # -- open work windows (the intent side of the same math) ----------------------
+    def _caregiver(self, name: str) -> Caregiver:
+        for cg in self.caregivers:
+            if cg.name == name:
+                return cg
+        raise KeyError(f"No caregiver named {name!r}")
+
+    def _coverers_on(self, day: date, span: _Interval, exclude: str) -> list[tuple[_Interval, str]]:
+        """Who/what covers the recipient on ``day``, other than ``exclude``."""
+
+        out: list[tuple[_Interval, str]] = []
+        if self.school is not None:
+            cov = self.school.coverage_on(day)
+            if cov is not None:
+                out.append((cov, f"{self.recipient.name} at {self.school.name}"))
+        for program in self.care_programs:
+            pc = program.coverage_on(day)
+            if pc is not None:
+                out.append((pc, program.name))
+        for cg in self.caregivers:
+            if cg.name == exclude:
+                continue
+            for iv in cg.available_on(day, span):
+                out.append((iv, f"{cg.name} has {self.recipient.name}"))
+        return out
+
+    def open_windows_on(self, day: date, caregiver_name: str) -> list["WorkWindow"]:
+        """When ``caregiver_name`` is free *and* the child is covered by others.
+
+        The mirror of a care gap: a stretch this caregiver could use for work,
+        because they have no commitment and someone/something else has the child.
+        The drop-off/pickup pinch (child home, no one else covering) is correctly
+        excluded — that time is childcare, not workable.
+        """
+
+        target = self._caregiver(caregiver_name)
+        span_start = datetime.combine(day, self.recipient.supervised_start)
+        span_end = datetime.combine(day, self.recipient.supervised_end)
+        span: _Interval = (span_start, span_end)
+
+        free = target.available_on(day, span)
+        coverers = self._coverers_on(day, span, exclude=caregiver_name)
+        workable = _intersect(free, _union([iv for iv, _ in coverers]))
+
+        windows: list[WorkWindow] = []
+        for ws, we in workable:
+            if we <= self.now:  # skip windows already in the past
+                continue
+            labels = tuple(sorted({
+                label for iv, label in coverers if _overlaps((ws, we), iv)
+            }))
+            windows.append(WorkWindow(
+                caregiver_name=caregiver_name,
+                start=ws, end=we,
+                duration_hours=(we - ws).total_seconds() / 3600.0,
+                child_covered_by=labels,
+            ))
+        return windows
+
+    def work_windows(
+        self, caregiver_name: str, start_day: date, end_day: date, *, min_hours: float = 1.0
+    ) -> list["WorkWindow"]:
+        """Every workable window ≥ ``min_hours`` across the range, by start time."""
+
+        out: list[WorkWindow] = []
+        day = start_day
+        while day <= end_day:
+            out.extend(
+                w for w in self.open_windows_on(day, caregiver_name)
+                if w.duration_hours >= min_hours
+            )
+            day += timedelta(days=1)
+        out.sort(key=lambda w: w.start)
+        return out
 
     # -- gap explanation -----------------------------------------------------------
     def _build_gap(self, day: date, gs: datetime, ge: datetime) -> CareGap:
@@ -363,4 +475,50 @@ def build_care_watch(
             "assumption_dependent": sum(1 for g in gaps if g.depends_on_inference),
         },
         "gaps": [g.to_dict() for g in gaps],
+    }
+
+
+def suggest_work_windows(
+    engine: CoverageEngine,
+    caregiver_name: str,
+    start_day: date,
+    end_day: date,
+    *,
+    count: int = 3,
+    min_hours: float = 2.0,
+) -> list[WorkWindow]:
+    """The best ``count`` workable windows: longest first, then back in time order.
+
+    Answers "I want to work N times this week — when's best?" by picking the
+    longest qualifying blocks (the most useful stretches) and returning them in
+    chronological order for the schedule.
+    """
+
+    windows = engine.work_windows(caregiver_name, start_day, end_day, min_hours=min_hours)
+    best = sorted(windows, key=lambda w: w.duration_hours, reverse=True)[:count]
+    return sorted(best, key=lambda w: w.start)
+
+
+def build_work_plan(
+    engine: CoverageEngine,
+    caregiver_name: str,
+    start_day: date,
+    end_day: date,
+    *,
+    count: int = 3,
+    min_hours: float = 2.0,
+) -> dict:
+    """Briefing-ready payload: the caregiver's suggested best work windows."""
+
+    windows = suggest_work_windows(
+        engine, caregiver_name, start_day, end_day, count=count, min_hours=min_hours
+    )
+    total = round(sum(w.duration_hours for w in windows), 2)
+    return {
+        "view": "work_windows",
+        "caregiver": caregiver_name,
+        "range": {"from": start_day.isoformat(), "to": end_day.isoformat()},
+        "criteria": {"count": count, "min_hours": min_hours},
+        "summary": {"suggested": len(windows), "total_hours": total},
+        "windows": [w.to_dict() for w in windows],
     }

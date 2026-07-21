@@ -403,3 +403,30 @@ def test_school_photo_503_without_credentials(monkeypatch):
     r = client.post(f"/v1/families/{fam}/coverage-model/school/photo",
                     json={"image_base64": "abc"})
     assert r.status_code == 503
+
+
+# --- work-windows endpoint --------------------------------------------------------
+def test_work_windows_endpoint_suggests_blocks():
+    fam = "family_work_windows"
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    r = client.get(f"/v1/families/{fam}/work-windows",
+                   params={"caregiver": "Andy", "from": "2026-09-14", "to": "2026-09-18",
+                           "count": 3, "min_hours": 2})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["view"] == "work_windows"
+    assert body["caregiver"] == "Andy"
+    assert body["summary"]["suggested"] >= 1
+    assert all(w["duration_hours"] >= 2 for w in body["windows"])
+
+
+def test_work_windows_404_without_model():
+    r = client.get("/v1/families/family_no_ww/work-windows", params={"caregiver": "Andy"})
+    assert r.status_code == 404
+
+
+def test_work_windows_400_for_unknown_caregiver():
+    fam = "family_ww_badcg"
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    r = client.get(f"/v1/families/{fam}/work-windows", params={"caregiver": "Nobody"})
+    assert r.status_code == 400
