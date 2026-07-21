@@ -35,6 +35,7 @@ def build_weekly_briefing(
     now: datetime | None = None,
     week_label: str | None = None,
     coverage: dict | None = None,
+    care_watch: dict | None = None,
 ) -> dict:
     """Assemble the Weekly COO Briefing payload from a family's graph.
 
@@ -42,6 +43,11 @@ def build_weekly_briefing(
     :func:`exhale.credibility.build_coverage`); when the caller does not
     supply one, the briefing still carries the honest default ("coverage
     undeclared") rather than implying completeness.
+
+    ``care_watch`` is the Care-Coverage Engine's payload (see
+    :func:`exhale.coverage.build_care_watch`) — the child-supervision gaps for
+    the week. Included when supplied; omitted (``None``) when the household has
+    no coverage model configured yet.
     """
 
     now = now or datetime.now(timezone.utc)
@@ -69,4 +75,5 @@ def build_weekly_briefing(
         "dependency_watch": dependency_watch,
         "advisories": advisory,
         "coverage": coverage if coverage is not None else build_coverage(None),
+        "care_watch": care_watch,
     }

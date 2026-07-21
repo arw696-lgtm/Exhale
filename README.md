@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (177 tests)
+│   ├── tests/          pytest suite (198 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 177 tests (incl. Postgres integration when reachable)
+python -m pytest             # 198 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -200,6 +200,34 @@ Risk Score = Likelihood of Forgetting (P_f) × Impact of Forgetting (I_f)
 
 and stratifies it into 🔴 CRITICAL (high-impact, ≤ 36h), 🟡 IMPORTANT
 (≤ 14 days), or 🔵 ADVISORY.
+
+**Care-Coverage Engine (`coverage.py`).** The Forgetting Engine's forward-looking
+sibling. Where that engine asks "what prep does this event need?", the Coverage
+Engine asks the mirror question about a child who requires constant supervision:
+*"what care does each day need, and is it assigned?"* A **care gap** — a stretch
+where a supervised child has no caregiver and no institution covering them — is a
+hard, safety-level obligation, and it's the base layer the schedule stands on
+("when can a parent work" and "when does the child need a sitter" are the same
+question from two sides). It composes:
+
+- a **school calendar** whose operationally important part is the *no-school
+  days* that flip the child from school-covered to needing care;
+- **caregivers**, each unavailable during a recurring work pattern (often
+  *inferred* from a stated schedule) and/or specific **calendar events** they
+  attend (*observed* from a shared calendar — the thing that turns "both parents
+  at a concert" into a sitter gap);
+- optional **care programs** (e.g. a school's non-school-day care).
+
+Each gap reuses the Forgetting Engine's exact threat bands (imminence drives the
+band; an uncovered child is inherently high-impact) and carries the credibility
+layer's provenance: a gap resting only on an *inferred* work pattern is flagged
+`depends_on_inference` ("assumes Ali's usual hours"), while one built from
+observed calendar events is high-confidence. `build_care_watch()` assembles the
+briefing-ready payload. See it on real data:
+
+```bash
+cd backend && PYTHONPATH=src python examples/demo_coverage.py
+```
 
 **Action engine (§6, §10).** Each gap advances along the controlled-autonomy
 path `Observe → Recommend → Draft → Execute with Approval → Autonomous`. The
