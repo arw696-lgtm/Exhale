@@ -91,6 +91,39 @@ class _VisionExtraction(BaseModel):
     items: list[_VisionItem] = Field(description="Every distinct trackable item; empty if none.")
 
 
+_SCHOOL_SYSTEM_PROMPT = """\
+You read a school-year calendar image and extract the days a specific student \
+has NO SCHOOL, so a household can plan childcare around them.
+
+Rules:
+1. Return only weekday closures during the school year (a supervised child needs \
+care on a no-school weekday; weekends are already non-school and are not needed).
+2. GRADE MATTERS. If the student's grade is given, include only closures that \
+apply to that grade. Exclude closures marked for other grades only (e.g. a \
+"PK-K only" day is NOT a day off for a 1st grader).
+3. NEVER GUESS. If you cannot read the first/last day of school, return null for \
+it rather than inventing a date. Give each closure the exact date shown and a \
+short reason from the legend/notes ("MEA break", "Winter Break").
+4. first_day/last_day are for THIS student (some calendars list different start \
+dates per grade band)."""
+
+
+class _SchoolClosure(BaseModel):
+    day: date = Field(description="A weekday the student has no school (ISO).")
+    reason: str = Field(description="Short reason from the calendar legend/notes.")
+
+
+class _SchoolCalendarExtraction(BaseModel):
+    """Structured output for a school-calendar image."""
+
+    school_name: str | None = Field(description="School name if visible, else null.")
+    first_day: date | None = Field(description="First day of school for this student (ISO), or null.")
+    last_day: date | None = Field(description="Last day of school for this student (ISO), or null.")
+    no_school_days: list[_SchoolClosure] = Field(
+        description="Every weekday-during-term closure that applies to this student."
+    )
+
+
 class VisionExtractor:
     """Claude-vision-backed extractor producing §3.2 payloads from an image."""
 
@@ -169,6 +202,51 @@ class VisionExtractor:
                 )
             )
         return payloads
+
+
+    def extract_school_calendar(
+        self,
+        image_base64: str,
+        media_type: str,
+        *,
+        grade: str | None = None,
+        ctx: ExtractionContext | None = None,
+    ) -> _SchoolCalendarExtraction:
+        """Read a school-calendar image → the student's no-school days.
+
+        Feeds the Care-Coverage Engine's ``SchoolCalendar`` (the no-school days
+        that flip a child from school-covered to needing care), rather than the
+        obligation graph. Grade-aware: pass ``grade`` so grade-specific closures
+        that don't apply to this student are excluded.
+        """
+
+        if media_type not in _ALLOWED_MEDIA:
+            raise VisionUnavailable(f"unsupported media type: {media_type!r}")
+
+        who = f"The student is in grade {grade}." if grade else "The student's grade is unspecified."
+        content = [
+            {"type": "image", "source": {
+                "type": "base64", "media_type": media_type, "data": image_base64}},
+            {"type": "text", "text": f"{who} Extract this student's no-school days."},
+        ]
+        try:
+            response = self._client.messages.parse(
+                model=self.model,
+                max_tokens=16000,
+                thinking={"type": "adaptive"},
+                system=_SCHOOL_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": content}],
+                output_format=_SchoolCalendarExtraction,
+            )
+        except Exception as exc:
+            raise VisionUnavailable(str(exc)) from exc
+
+        result = response.parsed_output
+        if result is None:
+            raise VisionUnavailable(
+                f"no parsed output (stop_reason={getattr(response, 'stop_reason', None)})"
+            )
+        return result
 
 
 def vision_extractor_from_env() -> VisionExtractor | None:

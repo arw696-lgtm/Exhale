@@ -45,6 +45,8 @@ services:
       EXHALE_LLM_EXTRACTOR: ${EXHALE_LLM_EXTRACTOR:-0}
       EXHALE_LLM_MODEL: ${EXHALE_LLM_MODEL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Optional vision extraction (photos/screenshots) — reuses ANTHROPIC_API_KEY:
+      EXHALE_VISION_MODEL: ${EXHALE_VISION_MODEL:-}
     ports:
       - "8000:8000"
 

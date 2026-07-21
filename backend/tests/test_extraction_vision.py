@@ -159,3 +159,51 @@ def test_env_factory_builds_when_key_present(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     extractor = vision_extractor_from_env()
     assert isinstance(extractor, VisionExtractor)
+
+
+# --- school-calendar extraction ---------------------------------------------------
+from datetime import date as _date
+
+from exhale.extraction_vision import _SchoolCalendarExtraction, _SchoolClosure
+
+
+def _school(**over):
+    base = dict(
+        school_name="ISLA",
+        first_day=_date(2026, 9, 1),
+        last_day=_date(2027, 6, 3),
+        no_school_days=[
+            _SchoolClosure(day=_date(2026, 10, 15), reason="MEA break"),
+            _SchoolClosure(day=_date(2026, 10, 16), reason="MEA break"),
+        ],
+    )
+    base.update(over)
+    return _StubResponse(_SchoolCalendarExtraction(**base))
+
+
+def test_extract_school_calendar_returns_closures():
+    result = VisionExtractor(client=_StubClient(_school())).extract_school_calendar(
+        "img", "image/png", grade="1")
+    assert result.school_name == "ISLA"
+    assert result.first_day == _date(2026, 9, 1)
+    assert {c.day for c in result.no_school_days} == {_date(2026, 10, 15), _date(2026, 10, 16)}
+
+
+def test_extract_school_calendar_passes_grade_in_prompt():
+    client = _StubClient(_school())
+    VisionExtractor(client=client).extract_school_calendar("img", "image/png", grade="1")
+    text = client.messages.calls[0]["messages"][0]["content"][1]["text"]
+    assert "grade 1" in text
+
+
+def test_extract_school_calendar_bad_media_raises():
+    with pytest.raises(VisionUnavailable, match="media type"):
+        VisionExtractor(client=_StubClient(_school())).extract_school_calendar(
+            "img", "application/pdf")
+
+
+def test_extract_school_calendar_refusal_raises():
+    with pytest.raises(VisionUnavailable):
+        VisionExtractor(client=_StubClient(
+            _StubResponse(None, stop_reason="refusal"))).extract_school_calendar(
+            "img", "image/png")

@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (237 tests)
+│   ├── tests/          pytest suite (244 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 237 tests (incl. Postgres integration when reachable)
+python -m pytest             # 244 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -94,6 +94,7 @@ Key endpoints (see `src/exhale/api.py`):
 | `GET` | `/health` | liveness |
 | `POST` | `/v1/families/{fid}/extractions` | ingest → route (§3.3) → graph |
 | `POST` | `/v1/families/{fid}/extractions/photo` | extract trackable items from a photo/screenshot → route |
+| `POST` | `/v1/families/{fid}/coverage-model/school/photo` | read a school-calendar photo → coverage no-school days |
 | `GET` | `/v1/families/{fid}/briefing` | Weekly COO Briefing (§9.1) |
 | `GET` | `/v1/families/{fid}/ledger` | extraction ledger + provenance |
 | `GET` | `/v1/families/{fid}/drafts` | recommended action drafts (§6, §10) |
@@ -132,6 +133,12 @@ extracted only when legible (else the honest `missing_fields` state), and a date
 the model had to infer is flagged `INFERRED` — so it never silently auto-commits.
 `POST /v1/families/{fid}/extractions/photo` (base64 image); requires
 `ANTHROPIC_API_KEY` (503 otherwise). Model override: `EXHALE_VISION_MODEL`.
+
+A second path closes the loop with the Care-Coverage Engine: `POST
+/v1/families/{fid}/coverage-model/school/photo` reads a **school-calendar** image
+and populates the coverage model's no-school days (grade-aware — pass `grade` so
+closures for other grades only are excluded). Snap the school calendar and the
+care gaps populate themselves.
 
 **Live Gmail.** `connectors/gmail.py` speaks the Gmail REST API directly
 (OAuth: `EXHALE_GMAIL_ACCESS_TOKEN`, or `EXHALE_GMAIL_REFRESH_TOKEN` +
