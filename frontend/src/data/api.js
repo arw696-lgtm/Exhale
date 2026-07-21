@@ -258,6 +258,56 @@ export function sendTestNotification(familyId = DEMO_FAMILY) {
   return postJson(`/v1/families/${familyId}/notifications/test`);
 }
 
+// --- scoped caregivers (helpers) — FAMILY_STRUCTURES §3.2 ----------------------
+/** The logged-in helper's scoped home: their care days' gaps + shared items. */
+export async function fetchHelperView(familyId = DEMO_FAMILY, asUserId = null) {
+  try {
+    const q = asUserId ? `?as=${encodeURIComponent(asUserId)}` : "";
+    const res = await apiFetch(`/v1/families/${familyId}/helper-view${q}`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Members only: mint a scoped invite code for a helper covering these days. */
+export function createHelperInvite(weekdays, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/helper-invites`, { weekdays });
+}
+
+/** Members only: the household's helper roster + each one's scope, or null. */
+export async function fetchHelpers(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/helpers`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Members only: change a helper's care days or shared obligations. */
+export async function updateHelperScope(helperUserId, patch, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(`/v1/families/${familyId}/helpers/${helperUserId}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
+/** Members only: revoke a helper (clears their scope; their view goes empty). */
+export async function revokeHelper(helperUserId, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(`/v1/families/${familyId}/helpers/${helperUserId}`, {
+    method: "DELETE",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
 // --- connections (OAuth) -----------------------------------------------------
 /** What providers this family has connected, or null when unavailable. */
 export async function fetchConnections(familyId = DEMO_FAMILY) {

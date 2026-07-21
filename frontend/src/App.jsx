@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import WeeklyBriefing from "./components/WeeklyBriefing.jsx";
+import HelperHome from "./components/HelperHome.jsx";
 import DraftModal from "./components/DraftModal.jsx";
 import AuthScreen from "./components/AuthScreen.jsx";
 import {
@@ -43,6 +44,12 @@ export default function App() {
       const restored = await fetchMe();
       if (restored) {
         setMe(restored);
+        // A helper never loads the household briefing (they'd be denied);
+        // their scoped home fetches its own data.
+        if (restored.role === "HELPER") {
+          setPhase("ready");
+          return;
+        }
         await loadData(restored.family_id);
       } else {
         await loadData(DEMO_FAMILY);
@@ -52,9 +59,14 @@ export default function App() {
 
   const handleAuthed = async (user) => {
     const restored = await fetchMe(); // pick up invite_code alongside the user
-    setMe(restored ?? user);
+    const u = restored ?? user;
+    setMe(u);
+    if (u.role === "HELPER") {
+      setPhase("ready");
+      return;
+    }
     setPhase("loading");
-    await loadData((restored ?? user).family_id);
+    await loadData(u.family_id);
   };
 
   const handleLogout = async () => {
@@ -80,6 +92,17 @@ export default function App() {
 
   if (phase === "auth") {
     return <AuthScreen onAuthed={handleAuthed} />;
+  }
+
+  // Scoped caregiver: their own home, not the household briefing.
+  if (me?.role === "HELPER") {
+    return (
+      <HelperHome
+        familyId={me.family_id}
+        displayName={me.display_name}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   if (phase === "loading" || !briefing) {
