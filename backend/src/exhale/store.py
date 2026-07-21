@@ -100,6 +100,12 @@ class HouseholdStore:
         with self._lock:
             return dict(self._profiles.get(family_id, {}))
 
+    def family_ids(self) -> list[str]:
+        """Every family known to the store (for background jobs like auto-sync)."""
+
+        with self._lock:
+            return sorted(set(self._graphs) | set(self._profiles) | set(self._ledger))
+
     # -- action layer (§6, §10) ----------------------------------------------
     def drafts(self, family_id: str) -> list[ActionDraft]:
         """Generate approvable action drafts for every open dependency gap."""

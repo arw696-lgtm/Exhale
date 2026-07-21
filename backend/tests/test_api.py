@@ -570,3 +570,77 @@ def test_ics_upload_validates_attendees():
     r = client.post(f"/v1/families/{fam}/sync/ics/upload",
                     json={"content": "BEGIN:VCALENDAR\nEND:VCALENDAR\n", "attendees": []})
     assert r.status_code == 400
+
+
+# --- Review queue (the human side of "asks when unsure") --------------------------
+def _pending_payload(event="Zoo Camp Reminder"):
+    return {
+        "extracted_event": event, "event_date": "2026-08-10",
+        "action_required": True, "confidence_score": 0.95,
+        "artifact_tier": "REMINDER",  # reminder tier → held PENDING_VERIFICATION
+    }
+
+
+def test_pending_item_appears_in_review_queue():
+    fam = "fam_review_1"
+    client.post(f"/v1/families/{fam}/extractions", json=_pending_payload())
+    review = client.get(f"/v1/families/{fam}/review").json()
+    assert review["count"] == 1
+    assert review["pending"][0]["extracted_event"] == "Zoo Camp Reminder"
+    assert review["pending"][0]["record_status"] == "PENDING_VERIFICATION"
+
+
+def test_confirm_commits_and_clears_from_queue():
+    fam = "fam_review_2"
+    client.post(f"/v1/families/{fam}/extractions", json=_pending_payload())
+    ext_id = client.get(f"/v1/families/{fam}/review").json()["pending"][0]["extraction_id"]
+
+    r = client.post(f"/v1/families/{fam}/extractions/{ext_id}/confirm")
+    assert r.status_code == 200
+    assert r.json()["record_status"] == "COMMITTED"
+    assert r.json()["event_date_origin"] == "USER_CONFIRMED"
+    assert client.get(f"/v1/families/{fam}/review").json()["count"] == 0
+
+    # Confirmed item now shows in the briefing as a real obligation.
+    briefing = client.get(f"/v1/families/{fam}/briefing").json()
+    titles = [i["title"] for sec in ("critical_threats", "dependency_watch", "advisories")
+              for i in briefing[sec]]
+    assert "Zoo Camp Reminder" in titles
+
+
+def test_dismiss_clears_from_queue_but_keeps_ledger():
+    fam = "fam_review_3"
+    client.post(f"/v1/families/{fam}/extractions", json=_pending_payload())
+    ext_id = client.get(f"/v1/families/{fam}/review").json()["pending"][0]["extraction_id"]
+
+    r = client.post(f"/v1/families/{fam}/extractions/{ext_id}/dismiss")
+    assert r.status_code == 200
+    assert client.get(f"/v1/families/{fam}/review").json()["count"] == 0
+    # Dismissals are signal, not erasure: the ledger keeps the entry.
+    ledger = client.get(f"/v1/families/{fam}/ledger").json()["entries"]
+    assert any(e["extraction_id"] == ext_id for e in ledger)
+
+
+def test_confirm_and_dismiss_unknown_are_404():
+    assert client.post("/v1/families/f/extractions/ext_x/confirm").status_code == 404
+    assert client.post("/v1/families/f/extractions/ext_x/dismiss").status_code == 404
+
+
+def test_successful_ics_sync_is_remembered_for_auto_sync(monkeypatch):
+    import exhale.api as api_mod
+
+    class _FakeICS:
+        def __init__(self, url, *, attendees, tz="America/Chicago"):
+            self.attendees = attendees
+
+        def fetch_busy(self):
+            return []
+
+    monkeypatch.setattr("exhale.connectors.ics.ICSCalendarConnector", _FakeICS)
+    fam = "fam_remember_sync"
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    r = client.post(f"/v1/families/{fam}/sync/ics",
+                    json={"url": "https://x/shared.ics", "attendees": ["Ali", "Andy"]})
+    assert r.status_code == 200
+    configs = api_mod.store.profile(fam).get("sync_configs")
+    assert configs["ics"][0]["url"] == "https://x/shared.ics"

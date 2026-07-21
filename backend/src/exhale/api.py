@@ -104,9 +104,31 @@ def _family_google_tokens(family_id: str) -> dict | None:
     return None
 
 
+def _remember_sync(family_id: str, kind: str, config: dict) -> None:
+    """Persist a successful sync's parameters so auto-sync can replay them.
+
+    ``ics`` configs accumulate as a list (deduped by url+holder); ``gcal`` and
+    ``outlook`` keep the latest single config.
+    """
+
+    configs = dict(store.profile(family_id).get("sync_configs") or {})
+    if kind == "ics":
+        existing = [c for c in (configs.get("ics") or [])
+                    if not (c.get("url") == config.get("url")
+                            and c.get("holder") == config.get("holder"))]
+        configs["ics"] = existing + [config]
+    else:
+        configs[kind] = config
+    store.set_profile(family_id, sync_configs=configs)
+
+
 store = _build_store()
 auth_store = _build_auth_store()
 pipeline_extractor = _build_extractor()
+# Background auto-sync (off unless EXHALE_AUTO_SYNC_MINUTES is set).
+from exhale.auto_sync import scheduler_from_env  # noqa: E402
+
+auto_sync_scheduler = scheduler_from_env(store, pipeline_extractor)
 # Seed the demo household only if absent, so state (e.g. approved obligations)
 # survives service restarts under the persistent backend.
 if not store.graph(DEMO_FAMILY_ID).nodes:
@@ -548,6 +570,69 @@ def correct_extraction(
     return {"family_id": family_id, **entry.to_dict()}
 
 
+# --- Review queue: the human side of "asks when unsure" -----------------------------
+def _dismissed_ids(family_id: str) -> set[str]:
+    return set(store.profile(family_id).get("dismissed_extractions") or [])
+
+
+@app.get("/v1/families/{family_id}/review")
+def get_review_queue(family_id: str = Depends(require_family_access)) -> dict:
+    """Items held PENDING_VERIFICATION, awaiting a human yes/no/fix.
+
+    The surface for the credibility layer's core promise: anything the pipeline
+    wasn't sure enough to commit waits here instead of silently landing (or
+    silently vanishing). Superseded and dismissed entries are excluded.
+    """
+
+    from exhale.routing import RecordStatus
+
+    dismissed = _dismissed_ids(family_id)
+    pending = [
+        e.to_dict()
+        for e in store.ledger(family_id)
+        if e.decision.status is RecordStatus.PENDING_VERIFICATION
+        and e.superseded_by is None
+        and e.extraction_id not in dismissed
+    ]
+    pending.sort(key=lambda d: d["event_date"])
+    return {"family_id": family_id, "count": len(pending), "pending": pending}
+
+
+@app.post("/v1/families/{family_id}/extractions/{extraction_id}/confirm")
+def confirm_extraction(
+    extraction_id: str, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Confirm a pending item as-is — 'yes, that's real.'
+
+    A confirmation is a correction that changes nothing: the entry re-routes as
+    USER_CONFIRMED (always commits) and the original is kept, superseded.
+    """
+
+    try:
+        entry = store.correct(family_id, extraction_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"family_id": family_id, **entry.to_dict()}
+
+
+@app.post("/v1/families/{family_id}/extractions/{extraction_id}/dismiss")
+def dismiss_extraction(
+    extraction_id: str, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Dismiss a pending item — 'not a real obligation.'
+
+    The entry stays in the ledger (dismissals are signal, not erasure) but drops
+    out of the review queue; the dismissed set persists in the encrypted profile.
+    """
+
+    if not any(e.extraction_id == extraction_id for e in store.ledger(family_id)):
+        raise HTTPException(status_code=404, detail=f"No extraction {extraction_id!r}")
+    dismissed = _dismissed_ids(family_id)
+    dismissed.add(extraction_id)
+    store.set_profile(family_id, dismissed_extractions=sorted(dismissed))
+    return {"family_id": family_id, "extraction_id": extraction_id, "status": "dismissed"}
+
+
 class MissingSourceIn(BaseModel):
     """A source the family knows exists but has not connected."""
 
@@ -742,6 +827,10 @@ def sync_calendar(
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    _remember_sync(family_id, "gcal", {
+        "caregiver_name": req.caregiver_name, "calendar_id": req.calendar_id,
+        "days": req.days,
+    })
     return {
         "family_id": family_id,
         "caregiver": req.caregiver_name,
@@ -796,6 +885,9 @@ def sync_ics(
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Could not fetch calendar: {exc}") from exc
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    _remember_sync(family_id, "ics", {
+        "url": req.url, "attendees": req.attendees, "holder": holder, "tz": req.tz,
+    })
     return {
         "family_id": family_id,
         "holder": holder,
@@ -912,6 +1004,9 @@ def sync_outlook(
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    _remember_sync(family_id, "outlook", {
+        "caregiver_name": req.caregiver_name, "days": req.days,
+    })
     return {
         "family_id": family_id,
         "caregiver": req.caregiver_name,

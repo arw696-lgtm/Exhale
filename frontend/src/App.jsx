@@ -101,6 +101,9 @@ export default function App() {
         user={me}
         inviteCode={me?.invite_code}
         onLogout={me ? handleLogout : undefined}
+        familyId={familyId}
+        live={source === "api"}
+        onRefresh={() => loadData(familyId)}
       />
       <DraftModal
         draft={openObligationId ? drafts[openObligationId] : null}

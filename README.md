@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (311 tests)
+│   ├── tests/          pytest suite (305 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 311 tests (incl. Postgres integration when reachable)
+python -m pytest             # 305 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -99,6 +99,8 @@ Key endpoints (see `src/exhale/api.py`):
 | `POST` | `/v1/families/{fid}/extractions/photo` | extract trackable items from a photo/screenshot → route |
 | `POST` | `/v1/families/{fid}/coverage-model/school/photo` | read a school-calendar photo → coverage no-school days |
 | `GET` | `/v1/families/{fid}/briefing` | Weekly COO Briefing (§9.1) |
+| `GET` | `/v1/families/{fid}/review` | pending-verification queue awaiting a human yes/no |
+| `POST` | `/v1/families/{fid}/extractions/{id}/confirm` · `/dismiss` | resolve a held item (confirm = USER_CONFIRMED commit) |
 | `GET` | `/v1/families/{fid}/ledger` | extraction ledger + provenance |
 | `GET` | `/v1/families/{fid}/drafts` | recommended action drafts (§6, §10) |
 | `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
@@ -162,6 +164,21 @@ family's own connected tokens, falling back to the single-tenant `EXHALE_GMAIL_*
 / `EXHALE_GCAL_*` env vars. `GET /connections` reports what's linked. Read-only
 scopes only. Fully testable without a real Google account (the token exchange
 takes an injectable client; state signing is pure).
+
+**Review queue (the human side of "asks when unsure").** Anything the pipeline
+holds at `PENDING_VERIFICATION` — a reminder-tier artifact, an inferred date —
+waits in `GET /review` for a human decision instead of silently landing or
+vanishing. The UI shows *why* each item was held; **Confirm** re-routes it as
+`USER_CONFIRMED` ground truth (always commits), **Dismiss** drops it from the
+queue while keeping the ledger record (dismissals are signal, not erasure).
+
+**Background auto-sync (`auto_sync.py`).** Set `EXHALE_AUTO_SYNC_MINUTES` and a
+daemon thread re-pulls each family's sources on that cadence: Gmail whenever a
+Google account is connected (the watermark keeps it incremental), plus a replay
+of every calendar/`.ics` sync the family has run once by hand (the parameters
+are remembered in the encrypted profile). Every unit of work is individually
+error-isolated, so one family's broken feed never stalls another's. Off by
+default — dev and tests stay deterministic.
 
 **Live Gmail.** `connectors/gmail.py` speaks the Gmail REST API directly
 (OAuth: `EXHALE_GMAIL_ACCESS_TOKEN`, or `EXHALE_GMAIL_REFRESH_TOKEN` +

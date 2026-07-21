@@ -128,6 +128,63 @@ export async function approveAction(obligationNodeId, familyId = DEMO_FAMILY) {
   return res.json();
 }
 
+// --- review queue ------------------------------------------------------------
+/** Pending-verification items awaiting a human yes/no, or null when unavailable. */
+export async function fetchReview(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/review`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function postJson(path, payload) {
+  const res = await apiFetch(path, {
+    method: "POST",
+    ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
+export function confirmExtraction(extractionId, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/extractions/${extractionId}/confirm`);
+}
+
+export function dismissExtraction(extractionId, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/extractions/${extractionId}/dismiss`);
+}
+
+// --- photo extraction ---------------------------------------------------------
+/** Send a photo/screenshot (File object) through vision extraction. */
+export async function uploadPhoto(file, familyId = DEMO_FAMILY, knownChildren = []) {
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",", 2)[1] ?? "");
+    reader.onerror = () => reject(new Error("Could not read the file"));
+    reader.readAsDataURL(file);
+  });
+  return postJson(`/v1/families/${familyId}/extractions/photo`, {
+    image_base64: base64,
+    media_type: file.type || "image/png",
+    source_name: file.name || "photo",
+    known_children: knownChildren,
+  });
+}
+
+// --- work windows -------------------------------------------------------------
+export async function fetchWorkWindows(caregiver, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(
+    `/v1/families/${familyId}/work-windows?caregiver=${encodeURIComponent(caregiver)}`
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
 // --- connections (OAuth) -----------------------------------------------------
 /** What providers this family has connected, or null when unavailable. */
 export async function fetchConnections(familyId = DEMO_FAMILY) {
