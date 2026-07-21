@@ -137,6 +137,38 @@ class GoogleCalendarConnector:
             return resp.json()
         raise RuntimeError("unreachable")
 
+    # -- write -----------------------------------------------------------------
+    def create_event(
+        self, title: str, start: datetime, end: datetime,
+        *, description: str = "", tz: str = "America/Chicago",
+    ) -> dict:
+        """Create an event on the calendar; returns Google's event resource.
+
+        The write half of controlled autonomy: only ever called after the
+        household's autonomy dial (and, at ASK level, a human tap) allows it.
+        """
+
+        if self._access_token is None:
+            self._refresh_access_token()
+        body = {
+            "summary": title,
+            "description": description or "Added by Exhale",
+            "start": {"dateTime": start.isoformat(), "timeZone": tz},
+            "end": {"dateTime": end.isoformat(), "timeZone": tz},
+        }
+        url = f"{CALENDAR_API}/calendars/{self.calendar_id}/events"
+        for attempt in (1, 2):
+            resp = self._http.post(
+                url, json=body,
+                headers={"Authorization": f"Bearer {self._access_token}"},
+            )
+            if resp.status_code == 401 and attempt == 1:
+                self._refresh_access_token()
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        raise RuntimeError("unreachable")
+
     # -- fetch -----------------------------------------------------------------
     def fetch_busy(self, start: datetime, end: datetime) -> list[CalendarEvent]:
         """Busy :class:`CalendarEvent`s for ``[start, end)``, recurrences expanded."""

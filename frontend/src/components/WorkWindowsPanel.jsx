@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { fetchWorkWindows } from "../data/api.js";
+import { fetchWorkWindows, scheduleEvent } from "../data/api.js";
 
 /**
  * Work Windows — "when can I work this week?"
@@ -25,6 +25,21 @@ export default function WorkWindowsPanel({ familyId }) {
   const [plan, setPlan] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [added, setAdded] = useState({}); // window start iso → provider it landed on
+
+  const addToCalendar = async (w) => {
+    setError(null);
+    try {
+      const result = await scheduleEvent(
+        { title: `Work block (Exhale)`, start: w.start, end: w.end,
+          description: `Suggested by Exhale — ${w.child_covered_by.join(", ")}` },
+        familyId
+      );
+      setAdded((a) => ({ ...a, [w.start]: result.provider }));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const lookup = async (e) => {
     e.preventDefault();
@@ -79,16 +94,27 @@ export default function WorkWindowsPanel({ familyId }) {
           ) : (
             <ul className="space-y-2">
               {plan.windows.map((w) => (
-                <li key={w.start} className="flex items-baseline justify-between border-l-2 border-sage-release/60 pl-3 font-micro text-sm">
+                <li key={w.start} className="flex items-center justify-between gap-2 border-l-2 border-sage-release/60 pl-3 font-micro text-sm">
                   <span>
                     <span className="font-semibold text-sanctuary-navy">
                       {fmtDay(w.start)} · {fmt(w.start)}–{fmt(w.end)}
                     </span>
                     <span className="ml-2 text-xs text-sanctuary-navy/50">
-                      {w.child_covered_by.join(", ")}
+                      {w.child_covered_by.join(", ")} · {w.duration_hours}h
                     </span>
                   </span>
-                  <span className="text-xs text-sanctuary-navy/50">{w.duration_hours}h</span>
+                  {added[w.start] ? (
+                    <span className="whitespace-nowrap text-xs font-medium text-sanctuary-navy/60">
+                      ✓ on your {added[w.start] === "feed" ? "Exhale" : added[w.start]} calendar
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => addToCalendar(w)}
+                      className="whitespace-nowrap rounded-full border border-sage-release/40 bg-sage-release/10 px-3 py-1 text-xs font-medium text-sanctuary-navy transition hover:bg-sage-release/20"
+                    >
+                      + Add to my calendar
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

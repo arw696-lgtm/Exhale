@@ -99,3 +99,24 @@ def test_fetch_refreshes_on_401():
 def test_connector_requires_credentials():
     with pytest.raises(ValueError):
         GraphCalendarConnector(caregiver_name="Ali")
+
+
+# --- event write ------------------------------------------------------------------
+def test_create_event_posts_to_graph():
+    seen = {}
+
+    def handler(request):
+        if request.method == "POST" and "events" in request.url.path:
+            import json
+            seen["body"] = json.loads(request.content)
+            return httpx.Response(201, json={"id": "AAMk_new"})
+        return httpx.Response(200, json={})
+
+    conn = GraphCalendarConnector(
+        caregiver_name="Ali", access_token="tok",
+        http=httpx.Client(transport=httpx.MockTransport(handler)))
+    created = conn.create_event("Gym", datetime(2026, 7, 23, 9, 0),
+                                datetime(2026, 7, 23, 10, 0))
+    assert created["id"] == "AAMk_new"
+    assert seen["body"]["subject"] == "Gym"
+    assert seen["body"]["start"]["timeZone"] == "America/Chicago"
