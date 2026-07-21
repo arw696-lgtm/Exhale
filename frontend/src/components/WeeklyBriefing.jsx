@@ -2,6 +2,7 @@ import React from "react";
 import ThreatCard from "./ThreatCard.jsx";
 import DependencyWatch from "./DependencyWatch.jsx";
 import CalendarConflicts from "./CalendarConflicts.jsx";
+import CareWatch from "./CareWatch.jsx";
 
 /**
  * The Sunday Morning Weekly COO Briefing (Blueprint §9.1).
@@ -9,8 +10,10 @@ import CalendarConflicts from "./CalendarConflicts.jsx";
  */
 export default function WeeklyBriefing({ briefing, drafts = {}, onOpenDraft, user, inviteCode, onLogout }) {
   const criticalCount = briefing.summary?.critical_count ?? briefing.critical_threats.length;
+  const careGapCount = briefing.care_watch?.summary?.total_gaps ?? 0;
   const isAllClear =
     criticalCount === 0 &&
+    careGapCount === 0 &&
     (briefing.dependency_watch?.length ?? 0) === 0 &&
     (briefing.completed?.length ?? 0) === 0 &&
     (briefing.calendar_conflicts?.length ?? 0) === 0;
@@ -74,6 +77,9 @@ export default function WeeklyBriefing({ briefing, drafts = {}, onOpenDraft, use
           </div>
         </section>
       )}
+
+      {/* Care Watch — child-supervision gaps */}
+      <CareWatch careWatch={briefing.care_watch} />
 
       {/* Dependency watch */}
       <div className="mb-8">

@@ -16,9 +16,10 @@ out of the box. Run with::
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+import httpx
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -27,6 +28,9 @@ from exhale.auth import AuthError, InMemoryAuthStore, User
 from exhale.briefing import build_weekly_briefing
 from exhale.connectors.base import RawMessage
 from exhale.connectors.memory import FixtureConnector
+from exhale.coverage import build_care_watch
+from exhale.coverage_config import CoverageModelIn, build_engine, default_range
+from exhale.credibility import build_coverage
 from exhale.extraction import ExtractionContext
 from exhale.retro_scan import run_incremental_sync, run_retro_scan
 from exhale.schemas import ExtractionPayload
@@ -234,10 +238,28 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     """Assemble the family's Weekly COO Briefing from the current graph.
 
     A family with no graph yet (fresh signup) gets a valid all-clear briefing,
-    not an error — the empty state is a real product state.
+    not an error — the empty state is a real product state. When the household
+    has configured a coverage model, the child-supervision Care Watch for the
+    next two weeks rides along.
     """
 
-    return build_weekly_briefing(store.graph(family_id))
+    profile = store.profile(family_id)
+    return build_weekly_briefing(
+        store.graph(family_id),
+        coverage=build_coverage(profile),
+        care_watch=_care_watch_for(profile),
+    )
+
+
+def _care_watch_for(profile: dict) -> dict | None:
+    """Build the next-two-weeks Care Watch if the family configured a model."""
+
+    config = profile.get("coverage_model")
+    if not config:
+        return None
+    engine = build_engine(CoverageModelIn(**config))
+    start, end = default_range()
+    return build_care_watch(engine, start, end)
 
 
 @app.get("/v1/families/{family_id}/ledger")
@@ -245,6 +267,242 @@ def get_ledger(family_id: str = Depends(require_family_access)) -> dict:
     """Return the extraction ledger (routing outcomes + provenance)."""
 
     return {"family_id": family_id, "entries": [e.to_dict() for e in store.ledger(family_id)]}
+
+
+class CorrectionRequest(BaseModel):
+    """User-supplied fixes for a previous extraction — ground truth.
+
+    Only the provided fields change; the corrected record re-routes as
+    USER_CONFIRMED (always commits) and the original entry is kept, marked
+    superseded — corrections are a logged failure signal, not an erasure.
+    """
+
+    extracted_event: str | None = None
+    target_person_name: str | None = None
+    event_date: date | None = None
+    deadline_date: date | None = None
+    event_start_time: time | None = None
+    event_end_time: time | None = None
+    action_required: bool | None = None
+
+
+@app.post("/v1/families/{family_id}/extractions/{extraction_id}/correct")
+def correct_extraction(
+    extraction_id: str,
+    req: CorrectionRequest,
+    family_id: str = Depends(require_family_access),
+) -> dict:
+    """Apply a user correction to a ledger entry (credibility layer)."""
+
+    fixes = {k: v for k, v in req.model_dump().items() if v is not None}
+    try:
+        entry = store.correct(family_id, extraction_id, **fixes)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"family_id": family_id, **entry.to_dict()}
+
+
+class MissingSourceIn(BaseModel):
+    """A source the family knows exists but has not connected."""
+
+    source: str
+    owns: list[str] = Field(default_factory=list)
+
+
+class CoverageDeclaration(BaseModel):
+    """What the pipeline can and cannot see, declared per family."""
+
+    connected_sources: list[str] = Field(default_factory=list)
+    known_missing_sources: list[MissingSourceIn] = Field(default_factory=list)
+
+
+@app.put("/v1/families/{family_id}/coverage")
+def declare_coverage(
+    req: CoverageDeclaration, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Declare source coverage — connected channels and known blind spots.
+
+    The resulting statement rides on every briefing so answers touching an
+    uncovered domain are visibly partial instead of silently incomplete.
+    """
+
+    store.set_profile(family_id, coverage=req.model_dump())
+    return build_coverage(store.profile(family_id))
+
+
+@app.put("/v1/families/{family_id}/coverage-model")
+def set_coverage_model(
+    model: CoverageModelIn, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Configure the household's care-coverage model (child, caregivers, school).
+
+    Persisted (encrypted) in the family profile; the Care-Coverage Engine reads
+    it to detect child-supervision gaps for the briefing and the care-gaps API.
+    """
+
+    store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {
+        "family_id": family_id,
+        "status": "saved",
+        "recipient": model.recipient.name,
+        "caregivers": [c.name for c in model.caregivers],
+        "school": model.school.name if model.school else None,
+    }
+
+
+@app.get("/v1/families/{family_id}/care-gaps")
+def get_care_gaps(
+    family_id: str = Depends(require_family_access),
+    from_: date | None = Query(default=None, alias="from"),
+    to: date | None = Query(default=None),
+) -> dict:
+    """Care-supervision gaps over a date range (default: next 14 days).
+
+    Requires a coverage model (see PUT /coverage-model); 404 if none is set.
+    """
+
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    engine = build_engine(CoverageModelIn(**config))
+    default_start, default_end = default_range()
+    start = from_ or default_start
+    end = to or (start + (default_end - default_start))
+    return build_care_watch(engine, start, end)
+
+
+class CalendarSyncRequest(BaseModel):
+    """Sync a caregiver's Google Calendar busy blocks into the coverage model."""
+
+    caregiver_name: str
+    calendar_id: str = "primary"
+    days: int = 120  # horizon to pull busy blocks for
+
+
+def _gcal_connector_from_env(caregiver_name: str, calendar_id: str):
+    """Build a GoogleCalendarConnector from env credentials, or ``None``."""
+
+    import os
+
+    access = os.environ.get("EXHALE_GCAL_ACCESS_TOKEN")
+    refresh = os.environ.get("EXHALE_GCAL_REFRESH_TOKEN")
+    if not access and not refresh:
+        return None
+    from exhale.connectors.gcal import GoogleCalendarConnector
+
+    return GoogleCalendarConnector(
+        caregiver_name=caregiver_name,
+        calendar_id=calendar_id,
+        access_token=access,
+        refresh_token=refresh,
+        client_id=os.environ.get("EXHALE_GCAL_CLIENT_ID"),
+        client_secret=os.environ.get("EXHALE_GCAL_CLIENT_SECRET"),
+    )
+
+
+@app.post("/v1/families/{family_id}/sync/calendar")
+def sync_calendar(
+    req: CalendarSyncRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Pull a caregiver's Google Calendar busy blocks into the coverage model.
+
+    Turns that caregiver's availability from inferred into observed: synced
+    events are stamped OBSERVED, so gaps built on them are high-confidence.
+    Idempotent — re-syncing replaces the previous pull. Requires a configured
+    coverage model (404) and Google Calendar credentials (503).
+    """
+
+    from datetime import timedelta
+
+    from exhale.coverage_config import merge_events
+
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    connector = _gcal_connector_from_env(req.caregiver_name, req.calendar_id)
+    if connector is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Google Calendar is not configured. Set EXHALE_GCAL_ACCESS_TOKEN, "
+                   "or EXHALE_GCAL_REFRESH_TOKEN + EXHALE_GCAL_CLIENT_ID + "
+                   "EXHALE_GCAL_CLIENT_SECRET.",
+        )
+
+    now = datetime.now()
+    events = connector.fetch_busy(now, now + timedelta(days=req.days))
+    try:
+        model = merge_events(
+            CoverageModelIn(**config), req.caregiver_name, events, source_prefix="gcal_"
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {
+        "family_id": family_id,
+        "caregiver": req.caregiver_name,
+        "calendar_id": req.calendar_id,
+        "synced_busy_events": len(events),
+    }
+
+
+class ICSSyncRequest(BaseModel):
+    """Sync a published .ics calendar (iCloud/Outlook shared) into the model."""
+
+    url: str
+    attendees: list[str]  # caregivers who are OUT for these events
+    holder: str | None = None  # whose event bucket to store them in (default: first attendee)
+    tz: str = "America/Chicago"
+
+
+@app.post("/v1/families/{family_id}/sync/ics")
+def sync_ics(
+    req: ICSSyncRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Pull a published iCloud/Outlook shared calendar into the coverage model.
+
+    The bridge for calendars with no clean API: the household publishes the
+    shared calendar as a public .ics URL (the concerts, both-parents-out events)
+    and Exhale reads it. Events are stamped with the caregivers who are out for
+    them, and OBSERVED — so gaps built on them are high-confidence. Idempotent.
+    """
+
+    from exhale.connectors.ics import ICSCalendarConnector
+    from exhale.coverage_config import merge_events
+
+    if not req.attendees:
+        raise HTTPException(status_code=400, detail="attendees must be non-empty")
+
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    holder = req.holder or req.attendees[0]
+    try:
+        events = ICSCalendarConnector(
+            req.url, attendees=tuple(req.attendees), tz=req.tz
+        ).fetch_busy()
+        model = merge_events(
+            CoverageModelIn(**config), holder, events, source_prefix="ics_"
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not fetch calendar: {exc}") from exc
+    store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {
+        "family_id": family_id,
+        "holder": holder,
+        "attendees": req.attendees,
+        "synced_busy_events": len(events),
+    }
 
 
 @app.get("/v1/families/{family_id}/drafts")

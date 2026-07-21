@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (142 tests)
+│   ├── tests/          pytest suite (222 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 142 passing (incl. Postgres integration when reachable)
+python -m pytest             # 222 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -97,6 +97,9 @@ Key endpoints (see `src/exhale/api.py`):
 | `GET` | `/v1/families/{fid}/ledger` | extraction ledger + provenance |
 | `GET` | `/v1/families/{fid}/drafts` | recommended action drafts (§6, §10) |
 | `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
+| `PUT` | `/v1/families/{fid}/coverage-model` | configure the care-coverage model (child, caregivers, school) |
+| `GET` | `/v1/families/{fid}/care-gaps` | child-supervision gaps over a range (Care Watch) |
+| `POST` | `/v1/families/{fid}/sync/calendar` | pull a caregiver's Google Calendar busy blocks into the model |
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 | `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
 | `POST` | `/v1/auth/signup` | create account (+ new family, or join via invite code) |
@@ -163,6 +166,34 @@ guessed.
 | Medium | 0.70–0.91 | `PENDING_VERIFICATION`, UI review |
 | Low | < 0.70 | Rejected; request clearer artifact |
 
+**Credibility layer (`credibility.py`).** Born from two real extraction
+failures in live testing (activity hours answered from a plausible default
+instead of the confirmation email that stated them; a multi-leg trip reported
+as one leg because the second booking lived in an unconnected inbox). Four
+rules, enforced at the routing choke point so no extractor can bypass them:
+
+- **Artifact hierarchy** — every source is tiered
+  `CONFIRMATION > LOGISTICS > REMINDER > NEWSLETTER > MARKETING`.
+  Confirmations *establish* facts; reminders/newsletters only *reference* them
+  (they can never auto-commit — held `PENDING_VERIFICATION` even at a HIGH
+  score); marketing establishes nothing (always rejected).
+- **Observed vs. inferred** — every event date carries a `FactOrigin`. A date
+  read from the artifact is `OBSERVED`; one derived from a relative phrase is
+  `INFERRED` and never auto-commits. Unknown values (e.g. an activity's hours)
+  stay a named `missing_fields` state — never a filled default.
+- **Corroboration** — event anchors track distinct witnessing artifacts
+  (`witness_refs`); an obligation attested by a single source is marked
+  uncorroborated so downstream surfaces can say so.
+- **Coverage honesty** — each family declares connected sources and known
+  blind spots (`PUT /v1/families/{fid}/coverage`); every briefing carries the
+  resulting statement, so answers touching an uncovered domain are visibly
+  partial instead of silently incomplete.
+
+User corrections are ground truth: `POST
+/v1/families/{fid}/extractions/{id}/correct` re-routes the record as
+`USER_CONFIRMED` (always commits, updates the obligation in place) and keeps
+the superseded original as a logged failure signal.
+
 **Forgetting Engine (§7).** From a confirmed anchor event it traces
 `DEPENDS_ON` chains, scoring each unresolved prerequisite:
 
@@ -172,6 +203,45 @@ Risk Score = Likelihood of Forgetting (P_f) × Impact of Forgetting (I_f)
 
 and stratifies it into 🔴 CRITICAL (high-impact, ≤ 36h), 🟡 IMPORTANT
 (≤ 14 days), or 🔵 ADVISORY.
+
+**Care-Coverage Engine (`coverage.py`).** The Forgetting Engine's forward-looking
+sibling. Where that engine asks "what prep does this event need?", the Coverage
+Engine asks the mirror question about a child who requires constant supervision:
+*"what care does each day need, and is it assigned?"* A **care gap** — a stretch
+where a supervised child has no caregiver and no institution covering them — is a
+hard, safety-level obligation, and it's the base layer the schedule stands on
+("when can a parent work" and "when does the child need a sitter" are the same
+question from two sides). It composes:
+
+- a **school calendar** whose operationally important part is the *no-school
+  days* that flip the child from school-covered to needing care;
+- **caregivers**, each unavailable during a recurring work pattern (often
+  *inferred* from a stated schedule) and/or specific **calendar events** they
+  attend (*observed* from a shared calendar — the thing that turns "both parents
+  at a concert" into a sitter gap);
+- optional **care programs** (e.g. a school's non-school-day care).
+
+Each gap reuses the Forgetting Engine's exact threat bands (imminence drives the
+band; an uncovered child is inherently high-impact) and carries the credibility
+layer's provenance: a gap resting only on an *inferred* work pattern is flagged
+`depends_on_inference` ("assumes Ali's usual hours"), while one built from
+observed calendar events is high-confidence. `build_care_watch()` assembles the
+briefing-ready payload. See it on real data:
+
+```bash
+cd backend && PYTHONPATH=src python examples/demo_coverage.py
+```
+
+**Live caregiver availability (`connectors/gcal.py`).** The Google Calendar
+connector turns a caregiver's availability from *inferred* into *observed*:
+`POST /v1/families/{fid}/sync/calendar` pulls their busy blocks (recurring
+events expanded) and merges them into the coverage model. Only real busy time
+counts — an event marked Free (`transparency: transparent`) or an all-day marker
+does **not** blacked out the day, and cancelled events are skipped. Synced events
+are stamped `OBSERVED`, so a care gap built on them is high-confidence rather than
+assumption-dependent. Auth mirrors Gmail (`EXHALE_GCAL_ACCESS_TOKEN`, or the
+`EXHALE_GCAL_REFRESH_TOKEN` + `EXHALE_GCAL_CLIENT_ID` + `EXHALE_GCAL_CLIENT_SECRET`
+trio); re-syncing is idempotent.
 
 **Action engine (§6, §10).** Each gap advances along the controlled-autonomy
 path `Observe → Recommend → Draft → Execute with Approval → Autonomous`. The

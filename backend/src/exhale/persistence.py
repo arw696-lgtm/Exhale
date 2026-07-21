@@ -183,6 +183,9 @@ class PersistentHouseholdStore(HouseholdStore):
                 entry.created_at = created
                 entries.append(entry)
             if entries:
+                # Supersession is derived from payload.corrects, so a user
+                # correction's audit trail survives restarts without schema churn.
+                self._link_supersessions(entries)
                 self._ledger[family_id] = entries
             if profile_row and profile_row[0]:
                 self._profiles[family_id] = decrypt_payload(
@@ -288,6 +291,13 @@ class PersistentHouseholdStore(HouseholdStore):
     def ingest(self, family_id: str, payload: ExtractionPayload) -> LedgerEntry:
         self._hydrate(family_id)
         entry = super().ingest(family_id, payload)
+        self._persist_graph(family_id)
+        self._persist_ledger_entry(family_id, entry)
+        return entry
+
+    def correct(self, family_id: str, extraction_id: str, **fixes) -> LedgerEntry:
+        self._hydrate(family_id)
+        entry = super().correct(family_id, extraction_id, **fixes)
         self._persist_graph(family_id)
         self._persist_ledger_entry(family_id, entry)
         return entry

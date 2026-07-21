@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from exhale.actions import ActionDraft, ActionEngine, mark_obligation_resolved
 from exhale.graph import Edge, EdgeType, KnowledgeGraph, Node, NodeType
 from exhale.routing import RecordStatus, RoutingDecision, route_extraction
-from exhale.schemas import ExtractionPayload
+from exhale.schemas import ExtractionPayload, FactOrigin
 
 
 class LedgerEntry:
@@ -38,6 +38,8 @@ class LedgerEntry:
         self.decision = decision
         self.obligation_node_id = obligation_node_id
         self.created_at = datetime.now(timezone.utc)
+        # Set when a later user correction replaces this entry as the record.
+        self.superseded_by: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -54,6 +56,20 @@ class LedgerEntry:
             "obligation_node_id": self.obligation_node_id,
             "source_document_name": self.payload.source_document_name,
             "source_reference": self.payload.source_reference,
+            # Credibility layer: how authoritative the artifact is, whether the
+            # date was read or derived, the observed time window (null = the
+            # honest UNKNOWN state), and the named gaps.
+            "artifact_tier": self.payload.artifact_tier.value,
+            "event_date_origin": self.payload.event_date_origin.value,
+            "event_start_time": self.payload.event_start_time.isoformat()
+            if self.payload.event_start_time
+            else None,
+            "event_end_time": self.payload.event_end_time.isoformat()
+            if self.payload.event_end_time
+            else None,
+            "missing_fields": self.payload.missing_fields(),
+            "corrects": self.payload.corrects,
+            "superseded_by": self.superseded_by,
             "created_at": self.created_at.isoformat(),
         }
 
@@ -135,34 +151,113 @@ class HouseholdStore:
             self._ledger.setdefault(family_id, []).append(entry)
             return entry
 
+    def correct(self, family_id: str, extraction_id: str, **fixes) -> LedgerEntry:
+        """Apply a user correction — the highest tier of ground truth.
+
+        The corrected payload re-enters the pipeline stamped USER_CONFIRMED
+        (routing always commits it), the original ledger entry is marked
+        superseded (kept — corrections are a logged failure signal, not an
+        erasure), and any obligation the original committed is updated in
+        place rather than duplicated.
+        """
+
+        with self._lock:
+            entries = self._ledger.get(family_id, [])
+            original = next(
+                (e for e in entries if e.extraction_id == extraction_id), None
+            )
+            if original is None:
+                raise KeyError(
+                    f"No extraction {extraction_id!r} for family {family_id!r}"
+                )
+
+            data = original.payload.model_dump()
+            data.update(fixes)
+            data["confidence_score"] = 1.0
+            data["event_date_origin"] = FactOrigin.USER_CONFIRMED
+            data["corrects"] = extraction_id
+            payload = ExtractionPayload(**data)
+            decision = route_extraction(payload)
+
+            graph = self._graphs.setdefault(family_id, KnowledgeGraph())
+            existing = (
+                graph.nodes.get(original.obligation_node_id)
+                if original.obligation_node_id
+                else None
+            )
+            if existing is not None:
+                props = self._obligation_properties(
+                    payload, corroborated=existing.properties.get("corroborated", False)
+                )
+                props["status"] = existing.properties.get("status", "UNRESOLVED")
+                existing.properties.update(props)
+                obligation_id = existing.node_id
+            else:
+                obligation_id = self._commit_obligation(graph, payload)
+
+            entry = LedgerEntry(
+                extraction_id=f"ext_{uuid.uuid4().hex[:12]}",
+                payload=payload,
+                decision=decision,
+                obligation_node_id=obligation_id,
+            )
+            original.superseded_by = entry.extraction_id
+            self._ledger.setdefault(family_id, []).append(entry)
+            return entry
+
+    @staticmethod
+    def _link_supersessions(entries: list[LedgerEntry]) -> None:
+        """Rebuild superseded_by links from payload.corrects (used on hydration)."""
+
+        by_id = {e.extraction_id: e for e in entries}
+        for entry in entries:
+            if entry.payload.corrects:
+                target = by_id.get(entry.payload.corrects)
+                if target is not None:
+                    target.superseded_by = entry.extraction_id
+
+    @staticmethod
+    def _obligation_properties(payload: ExtractionPayload, *, corroborated: bool) -> dict:
+        # High-impact if there is a hard deadline; easy to forget if it required
+        # manual action. These are reasonable defaults the memory engine refines.
+        return {
+            "name": payload.extracted_event,
+            "status": "UNRESOLVED",
+            "deadline": (payload.deadline_date or payload.event_date).isoformat(),
+            "target_person_name": payload.target_person_name,
+            "likelihood_of_forgetting": 0.8 if payload.action_required else 0.4,
+            "impact_of_forgetting": 0.85 if payload.deadline_date else 0.5,
+            "source_document_name": payload.source_document_name,
+            "source_reference": payload.source_reference,
+            # Credibility layer: cite-or-gap, never a silent default.
+            "artifact_tier": payload.artifact_tier.value,
+            "event_date_origin": payload.event_date_origin.value,
+            "event_start_time": payload.event_start_time.isoformat()
+            if payload.event_start_time
+            else None,
+            "event_end_time": payload.event_end_time.isoformat()
+            if payload.event_end_time
+            else None,
+            "hours_known": payload.event_start_time is not None,
+            "missing_fields": payload.missing_fields(),
+            "corroborated": corroborated,
+        }
+
     def _commit_obligation(self, graph: KnowledgeGraph, payload: ExtractionPayload) -> str:
         """Create an OBLIGATION node (+ anchor EVENT link) from an extraction."""
 
+        anchor_id, witnesses = self._ensure_event_anchor(graph, payload)
         obligation_id = f"ob_{uuid.uuid4().hex[:10]}"
-        # High-impact if there is a hard deadline; easy to forget if it required
-        # manual action. These are reasonable defaults the memory engine refines.
-        impact = 0.85 if payload.deadline_date else 0.5
-        likelihood = 0.8 if payload.action_required else 0.4
-
         graph.add_node(
             Node(
                 node_id=obligation_id,
                 type=NodeType.OBLIGATION,
                 sub_type="REQUIRES_ACTION" if payload.action_required else "TRACKED",
-                properties={
-                    "name": payload.extracted_event,
-                    "status": "UNRESOLVED",
-                    "deadline": (payload.deadline_date or payload.event_date).isoformat(),
-                    "target_person_name": payload.target_person_name,
-                    "likelihood_of_forgetting": likelihood,
-                    "impact_of_forgetting": impact,
-                    "source_document_name": payload.source_document_name,
-                    "source_reference": payload.source_reference,
-                },
+                properties=self._obligation_properties(
+                    payload, corroborated=witnesses > 1
+                ),
             )
         )
-
-        anchor_id = self._ensure_event_anchor(graph, payload)
         graph.add_edge(
             Edge(
                 edge_id=f"edge_{uuid.uuid4().hex[:10]}",
@@ -173,15 +268,26 @@ class HouseholdStore:
         )
         return obligation_id
 
-    def _ensure_event_anchor(self, graph: KnowledgeGraph, payload: ExtractionPayload) -> str:
-        """Reuse an EVENT node for the payload's event name/date, or create one."""
+    def _ensure_event_anchor(
+        self, graph: KnowledgeGraph, payload: ExtractionPayload
+    ) -> tuple[str, int]:
+        """Reuse an EVENT node for the payload's event name, or create one.
+
+        Returns ``(anchor_id, witness_count)`` where the witness count is the
+        number of distinct source artifacts attesting this event so far — the
+        falsification-pass primitive: an event attested by a single artifact
+        is UNCORROBORATED and downstream surfaces may say so.
+        """
 
         for node in graph.nodes.values():
             if (
                 node.type is NodeType.EVENT
                 and node.properties.get("name") == payload.extracted_event
             ):
-                return node.node_id
+                refs = node.properties.setdefault("witness_refs", [])
+                if payload.source_reference and payload.source_reference not in refs:
+                    refs.append(payload.source_reference)
+                return node.node_id, max(len(refs), 1)
 
         anchor_id = f"event_{uuid.uuid4().hex[:10]}"
         graph.add_node(
@@ -191,7 +297,10 @@ class HouseholdStore:
                 properties={
                     "name": payload.extracted_event,
                     "event_date": payload.event_date.isoformat(),
+                    "witness_refs": [payload.source_reference]
+                    if payload.source_reference
+                    else [],
                 },
             )
         )
-        return anchor_id
+        return anchor_id, 1
