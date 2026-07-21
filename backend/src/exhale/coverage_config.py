@@ -71,6 +71,9 @@ class CareRecipientIn(BaseModel):
     name: str
     supervised_start: time = time(6, 0)
     supervised_end: time = time(22, 0)
+    # Optional; never used to decide anything — only to *ask* (aging-out and
+    # sibling-sitter prompts) and to prefill the school grade (exhale.ages).
+    birthdate: date | None = None
 
 
 class ChildIn(BaseModel):

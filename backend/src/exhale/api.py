@@ -605,9 +605,24 @@ def ingest_school_calendar_photo(
             status_code=503,
             detail="Vision extraction is not configured. Set ANTHROPIC_API_KEY.",
         )
+
+    # Grade drives closure filtering ("PK-K only" days). Explicit wins; else
+    # infer it from the target child's birthdate when they have one.
+    model_before = CoverageModelIn(**config)
+    grade = req.grade
+    if grade is None:
+        from exhale.ages import grade_for
+
+        names_before = [c.recipient.name for c in model_before.children]
+        target_name = req.child or names_before[0]
+        for c in model_before.children:
+            if c.recipient.name == target_name and c.recipient.birthdate:
+                grade = grade_for(c.recipient.birthdate)
+                break
+
     try:
         extraction = extractor.extract_school_calendar(
-            req.image_base64, req.media_type, grade=req.grade
+            req.image_base64, req.media_type, grade=grade
         )
     except VisionUnavailable as exc:
         raise HTTPException(status_code=422, detail=f"Could not read the calendar: {exc}") from exc
@@ -624,7 +639,7 @@ def ingest_school_calendar_photo(
         last_day=extraction.last_day,
         no_school_days={c.day: c.reason for c in extraction.no_school_days},
     )
-    model = CoverageModelIn(**config)
+    model = model_before
     names = [c.recipient.name for c in model.children]
     if req.child is not None and req.child not in names:
         raise HTTPException(
@@ -642,6 +657,7 @@ def ingest_school_calendar_photo(
     return {
         "family_id": family_id,
         "child": target,
+        "grade_used": grade,
         "school": school.name,
         "first_day": school.first_day.isoformat(),
         "last_day": school.last_day.isoformat(),
@@ -676,12 +692,18 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
 def _care_watch_for(profile: dict) -> dict | None:
     """Build the next-two-weeks Care Watch (all children) if a model exists."""
 
+    from exhale.ages import age_prompts
+
     config = profile.get("coverage_model")
     if not config:
         return None
-    family = build_family(CoverageModelIn(**config))
+    model = CoverageModelIn(**config)
+    family = build_family(model)
     start, end = default_range()
-    return build_family_care_watch(family, start, end)
+    watch = build_family_care_watch(family, start, end)
+    # Age-triggered questions ride along (asks, never actions — exhale.ages).
+    watch["age_prompts"] = age_prompts(model)
+    return watch
 
 
 @app.get("/v1/families/{family_id}/ledger")

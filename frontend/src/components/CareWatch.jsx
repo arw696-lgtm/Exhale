@@ -33,7 +33,9 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
   const [added, setAdded] = useState({}); // gap key → provider it landed on
   const [error, setError] = useState(null);
 
-  if (!careWatch || (careWatch.gaps?.length ?? 0) === 0) return null;
+  const agePrompts = careWatch?.age_prompts ?? [];
+  if (!careWatch || ((careWatch.gaps?.length ?? 0) === 0 && agePrompts.length === 0))
+    return null;
 
   const { recipient, summary, gaps } = careWatch;
   const assumptionCount = summary?.assumption_dependent ?? 0;
@@ -125,6 +127,23 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
           {assumptionCount} of these rest on an assumed schedule. Sync the calendars
           to turn them into confirmed facts.
         </p>
+      )}
+
+      {agePrompts.length > 0 && (
+        <div className="mt-4 border-t border-sanctuary-navy/10 pt-3">
+          <p className="mb-2 font-micro text-xs font-semibold uppercase text-sanctuary-navy/50">
+            Worth a look as they grow
+          </p>
+          <ul className="space-y-2">
+            {agePrompts.map((p) => (
+              <li key={`${p.kind}-${p.child}`}
+                  className="border-l-2 border-sage-release/50 pl-3 font-micro text-xs text-sanctuary-navy/70">
+                {p.question}
+                <span className="mt-0.5 block text-sanctuary-navy/40">{p.basis}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {error && <p className="mt-3 font-micro text-xs text-looming-amber">{error}</p>}
     </section>
