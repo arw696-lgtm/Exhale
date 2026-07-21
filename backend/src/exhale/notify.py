@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 
 from exhale.briefing import build_weekly_briefing
-from exhale.coverage import build_care_watch
+from exhale.coverage import build_family_care_watch
 from exhale.forgetting_engine import ThreatLevel
 
 log = logging.getLogger("exhale.notify")
@@ -91,7 +91,7 @@ def notifier_from_env(**kwargs) -> EmailNotifier | None:
 def find_critical_alerts(store, family_id: str, *, now: datetime | None = None) -> list[dict]:
     """Every currently-🔴 item for a family, each with a stable dedupe key."""
 
-    from exhale.coverage_config import CoverageModelIn, build_engine
+    from exhale.coverage_config import CoverageModelIn, build_family
 
     now = now or datetime.now()
     alerts: list[dict] = []
@@ -113,15 +113,17 @@ def find_critical_alerts(store, family_id: str, *, now: datetime | None = None) 
 
     model_cfg = store.profile(family_id).get("coverage_model")
     if model_cfg:
-        engine = build_engine(CoverageModelIn(**model_cfg), now=now.replace(tzinfo=None))
-        watch = build_care_watch(engine, now.date(), (now + timedelta(days=3)).date())
+        family = build_family(CoverageModelIn(**model_cfg), now=now.replace(tzinfo=None))
+        watch = build_family_care_watch(family, now.date(), (now + timedelta(days=3)).date())
         for gap in watch["gaps"]:
             if gap["threat_level"] != ThreatLevel.CRITICAL.value:
                 continue
             alerts.append({
-                "key": f"caregap:{gap['start']}:{gap['end']}",
+                # Child name in the key: two kids uncovered over the same
+                # stretch are two alerts, not one.
+                "key": f"caregap:{gap['recipient']}:{gap['start']}:{gap['end']}",
                 "line": (
-                    f"🔴 {watch['recipient']} uncovered {gap['date']} "
+                    f"🔴 {gap['recipient']} uncovered {gap['date']} "
                     f"{gap['start'][11:16]}–{gap['end'][11:16]} — {gap['reason']}. "
                     f"{gap['suggested_action']}."
                 ),

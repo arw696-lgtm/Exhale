@@ -27,28 +27,32 @@ function formatWindow(gap) {
   return `${day} · ${time(gap.start)}–${time(gap.end)}`;
 }
 
+const gapKey = (gap) => `${gap.recipient ?? ""}|${gap.start}|${gap.end}`;
+
 export default function CareWatch({ careWatch, familyId, live = false }) {
-  const [added, setAdded] = useState({}); // gap start iso → provider it landed on
+  const [added, setAdded] = useState({}); // gap key → provider it landed on
   const [error, setError] = useState(null);
 
   if (!careWatch || (careWatch.gaps?.length ?? 0) === 0) return null;
 
   const { recipient, summary, gaps } = careWatch;
   const assumptionCount = summary?.assumption_dependent ?? 0;
+  // Multi-child households: name the child on each gap (the header shows all).
+  const multiChild = (careWatch.recipients?.length ?? 1) > 1;
 
   const putOnCalendar = async (gap) => {
     setError(null);
     try {
       const result = await scheduleEvent(
         {
-          title: `Sitter needed: ${recipient}`,
+          title: `Sitter needed: ${gap.recipient ?? recipient}`,
           start: gap.start,
           end: gap.end,
           description: `Care gap — ${gap.reason}. Suggested: ${gap.suggested_action}. (Exhale)`,
         },
         familyId
       );
-      setAdded((a) => ({ ...a, [gap.start]: result.provider }));
+      setAdded((a) => ({ ...a, [gapKey(gap)]: result.provider }));
     } catch (err) {
       setError(err.message);
     }
@@ -70,13 +74,14 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
           const band = threatPresentation[gap.threat_level] ?? threatPresentation.ADVISORY;
           return (
             <li
-              key={`${gap.start}-${gap.end}`}
+              key={`${gap.recipient ?? ""}-${gap.start}-${gap.end}`}
               className="border-l-2 pl-3 font-micro text-sm"
               style={{ borderColor: band.accent }}
             >
               <div className="flex items-baseline justify-between gap-2">
                 <p className="font-semibold text-sanctuary-navy">
-                  {band.indicator} {formatWindow(gap)}
+                  {band.indicator} {multiChild && gap.recipient ? `${gap.recipient} · ` : ""}
+                  {formatWindow(gap)}
                 </p>
                 <span className="whitespace-nowrap text-xs text-sanctuary-navy/50">
                   {gap.duration_hours}h
@@ -89,9 +94,9 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
                   → {gap.suggested_action}
                 </button>
                 {live &&
-                  (added[gap.start] ? (
+                  (added[gapKey(gap)] ? (
                     <span className="text-xs font-medium text-sanctuary-navy/60">
-                      ✓ on your {added[gap.start] === "feed" ? "Exhale" : added[gap.start]} calendar
+                      ✓ on your {added[gapKey(gap)] === "feed" ? "Exhale" : added[gapKey(gap)]} calendar
                     </span>
                   ) : (
                     <button

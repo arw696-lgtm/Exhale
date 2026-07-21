@@ -1,6 +1,6 @@
 # Exhale — Full Project Scope & Status
 
-*As of 2026-07-21 · 17 PRs merged · 379 tests (371 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
+*As of 2026-07-21 · 18 PRs merged · 387 tests (379 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
 
 This is the complete map of the project: what Exhale is, what has been built,
 the design laws it runs on, and — most importantly for gap analysis — an honest
@@ -185,7 +185,7 @@ a product — and "not yet" stays the answer until §5C says otherwise.
 | Gap | Notes |
 |---|---|
 | ~~No notification/push channel~~ **Closed** | Email alerts for 🔴 items shipped (`notify.py`): alert-once keys, one digest per cycle, runs with auto-sync. SMS/push remain unbuilt. |
-| **Single-child coverage model** | `CareRecipient` is singular; a two-kid family can't model both children's supervision needs yet. |
+| ~~Single-child coverage model~~ **Closed** | Any number of children: per-child engines (own school/hours/programs) over shared caregivers via `FamilyCoverage`. Gaps merge per child; work windows intersect (a caregiver is free only when *every* child is covered). Legacy single-child profiles normalize automatically. |
 | **No edit/delete for scheduled events** | Calendar write is create-only; no two-way sync (moving/cancelling an Exhale-written event isn't tracked). |
 | **Email thread / conversation state** | Extraction treats messages independently; a reschedule thread isn't linked into one evolving obligation (partially mitigated by anchors + corroboration). |
 | **Coverage-model editing UI** | The setup form creates; there is no UI to *edit* an existing model (re-running setup or API only). |
@@ -230,7 +230,8 @@ a product — and "not yet" stays the answer until §5C says otherwise.
 3. ~~**Scoped caregiver access**~~ Done — HELPER role shipped (FAMILY_STRUCTURES
    §3.2); §3.3 partitioned visibility is the next structural step when a real
    co-parenting household needs it.
-4. **Multi-child coverage** (small model change, big correctness win).
+4. ~~**Multi-child coverage**~~ Done — N children, merged gaps, intersected
+   work windows.
 5. **Founder config tasks** (interleaved — each one lights up a built system).
 6. **Thread/conversation state** (the last big extraction-quality item).
 7. Coverage-model edit UI · recurring writes · CalDAV — as demand appears.

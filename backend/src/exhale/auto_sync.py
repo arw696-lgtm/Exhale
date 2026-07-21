@@ -43,8 +43,13 @@ def _tokens(profile: dict, provider: str) -> dict | None:
 
 
 def _known_children(profile: dict) -> list[str]:
-    model = profile.get("coverage_model")
-    if model and model.get("recipient", {}).get("name"):
+    model = profile.get("coverage_model") or {}
+    names = [c["recipient"]["name"] for c in (model.get("children") or [])
+             if c.get("recipient", {}).get("name")]
+    if names:
+        return names
+    # Legacy single-child shape (profile stored before multi-child).
+    if (model.get("recipient") or {}).get("name"):
         return [model["recipient"]["name"]]
     return []
 

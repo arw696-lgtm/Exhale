@@ -28,8 +28,8 @@ from exhale.auth import ROLE_HELPER, ROLE_MEMBER, AuthError, InMemoryAuthStore, 
 from exhale.briefing import build_weekly_briefing
 from exhale.connectors.base import RawMessage
 from exhale.connectors.memory import FixtureConnector
-from exhale.coverage import build_care_watch
-from exhale.coverage_config import CoverageModelIn, build_engine, default_range
+from exhale.coverage import build_family_care_watch
+from exhale.coverage_config import CoverageModelIn, build_family, default_range
 from exhale.credibility import build_coverage
 from exhale.extraction import ExtractionContext
 from exhale.retro_scan import run_incremental_sync, run_retro_scan
@@ -576,6 +576,7 @@ class SchoolPhotoRequest(BaseModel):
     media_type: str = "image/png"
     grade: str | None = None  # e.g. "1" — excludes closures for other grades only
     school_name: str | None = None
+    child: str | None = None  # which child's school (default: the only/first child)
 
 
 @app.post("/v1/families/{family_id}/coverage-model/school/photo")
@@ -624,10 +625,23 @@ def ingest_school_calendar_photo(
         no_school_days={c.day: c.reason for c in extraction.no_school_days},
     )
     model = CoverageModelIn(**config)
-    model = model.model_copy(update={"school": school})
+    names = [c.recipient.name for c in model.children]
+    if req.child is not None and req.child not in names:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No child named {req.child!r} in the coverage model "
+                   f"(children: {', '.join(names)}).",
+        )
+    target = req.child or names[0]
+    children = [
+        c.model_copy(update={"school": school}) if c.recipient.name == target else c
+        for c in model.children
+    ]
+    model = model.model_copy(update={"children": children})
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
     return {
         "family_id": family_id,
+        "child": target,
         "school": school.name,
         "first_day": school.first_day.isoformat(),
         "last_day": school.last_day.isoformat(),
@@ -660,14 +674,14 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
 
 
 def _care_watch_for(profile: dict) -> dict | None:
-    """Build the next-two-weeks Care Watch if the family configured a model."""
+    """Build the next-two-weeks Care Watch (all children) if a model exists."""
 
     config = profile.get("coverage_model")
     if not config:
         return None
-    engine = build_engine(CoverageModelIn(**config))
+    family = build_family(CoverageModelIn(**config))
     start, end = default_range()
-    return build_care_watch(engine, start, end)
+    return build_family_care_watch(family, start, end)
 
 
 @app.get("/v1/families/{family_id}/ledger")
@@ -1234,7 +1248,9 @@ def declare_coverage(
 def set_coverage_model(
     model: CoverageModelIn, family_id: str = Depends(require_family_access)
 ) -> dict:
-    """Configure the household's care-coverage model (child, caregivers, school).
+    """Configure the household's care-coverage model (children, caregivers,
+    per-child school). Accepts the canonical ``children`` list or the legacy
+    single-child fields (normalized on parse).
 
     Persisted (encrypted) in the family profile; the Care-Coverage Engine reads
     it to detect child-supervision gaps for the briefing and the care-gaps API.
@@ -1244,9 +1260,10 @@ def set_coverage_model(
     return {
         "family_id": family_id,
         "status": "saved",
-        "recipient": model.recipient.name,
+        "children": [c.recipient.name for c in model.children],
         "caregivers": [c.name for c in model.caregivers],
-        "school": model.school.name if model.school else None,
+        "schools": {c.recipient.name: c.school.name
+                    for c in model.children if c.school},
     }
 
 
@@ -1267,11 +1284,11 @@ def get_care_gaps(
             status_code=404,
             detail="No coverage model configured. PUT /coverage-model first.",
         )
-    engine = build_engine(CoverageModelIn(**config))
+    family = build_family(CoverageModelIn(**config))
     default_start, default_end = default_range()
     start = from_ or default_start
     end = to or (start + (default_end - default_start))
-    return build_care_watch(engine, start, end)
+    return build_family_care_watch(family, start, end)
 
 
 @app.get("/v1/families/{family_id}/work-windows")
@@ -1285,8 +1302,9 @@ def get_work_windows(
 ) -> dict:
     """Suggested best work windows for a caregiver — the intent side of coverage.
 
-    'When can I work this week?' — times the caregiver is free AND the child is
-    covered by someone/something else. Requires a coverage model (404).
+    'When can I work this week?' — times the caregiver is free AND every child
+    is covered by someone/something else (one kid at school doesn't free a
+    parent whose toddler is home). Requires a coverage model (404).
     """
 
     from exhale.coverage import build_work_plan
@@ -1297,13 +1315,13 @@ def get_work_windows(
             status_code=404,
             detail="No coverage model configured. PUT /coverage-model first.",
         )
-    engine = build_engine(CoverageModelIn(**config))
+    family = build_family(CoverageModelIn(**config))
     default_start, default_end = default_range(days=7)
     start = from_ or default_start
     end = to or (start + (default_end - default_start))
     try:
         return build_work_plan(
-            engine, caregiver, start, end, count=count, min_hours=min_hours
+            family, caregiver, start, end, count=count, min_hours=min_hours
         )
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

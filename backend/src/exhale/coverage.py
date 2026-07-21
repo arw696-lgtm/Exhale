@@ -460,6 +460,97 @@ class CoverageEngine:
         )
 
 
+class FamilyCoverage:
+    """Multi-child aggregation over per-child engines (FAMILY_STRUCTURES-era
+    reality: households have one, two, or five kids).
+
+    Each child gets their own :class:`CoverageEngine` (own supervised hours,
+    own school, own programs) over the *shared* caregiver roster. Care gaps
+    are per-child facts, so they simply merge. Work windows are the opposite:
+    a caregiver is only free to work when **every** child is simultaneously
+    covered — one kid at school doesn't free a parent whose toddler is home —
+    so windows intersect across children.
+
+    Duck-types the engine's ``scan_range``/``work_windows`` so the ranking
+    helpers (:func:`suggest_work_windows`, :func:`build_work_plan`) work on a
+    family unchanged.
+    """
+
+    def __init__(self, engines: list[CoverageEngine]) -> None:
+        if not engines:
+            raise ValueError("FamilyCoverage needs at least one child engine")
+        self.engines = list(engines)
+
+    @property
+    def recipient_names(self) -> list[str]:
+        return [e.recipient.name for e in self.engines]
+
+    def scan_range(self, start_day: date, end_day: date) -> list[CareGap]:
+        gaps: list[CareGap] = []
+        for engine in self.engines:
+            gaps.extend(engine.scan_range(start_day, end_day))
+        gaps.sort(key=lambda g: (g.start, g.recipient_name))
+        return gaps
+
+    def work_windows(
+        self, caregiver_name: str, start_day: date, end_day: date, *, min_hours: float = 1.0
+    ) -> list[WorkWindow]:
+        """Windows where the caregiver is free AND every child is covered."""
+
+        per_child = [
+            engine.work_windows(caregiver_name, start_day, end_day, min_hours=0.0)
+            for engine in self.engines
+        ]
+        workable = [(w.start, w.end) for w in per_child[0]]
+        for windows in per_child[1:]:
+            workable = _intersect(workable, [(w.start, w.end) for w in windows])
+
+        out: list[WorkWindow] = []
+        for ws, we in workable:
+            hours = (we - ws).total_seconds() / 3600.0
+            if hours < min_hours:
+                continue
+            labels = tuple(sorted({
+                label
+                for windows in per_child
+                for w in windows
+                if _overlaps((ws, we), (w.start, w.end))
+                for label in w.child_covered_by
+            }))
+            out.append(WorkWindow(
+                caregiver_name=caregiver_name, start=ws, end=we,
+                duration_hours=hours, child_covered_by=labels,
+            ))
+        out.sort(key=lambda w: w.start)
+        return out
+
+
+def build_family_care_watch(
+    family: FamilyCoverage, start_day: date, end_day: date
+) -> dict:
+    """Briefing-ready Care Watch across every child (same shape as the
+    single-child payload; each gap already names its child)."""
+
+    gaps = family.scan_range(start_day, end_day)
+    by_band = {level: 0 for level in ThreatLevel}
+    for g in gaps:
+        by_band[g.threat_level] += 1
+    return {
+        "view": "care_watch",
+        "recipient": " & ".join(family.recipient_names),
+        "recipients": family.recipient_names,
+        "range": {"from": start_day.isoformat(), "to": end_day.isoformat()},
+        "summary": {
+            "total_gaps": len(gaps),
+            "critical": by_band[ThreatLevel.CRITICAL],
+            "important": by_band[ThreatLevel.IMPORTANT],
+            "advisory": by_band[ThreatLevel.ADVISORY],
+            "assumption_dependent": sum(1 for g in gaps if g.depends_on_inference),
+        },
+        "gaps": [g.to_dict() for g in gaps],
+    }
+
+
 def build_care_watch(
     engine: CoverageEngine, start_day: date, end_day: date
 ) -> dict:
@@ -485,7 +576,7 @@ def build_care_watch(
 
 
 def suggest_work_windows(
-    engine: CoverageEngine,
+    engine: "CoverageEngine | FamilyCoverage",
     caregiver_name: str,
     start_day: date,
     end_day: date,
@@ -506,7 +597,7 @@ def suggest_work_windows(
 
 
 def build_work_plan(
-    engine: CoverageEngine,
+    engine: "CoverageEngine | FamilyCoverage",
     caregiver_name: str,
     start_day: date,
     end_day: date,
