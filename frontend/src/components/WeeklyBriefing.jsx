@@ -4,12 +4,25 @@ import DependencyWatch from "./DependencyWatch.jsx";
 import CalendarConflicts from "./CalendarConflicts.jsx";
 import CareWatch from "./CareWatch.jsx";
 import ConnectionsPanel from "./ConnectionsPanel.jsx";
+import PhotoDrop from "./PhotoDrop.jsx";
+import ReviewQueue from "./ReviewQueue.jsx";
+import WorkWindowsPanel from "./WorkWindowsPanel.jsx";
 
 /**
  * The Sunday Morning Weekly COO Briefing (Blueprint §9.1).
  * Top-level layout that stitches the three briefing sections together.
  */
-export default function WeeklyBriefing({ briefing, drafts = {}, onOpenDraft, user, inviteCode, onLogout }) {
+export default function WeeklyBriefing({
+  briefing,
+  drafts = {},
+  onOpenDraft,
+  user,
+  inviteCode,
+  onLogout,
+  familyId,
+  live = false,
+  onRefresh,
+}) {
   const criticalCount = briefing.summary?.critical_count ?? briefing.critical_threats.length;
   const careGapCount = briefing.care_watch?.summary?.total_gaps ?? 0;
   const isAllClear =
@@ -79,10 +92,17 @@ export default function WeeklyBriefing({ briefing, drafts = {}, onOpenDraft, use
         </section>
       )}
 
+      {/* Review Queue — items held for a human yes/no (live backend only) */}
+      {live && <ReviewQueue familyId={familyId} onChanged={onRefresh} />}
+
       {/* Care Watch — child-supervision gaps */}
       <CareWatch careWatch={briefing.care_watch} />
 
-      {/* Connections — Connect Google (logged-in households) */}
+      {/* Photo ingestion + work windows (live backend only) */}
+      {live && <PhotoDrop familyId={familyId} onChanged={onRefresh} />}
+      {live && <WorkWindowsPanel familyId={familyId} />}
+
+      {/* Connections — Connect Google / Outlook (logged-in households) */}
       {user && <ConnectionsPanel familyId={user.family_id} />}
 
       {/* Dependency watch */}

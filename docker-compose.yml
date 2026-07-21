@@ -31,6 +31,8 @@ services:
       EXHALE_MASTER_SECRET: ${EXHALE_MASTER_SECRET:?set EXHALE_MASTER_SECRET in .env}
       # Auth enforcement defaults ON when a database is configured.
       EXHALE_REQUIRE_AUTH: ${EXHALE_REQUIRE_AUTH:-1}
+      # Background auto-sync interval in minutes (unset/0 = off):
+      EXHALE_AUTO_SYNC_MINUTES: ${EXHALE_AUTO_SYNC_MINUTES:-}
       # Optional live Gmail ingestion (see README):
       EXHALE_GMAIL_ACCESS_TOKEN: ${EXHALE_GMAIL_ACCESS_TOKEN:-}
       EXHALE_GMAIL_REFRESH_TOKEN: ${EXHALE_GMAIL_REFRESH_TOKEN:-}

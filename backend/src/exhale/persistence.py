@@ -311,6 +311,11 @@ class PersistentHouseholdStore(HouseholdStore):
         super().approve_action(family_id, obligation_node_id, resolution=resolution)
         self._persist_graph(family_id)
 
+    def family_ids(self) -> list[str]:
+        with self._db_lock:
+            rows = self._conn.execute("SELECT family_id FROM families").fetchall()
+        return sorted({r[0] for r in rows} | set(super().family_ids()))
+
     def close(self) -> None:
         self._conn.close()
 
