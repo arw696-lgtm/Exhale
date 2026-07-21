@@ -20,7 +20,8 @@ from exhale.coverage import (
 )
 from exhale.schemas import FactOrigin
 
-# --- the ISLA 2026-2027 no-school days (observed from the student calendar) --------
+# --- the full ISLA 2026-2027 no-school days (observed from the student calendar) ---
+# Student days off for a 1st grader (excludes the Sept 4 PK-K-only closure).
 NO_SCHOOL = {
     date(2026, 9, 7): "Labor Day",
     date(2026, 9, 21): "Yom Kippur + PD",
@@ -32,7 +33,31 @@ NO_SCHOOL = {
     date(2026, 11, 26): "Thanksgiving Break",
     date(2026, 11, 27): "Thanksgiving Break",
     date(2026, 12, 4): "Grading + PD",
+    **{d: "Winter Break" for d in (
+        date(2026, 12, 21), date(2026, 12, 22), date(2026, 12, 23),
+        date(2026, 12, 24), date(2026, 12, 25), date(2026, 12, 28),
+        date(2026, 12, 29), date(2026, 12, 30), date(2026, 12, 31),
+        date(2027, 1, 1))},
+    date(2027, 1, 18): "MLK Day",
+    date(2027, 2, 5): "Professional Development",
+    date(2027, 2, 15): "Presidents' Day",
+    date(2027, 3, 10): "Eid + Grading/PD",
+    date(2027, 3, 18): "Parent-Teacher Conferences",
+    date(2027, 3, 19): "Parent-Teacher Conferences",
+    **{d: "Spring Break" for d in (
+        date(2027, 3, 29), date(2027, 3, 30), date(2027, 3, 31),
+        date(2027, 4, 1), date(2027, 4, 2))},
+    date(2027, 4, 19): "Professional Development",
+    date(2027, 5, 17): "Eid + PD",
+    date(2027, 5, 31): "Memorial Day",
 }
+
+# Federal holidays Ali (government) has off too — on these, school-closed does
+# NOT mean a care gap, because both parents are home.
+ALI_HOLIDAYS = frozenset({
+    date(2026, 9, 7), date(2026, 11, 26), date(2026, 12, 25),
+    date(2027, 1, 1), date(2027, 1, 18), date(2027, 2, 15), date(2027, 5, 31),
+})
 
 ISLA = SchoolCalendar(
     name="ISLA",
@@ -56,7 +81,7 @@ ali = Caregiver(
     name="Ali", role="PARENT",
     work_pattern=WorkPattern(
         weekdays=frozenset({0, 1, 2, 3, 4}), start=time(7, 30), end=time(16, 30),
-        days_off=frozenset({date(2026, 9, 7), date(2026, 11, 26)}),  # fed holidays
+        days_off=ALI_HOLIDAYS,
         basis=FactOrigin.INFERRED),
     events=list(CONCERTS),
 )
@@ -75,9 +100,9 @@ andy = Caregiver(
 
 engine = CoverageEngine(
     CareRecipient("Stevie"), [ali, andy], school=ISLA,
-    now=datetime(2026, 9, 8, 8, 0),
+    now=datetime(2026, 9, 1, 6, 0),
 )
-watch = build_care_watch(engine, date(2026, 9, 8), date(2026, 12, 15))
+watch = build_care_watch(engine, date(2026, 9, 1), date(2027, 6, 3))
 
 s = watch["summary"]
 print(f"\nCare Watch for {watch['recipient']}  ({watch['range']['from']} → {watch['range']['to']})")
