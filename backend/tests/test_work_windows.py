@@ -124,3 +124,15 @@ def test_past_windows_are_not_suggested():
     now = datetime(2026, 9, 17, 6, 0)  # after the 16th
     windows = _engine([_ali(), _andy()], now=now).open_windows_on(date(2026, 9, 16), "Andy")
     assert windows == []
+
+
+def test_live_window_is_trimmed_to_now():
+    # At 6pm, the evening window that opened at 4:30 must not include the
+    # 90 minutes already gone.
+    from datetime import datetime as _dt
+    engine = CoverageEngine(STEVIE, [_ali(), _andy()], school=ISLA,
+                            now=_dt(2026, 9, 16, 18, 0))
+    windows = engine.open_windows_on(date(2026, 9, 16), "Andy")
+    evening = next(w for w in windows if w.end.time() == time(22, 0))
+    assert evening.start.time() == time(18, 0)
+    assert evening.duration_hours == 4.0

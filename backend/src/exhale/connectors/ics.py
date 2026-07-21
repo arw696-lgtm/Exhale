@@ -81,6 +81,22 @@ def _parse_dt(value: str, params: dict[str, str], tz: ZoneInfo) -> tuple[datetim
         return None, False
 
 
+def _add_months(dt: datetime, n: int) -> datetime:
+    """``dt`` shifted by ``n`` months, day clamped to the target month's length.
+
+    A monthly event anchored on the 31st lands on Feb 28 (not a ValueError),
+    and — because callers compute each occurrence from the base — March is
+    back on the 31st.
+    """
+
+    import calendar
+
+    m = dt.month - 1 + n
+    year, month = dt.year + m // 12, m % 12 + 1
+    day = min(dt.day, calendar.monthrange(year, month)[1])
+    return dt.replace(year=year, month=month, day=day)
+
+
 def _parse_rrule(value: str) -> dict:
     parts = {}
     for token in value.split(";"):
@@ -145,19 +161,17 @@ def _expand_recurrence(
             wk += 1
     elif freq in ("DAILY", "WEEKLY", "MONTHLY"):
         step_days = {"DAILY": 1, "WEEKLY": 7}.get(freq)
-        occ = base.start
-        guard = 0
-        while guard < _MAX_OCCURRENCES * 2:
+        # Each occurrence is computed from the base (not mutated forward), so a
+        # month-end clamp (Jan 31 → Feb 28) never drifts later months to the 28th.
+        k = 0
+        while k < _MAX_OCCURRENCES * 2:
+            if freq == "MONTHLY":
+                occ = _add_months(base.start, k * interval)
+            else:
+                occ = base.start + timedelta(days=step_days * interval * k)
             if not _emit(occ):
                 break
-            if freq == "MONTHLY":
-                m = occ.month - 1 + interval
-                occ = occ.replace(year=occ.year + m // 12, month=m % 12 + 1)
-            else:
-                occ = occ + timedelta(days=step_days * interval)
-            if occ > window_end:
-                break
-            guard += 1
+            k += 1
     else:
         return [base]  # unrecognized rule → keep the single occurrence
 

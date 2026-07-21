@@ -176,6 +176,13 @@ class HouseholdStore:
                 raise KeyError(
                     f"No extraction {extraction_id!r} for family {family_id!r}"
                 )
+            if original.superseded_by is not None:
+                # A second confirm/correct of the same entry would mint a second
+                # obligation for the same fact — refuse instead.
+                raise ValueError(
+                    f"Extraction {extraction_id!r} was already superseded by "
+                    f"{original.superseded_by!r}"
+                )
 
             data = original.payload.model_dump()
             data.update(fixes)

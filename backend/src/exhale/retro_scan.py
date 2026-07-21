@@ -29,6 +29,7 @@ class RetroScanResult:
     committed: int = 0
     pending: int = 0
     rejected: int = 0
+    duplicates: int = 0  # messages already in the ledger, skipped
     snapshot: dict = field(default_factory=dict)
 
 
@@ -53,13 +54,26 @@ def run_retro_scan(
     since = now - timedelta(days=days)
     ctx = ctx or ExtractionContext(reference_date=now.date())
 
+    # Dedupe against the ledger by source reference: a re-run scan, an
+    # overlapping sync window, or a crashed-and-retried sync must never mint
+    # the same obligation twice (and skipping early saves LLM cost too).
+    seen_refs = {
+        e.payload.source_reference
+        for e in store.ledger(family_id)
+        if e.payload.source_reference
+    }
+
     result = RetroScanResult(family_id=family_id)
     for raw in connector.fetch(since=since):
         result.scanned += 1
+        if raw.source_id and raw.source_id in seen_refs:
+            result.duplicates += 1
+            continue
         payload = extractor(raw, ctx)
         if payload is None:
             continue
         result.extracted += 1
+        seen_refs.add(payload.source_reference or raw.source_id)
         entry = store.ingest(family_id, payload)
         status = entry.decision.status
         if status is RecordStatus.COMMITTED:

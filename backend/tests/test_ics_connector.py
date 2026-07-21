@@ -170,3 +170,16 @@ def test_recurring_occurrences_have_unique_source_refs():
                     expand_from=WIN[0], expand_until=WIN[1])
     refs = [e.source_reference for e in evs]
     assert len(set(refs)) == 3 and all(r.startswith("ics_rec1") for r in refs)
+
+
+def test_monthly_recurrence_clamps_month_end_without_drift():
+    # Anchored on Jan 31: Feb clamps to 28, and March is back on the 31st
+    # (occurrences computed from the base, so the clamp never sticks).
+    feed = ("BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:m31\nSUMMARY:Rent due\n"
+            "DTSTART;TZID=America/Chicago:20260131T090000\n"
+            "DTEND;TZID=America/Chicago:20260131T100000\n"
+            "RRULE:FREQ=MONTHLY;COUNT=4\nEND:VEVENT\nEND:VCALENDAR\n")
+    evs = parse_ics(feed, ("Ali",), expand_from=datetime(2026, 1, 1),
+                    expand_until=datetime(2026, 6, 30))
+    assert [e.start.date() for e in evs] == [
+        _d(2026, 1, 31), _d(2026, 2, 28), _d(2026, 3, 31), _d(2026, 4, 30)]
