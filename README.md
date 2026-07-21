@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (244 tests)
+│   ├── tests/          pytest suite (256 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 244 tests (incl. Postgres integration when reachable)
+python -m pytest             # 256 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -101,6 +101,7 @@ Key endpoints (see `src/exhale/api.py`):
 | `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
 | `PUT` | `/v1/families/{fid}/coverage-model` | configure the care-coverage model (child, caregivers, school) |
 | `GET` | `/v1/families/{fid}/care-gaps` | child-supervision gaps over a range (Care Watch) |
+| `GET` | `/v1/families/{fid}/work-windows` | a caregiver's best open work windows (intent side of coverage) |
 | `POST` | `/v1/families/{fid}/sync/calendar` | pull a caregiver's Google Calendar busy blocks into the model |
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 | `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
@@ -250,6 +251,13 @@ briefing-ready payload. See it on real data:
 ```bash
 cd backend && PYTHONPATH=src python examples/demo_coverage.py
 ```
+
+The **intent side** of the same math answers "when can I work this week?"
+(`GET /work-windows?caregiver=…`): a caregiver's open windows are the times they
+are free *and* the child is covered by someone/something else — so the school
+block is workable, but the drop-off/pickup pinch (child home, no one else
+covering) correctly is not. `suggest_work_windows()` ranks the longest blocks and
+returns them in time order (`build_work_plan()` for the payload).
 
 **Live caregiver availability (`connectors/gcal.py`).** The Google Calendar
 connector turns a caregiver's availability from *inferred* into *observed*:

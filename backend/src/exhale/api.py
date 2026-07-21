@@ -502,6 +502,41 @@ def get_care_gaps(
     return build_care_watch(engine, start, end)
 
 
+@app.get("/v1/families/{family_id}/work-windows")
+def get_work_windows(
+    family_id: str = Depends(require_family_access),
+    caregiver: str = Query(...),
+    from_: date | None = Query(default=None, alias="from"),
+    to: date | None = Query(default=None),
+    count: int = Query(default=3, ge=1, le=20),
+    min_hours: float = Query(default=2.0, ge=0.25),
+) -> dict:
+    """Suggested best work windows for a caregiver — the intent side of coverage.
+
+    'When can I work this week?' — times the caregiver is free AND the child is
+    covered by someone/something else. Requires a coverage model (404).
+    """
+
+    from exhale.coverage import build_work_plan
+
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    engine = build_engine(CoverageModelIn(**config))
+    default_start, default_end = default_range(days=7)
+    start = from_ or default_start
+    end = to or (start + (default_end - default_start))
+    try:
+        return build_work_plan(
+            engine, caregiver, start, end, count=count, min_hours=min_hours
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 class CalendarSyncRequest(BaseModel):
     """Sync a caregiver's Google Calendar busy blocks into the coverage model."""
 
