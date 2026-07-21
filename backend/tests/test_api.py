@@ -303,3 +303,18 @@ def test_calendar_sync_503_when_credentials_absent(monkeypatch):
                     json={"caregiver_name": "Andy"})
     assert r.status_code == 503
     assert "Google Calendar is not configured" in r.json()["detail"]
+
+
+# --- ICS (iCloud/Outlook) sync endpoint -------------------------------------------
+def test_ics_sync_404_without_a_coverage_model():
+    r = client.post("/v1/families/family_no_ics_model/sync/ics",
+                    json={"url": "https://x/cal.ics", "attendees": ["Ali", "Andy"]})
+    assert r.status_code == 404
+
+
+def test_ics_sync_validates_attendees():
+    fam = "family_ics_validate"
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    r = client.post(f"/v1/families/{fam}/sync/ics",
+                    json={"url": "https://x/cal.ics", "attendees": []})
+    assert r.status_code == 400

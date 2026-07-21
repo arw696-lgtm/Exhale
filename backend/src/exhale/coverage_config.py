@@ -159,30 +159,43 @@ def default_range(days: int = 14) -> tuple[date, date]:
 
 
 # --- merge synced calendar events back into a stored model ------------------------
-_SYNCED_PREFIX = "gcal_"
+# Source-reference prefixes that mark a machine-synced event (vs. a manual one),
+# so re-syncing replaces rather than duplicates. gcal_ = Google, ics_ = published
+# iCloud/Outlook feed.
+_SYNCED_PREFIXES = ("gcal_", "ics_")
 
 
 def merge_events(
-    model: CoverageModelIn, caregiver_name: str, events: list
+    model: CoverageModelIn,
+    caregiver_name: str,
+    events: list,
+    *,
+    source_prefix: str | None = None,
 ) -> CoverageModelIn:
     """Return a copy of ``model`` with ``events`` merged into one caregiver.
 
-    Idempotent: any previously-synced events (source_reference starting
-    ``gcal_``) on that caregiver are dropped first, so re-syncing replaces rather
-    than duplicates. ``events`` are engine :class:`~exhale.coverage.CalendarEvent`
-    instances (e.g. from the Google Calendar connector).
+    Idempotent: previously-synced events on that caregiver are dropped before the
+    fresh set is added, so re-syncing replaces rather than duplicates.
+    ``source_prefix`` scopes *which* synced events are replaced — pass ``"gcal_"``
+    or ``"ics_"`` so a Google re-sync doesn't disturb ICS-synced events and vice
+    versa; ``None`` replaces any machine-synced event. Manual events (any other
+    source_reference) are always preserved. ``events`` are engine
+    :class:`~exhale.coverage.CalendarEvent` instances.
 
     Raises ``KeyError`` if the named caregiver isn't in the model.
     """
+
+    prefixes = (source_prefix,) if source_prefix else _SYNCED_PREFIXES
+
+    def _is_synced(e: dict) -> bool:
+        ref = str(e.get("source_reference", ""))
+        return any(ref.startswith(p) for p in prefixes)
 
     data = model.model_dump()
     for caregiver in data["caregivers"]:
         if caregiver["name"] != caregiver_name:
             continue
-        kept = [
-            e for e in caregiver["events"]
-            if not str(e.get("source_reference", "")).startswith(_SYNCED_PREFIX)
-        ]
+        kept = [e for e in caregiver["events"] if not _is_synced(e)]
         synced = [
             CalendarEventIn(
                 title=ev.title, start=ev.start, end=ev.end,

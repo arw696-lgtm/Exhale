@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
 
+import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -436,7 +437,9 @@ def sync_calendar(
     now = datetime.now()
     events = connector.fetch_busy(now, now + timedelta(days=req.days))
     try:
-        model = merge_events(CoverageModelIn(**config), req.caregiver_name, events)
+        model = merge_events(
+            CoverageModelIn(**config), req.caregiver_name, events, source_prefix="gcal_"
+        )
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
@@ -444,6 +447,60 @@ def sync_calendar(
         "family_id": family_id,
         "caregiver": req.caregiver_name,
         "calendar_id": req.calendar_id,
+        "synced_busy_events": len(events),
+    }
+
+
+class ICSSyncRequest(BaseModel):
+    """Sync a published .ics calendar (iCloud/Outlook shared) into the model."""
+
+    url: str
+    attendees: list[str]  # caregivers who are OUT for these events
+    holder: str | None = None  # whose event bucket to store them in (default: first attendee)
+    tz: str = "America/Chicago"
+
+
+@app.post("/v1/families/{family_id}/sync/ics")
+def sync_ics(
+    req: ICSSyncRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Pull a published iCloud/Outlook shared calendar into the coverage model.
+
+    The bridge for calendars with no clean API: the household publishes the
+    shared calendar as a public .ics URL (the concerts, both-parents-out events)
+    and Exhale reads it. Events are stamped with the caregivers who are out for
+    them, and OBSERVED — so gaps built on them are high-confidence. Idempotent.
+    """
+
+    from exhale.connectors.ics import ICSCalendarConnector
+    from exhale.coverage_config import merge_events
+
+    if not req.attendees:
+        raise HTTPException(status_code=400, detail="attendees must be non-empty")
+
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    holder = req.holder or req.attendees[0]
+    try:
+        events = ICSCalendarConnector(
+            req.url, attendees=tuple(req.attendees), tz=req.tz
+        ).fetch_busy()
+        model = merge_events(
+            CoverageModelIn(**config), holder, events, source_prefix="ics_"
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not fetch calendar: {exc}") from exc
+    store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {
+        "family_id": family_id,
+        "holder": holder,
+        "attendees": req.attendees,
         "synced_busy_events": len(events),
     }
 
