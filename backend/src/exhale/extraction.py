@@ -19,13 +19,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from dateutil import parser as dateparser
 
 from exhale.connectors.base import RawMessage
 from exhale.connectors.preprocess import clean
-from exhale.schemas import ExtractionPayload
+from exhale.credibility import TIER_SCORE_ADJUSTMENT, classify_artifact
+from exhale.schemas import ExtractionPayload, FactOrigin
 
 # --- Signal vocabularies ------------------------------------------------------
 _DEADLINE_CUES = (
@@ -70,6 +71,53 @@ _DATE_PATTERNS = [
     re.compile(r"\b(?:mon|tues|wednes|thurs|fri|satur|sun)day\b", re.I),
 ]
 _YEAR_RE = re.compile(r"\b\d{4}\b")
+
+# A time *range* like "1pm-4pm", "1 p.m. to 4 p.m.", "12:30-1:00 pm". The end
+# must carry an am/pm marker so date fragments ("2026-07-19", "Jul 20-23")
+# can never masquerade as a time window. Extraction is range-only on purpose:
+# a lone "4:15 p.m." is as likely a pickup cutoff as a start time, and the
+# credibility rule is that an unknown window stays UNKNOWN rather than being
+# filled with a plausible guess.
+_TIME_RANGE_RE = re.compile(
+    r"\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\s*(?:-|–|—|to|until)\s*"
+    r"(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b",
+    re.I,
+)
+
+
+def _to_24h(hour: int, minute: int, meridiem: str | None) -> time | None:
+    mer = meridiem.replace(".", "").lower() if meridiem else None
+    if mer and not 1 <= hour <= 12:
+        return None
+    if mer == "pm" and hour != 12:
+        hour += 12
+    elif mer == "am" and hour == 12:
+        hour = 0
+    if hour > 23 or minute > 59:
+        return None
+    return time(hour, minute)
+
+
+def _find_time_window(text: str) -> tuple[time | None, time | None]:
+    """First observed start/end time range in the text, or ``(None, None)``."""
+
+    for m in _TIME_RANGE_RE.finditer(text):
+        sh, sm, smer, eh, em, emer = m.groups()
+        end = _to_24h(int(eh), int(em or 0), emer)
+        if end is None:
+            continue
+        if smer:
+            start = _to_24h(int(sh), int(sm or 0), smer)
+        else:
+            # "1-4pm": the start inherits the end's half of the day unless
+            # that would run the window backwards ("11-1pm" → 11am).
+            start = _to_24h(int(sh), int(sm or 0), emer)
+            if start is not None and start > end:
+                start = _to_24h(int(sh), int(sm or 0), "am" if "p" in emer.lower() else "pm")
+        if start is None or start > end:
+            continue
+        return start, end
+    return None, None
 
 
 @dataclass
@@ -203,6 +251,8 @@ def extract_payload(raw: RawMessage, ctx: ExtractionContext | None = None) -> Ex
     person = _match_child(corpus, ctx.known_children)
     action_required = _has_action(corpus) or deadline_date is not None
     domain_weight = ctx.trusted_domains.get((raw.sender_domain or "").lower(), 0.0)
+    tier = classify_artifact(raw)
+    start_time, end_time = _find_time_window(corpus)
 
     # --- Confidence calibration (feeds §3.3 routing) --------------------------
     score = 0.35
@@ -212,7 +262,8 @@ def extract_payload(raw: RawMessage, ctx: ExtractionContext | None = None) -> Ex
     score += 0.08 if person else 0.0
     score += 0.12 * domain_weight
     score += 0.05 if raw.subject.strip() else 0.0
-    score = round(min(score, 1.0), 4)
+    score += TIER_SCORE_ADJUSTMENT[tier]
+    score = round(min(max(score, 0.0), 1.0), 4)
 
     title = (raw.subject or "").strip() or _first_sentence(body) or "Untitled item"
 
@@ -225,6 +276,12 @@ def extract_payload(raw: RawMessage, ctx: ExtractionContext | None = None) -> Ex
         confidence_score=score,
         source_document_name=raw.display_name,
         source_reference=raw.source_id,
+        artifact_tier=tier,
+        # A fuzzy token ("next week", a bare weekday) is the pipeline's
+        # arithmetic, not the artifact's text — that is an inference.
+        event_date_origin=FactOrigin.OBSERVED if event_hit.explicit else FactOrigin.INFERRED,
+        event_start_time=start_time,
+        event_end_time=end_time,
     )
 
 

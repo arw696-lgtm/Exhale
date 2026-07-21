@@ -162,3 +162,65 @@ def test_invalid_confidence_rejected_by_validation():
         "confidence_score": 1.5,
     })
     assert r.status_code == 422
+
+
+def test_correct_extraction_endpoint_supersedes_and_commits():
+    fam = "family_correct_api"
+    payload = {
+        "extracted_event": "Junior Robotics Camp",
+        "event_date": "2026-07-20",
+        "action_required": True,
+        "confidence_score": 0.95,
+        "artifact_tier": "REMINDER",  # held pending: reminders never auto-commit
+    }
+    r = client.post(f"/v1/families/{fam}/extractions", json=payload)
+    assert r.json()["routing"]["status"] == "PENDING_VERIFICATION"
+    ledger = client.get(f"/v1/families/{fam}/ledger").json()["entries"]
+    original_id = ledger[0]["extraction_id"]
+
+    r2 = client.post(
+        f"/v1/families/{fam}/extractions/{original_id}/correct",
+        json={"event_start_time": "13:00:00", "event_end_time": "16:00:00"},
+    )
+    assert r2.status_code == 200
+    body = r2.json()
+    assert body["record_status"] == "COMMITTED"
+    assert body["event_date_origin"] == "USER_CONFIRMED"
+    assert body["event_start_time"] == "13:00:00"
+    assert body["corrects"] == original_id
+
+    entries = client.get(f"/v1/families/{fam}/ledger").json()["entries"]
+    by_id = {e["extraction_id"]: e for e in entries}
+    assert by_id[original_id]["superseded_by"] == body["extraction_id"]
+
+
+def test_correct_unknown_extraction_is_404():
+    r = client.post(
+        "/v1/families/family_correct_api/extractions/ext_missing/correct",
+        json={"event_date": "2026-08-01"},
+    )
+    assert r.status_code == 404
+
+
+def test_coverage_declaration_flows_into_briefing():
+    fam = "family_coverage_api"
+    r = client.put(
+        f"/v1/families/{fam}/coverage",
+        json={
+            "connected_sources": ["gmail:arw696@gmail.com"],
+            "known_missing_sources": [
+                {"source": "parentsquare", "owns": ["school communications"]},
+            ],
+        },
+    )
+    assert r.status_code == 200
+    assert "parentsquare" in r.json()["statement"]
+
+    briefing = client.get(f"/v1/families/{fam}/briefing").json()
+    assert briefing["coverage"]["connected_sources"] == ["gmail:arw696@gmail.com"]
+    assert "incomplete by construction" in briefing["coverage"]["statement"]
+
+
+def test_briefing_without_declaration_says_coverage_undeclared():
+    briefing = client.get("/v1/families/family_no_coverage/briefing").json()
+    assert "undeclared" in briefing["coverage"]["statement"].lower()

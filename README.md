@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (142 tests)
+│   ├── tests/          pytest suite (177 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 142 passing (incl. Postgres integration when reachable)
+python -m pytest             # 177 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -162,6 +162,34 @@ guessed.
 | High | ≥ 0.92 | Commit to graph, schedule tracking |
 | Medium | 0.70–0.91 | `PENDING_VERIFICATION`, UI review |
 | Low | < 0.70 | Rejected; request clearer artifact |
+
+**Credibility layer (`credibility.py`).** Born from two real extraction
+failures in live testing (activity hours answered from a plausible default
+instead of the confirmation email that stated them; a multi-leg trip reported
+as one leg because the second booking lived in an unconnected inbox). Four
+rules, enforced at the routing choke point so no extractor can bypass them:
+
+- **Artifact hierarchy** — every source is tiered
+  `CONFIRMATION > LOGISTICS > REMINDER > NEWSLETTER > MARKETING`.
+  Confirmations *establish* facts; reminders/newsletters only *reference* them
+  (they can never auto-commit — held `PENDING_VERIFICATION` even at a HIGH
+  score); marketing establishes nothing (always rejected).
+- **Observed vs. inferred** — every event date carries a `FactOrigin`. A date
+  read from the artifact is `OBSERVED`; one derived from a relative phrase is
+  `INFERRED` and never auto-commits. Unknown values (e.g. an activity's hours)
+  stay a named `missing_fields` state — never a filled default.
+- **Corroboration** — event anchors track distinct witnessing artifacts
+  (`witness_refs`); an obligation attested by a single source is marked
+  uncorroborated so downstream surfaces can say so.
+- **Coverage honesty** — each family declares connected sources and known
+  blind spots (`PUT /v1/families/{fid}/coverage`); every briefing carries the
+  resulting statement, so answers touching an uncovered domain are visibly
+  partial instead of silently incomplete.
+
+User corrections are ground truth: `POST
+/v1/families/{fid}/extractions/{id}/correct` re-routes the record as
+`USER_CONFIRMED` (always commits, updates the obligation in place) and keeps
+the superseded original as a logged failure signal.
 
 **Forgetting Engine (§7).** From a confirmed anchor event it traces
 `DEPENDS_ON` chains, scoring each unresolved prerequisite:

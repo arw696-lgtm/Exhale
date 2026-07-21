@@ -25,15 +25,16 @@ profile). Model override: ``EXHALE_LLM_MODEL``.
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, time
 
 from pydantic import BaseModel, Field
 
 from exhale.connectors.base import RawMessage
 from exhale.connectors.preprocess import clean
+from exhale.credibility import classify_artifact
 from exhale.extraction import ExtractionContext, extract_payload
 from exhale.routing import ConfidenceBand, classify_confidence
-from exhale.schemas import ExtractionPayload
+from exhale.schemas import ExtractionPayload, FactOrigin
 
 DEFAULT_MODEL = "claude-opus-4-8"
 
@@ -87,6 +88,27 @@ class _LLMExtraction(BaseModel):
     )
     event_date: date | None = Field(
         description="Date the primary event takes place (ISO), or null."
+    )
+    event_date_stated_explicitly: bool = Field(
+        default=True,
+        description=(
+            "True only when the event date appears in the message as an explicit "
+            "calendar date; False when you resolved it from a relative phrase "
+            "('next week', a bare weekday). Inferred dates are routed for human "
+            "review instead of auto-committing."
+        ),
+    )
+    event_start_time: time | None = Field(
+        default=None,
+        description=(
+            "Start time of the event window, ONLY if explicitly stated in the "
+            "message (e.g. '1pm-4pm'). Null when not stated — never a typical or "
+            "guessed time."
+        ),
+    )
+    event_end_time: time | None = Field(
+        default=None,
+        description="End time of the event window if explicitly stated; else null.",
     )
     deadline_date: date | None = Field(
         description="Hard action cutoff date (ISO), or null when there is none."
@@ -162,6 +184,15 @@ class LLMExtractor:
             # Provenance comes from the pipeline, never from the model.
             source_document_name=raw.display_name,
             source_reference=raw.source_id,
+            # Credibility: the tier is classified pipeline-side (deterministic),
+            # while the observed/inferred distinction comes from the model's own
+            # account of whether it read the date or derived it.
+            artifact_tier=classify_artifact(raw),
+            event_date_origin=FactOrigin.OBSERVED
+            if result.event_date_stated_explicitly
+            else FactOrigin.INFERRED,
+            event_start_time=result.event_start_time,
+            event_end_time=result.event_end_time,
         )
 
 

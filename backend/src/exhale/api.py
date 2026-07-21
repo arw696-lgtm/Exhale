@@ -16,7 +16,7 @@ out of the box. Run with::
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +27,7 @@ from exhale.auth import AuthError, InMemoryAuthStore, User
 from exhale.briefing import build_weekly_briefing
 from exhale.connectors.base import RawMessage
 from exhale.connectors.memory import FixtureConnector
+from exhale.credibility import build_coverage
 from exhale.extraction import ExtractionContext
 from exhale.retro_scan import run_incremental_sync, run_retro_scan
 from exhale.schemas import ExtractionPayload
@@ -237,7 +238,9 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     not an error — the empty state is a real product state.
     """
 
-    return build_weekly_briefing(store.graph(family_id))
+    return build_weekly_briefing(
+        store.graph(family_id), coverage=build_coverage(store.profile(family_id))
+    )
 
 
 @app.get("/v1/families/{family_id}/ledger")
@@ -245,6 +248,67 @@ def get_ledger(family_id: str = Depends(require_family_access)) -> dict:
     """Return the extraction ledger (routing outcomes + provenance)."""
 
     return {"family_id": family_id, "entries": [e.to_dict() for e in store.ledger(family_id)]}
+
+
+class CorrectionRequest(BaseModel):
+    """User-supplied fixes for a previous extraction — ground truth.
+
+    Only the provided fields change; the corrected record re-routes as
+    USER_CONFIRMED (always commits) and the original entry is kept, marked
+    superseded — corrections are a logged failure signal, not an erasure.
+    """
+
+    extracted_event: str | None = None
+    target_person_name: str | None = None
+    event_date: date | None = None
+    deadline_date: date | None = None
+    event_start_time: time | None = None
+    event_end_time: time | None = None
+    action_required: bool | None = None
+
+
+@app.post("/v1/families/{family_id}/extractions/{extraction_id}/correct")
+def correct_extraction(
+    extraction_id: str,
+    req: CorrectionRequest,
+    family_id: str = Depends(require_family_access),
+) -> dict:
+    """Apply a user correction to a ledger entry (credibility layer)."""
+
+    fixes = {k: v for k, v in req.model_dump().items() if v is not None}
+    try:
+        entry = store.correct(family_id, extraction_id, **fixes)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"family_id": family_id, **entry.to_dict()}
+
+
+class MissingSourceIn(BaseModel):
+    """A source the family knows exists but has not connected."""
+
+    source: str
+    owns: list[str] = Field(default_factory=list)
+
+
+class CoverageDeclaration(BaseModel):
+    """What the pipeline can and cannot see, declared per family."""
+
+    connected_sources: list[str] = Field(default_factory=list)
+    known_missing_sources: list[MissingSourceIn] = Field(default_factory=list)
+
+
+@app.put("/v1/families/{family_id}/coverage")
+def declare_coverage(
+    req: CoverageDeclaration, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Declare source coverage — connected channels and known blind spots.
+
+    The resulting statement rides on every briefing so answers touching an
+    uncovered domain are visibly partial instead of silently incomplete.
+    """
+
+    store.set_profile(family_id, coverage=req.model_dump())
+    return build_coverage(store.profile(family_id))
 
 
 @app.get("/v1/families/{family_id}/drafts")

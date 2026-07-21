@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from exhale.credibility import build_coverage
 from exhale.forgetting_engine import DependencyGap, ForgettingEngine, ThreatLevel
 from exhale.graph import KnowledgeGraph
 
@@ -33,8 +34,15 @@ def build_weekly_briefing(
     *,
     now: datetime | None = None,
     week_label: str | None = None,
+    coverage: dict | None = None,
 ) -> dict:
-    """Assemble the Weekly COO Briefing payload from a family's graph."""
+    """Assemble the Weekly COO Briefing payload from a family's graph.
+
+    ``coverage`` is the credibility layer's source-coverage block (see
+    :func:`exhale.credibility.build_coverage`); when the caller does not
+    supply one, the briefing still carries the honest default ("coverage
+    undeclared") rather than implying completeness.
+    """
 
     now = now or datetime.now(timezone.utc)
     engine = ForgettingEngine(graph)
@@ -60,4 +68,5 @@ def build_weekly_briefing(
         "critical_threats": critical,
         "dependency_watch": dependency_watch,
         "advisories": advisory,
+        "coverage": coverage if coverage is not None else build_coverage(None),
     }
