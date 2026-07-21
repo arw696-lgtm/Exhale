@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -27,6 +27,8 @@ from exhale.auth import AuthError, InMemoryAuthStore, User
 from exhale.briefing import build_weekly_briefing
 from exhale.connectors.base import RawMessage
 from exhale.connectors.memory import FixtureConnector
+from exhale.coverage import build_care_watch
+from exhale.coverage_config import CoverageModelIn, build_engine, default_range
 from exhale.credibility import build_coverage
 from exhale.extraction import ExtractionContext
 from exhale.retro_scan import run_incremental_sync, run_retro_scan
@@ -235,12 +237,28 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     """Assemble the family's Weekly COO Briefing from the current graph.
 
     A family with no graph yet (fresh signup) gets a valid all-clear briefing,
-    not an error — the empty state is a real product state.
+    not an error — the empty state is a real product state. When the household
+    has configured a coverage model, the child-supervision Care Watch for the
+    next two weeks rides along.
     """
 
+    profile = store.profile(family_id)
     return build_weekly_briefing(
-        store.graph(family_id), coverage=build_coverage(store.profile(family_id))
+        store.graph(family_id),
+        coverage=build_coverage(profile),
+        care_watch=_care_watch_for(profile),
     )
+
+
+def _care_watch_for(profile: dict) -> dict | None:
+    """Build the next-two-weeks Care Watch if the family configured a model."""
+
+    config = profile.get("coverage_model")
+    if not config:
+        return None
+    engine = build_engine(CoverageModelIn(**config))
+    start, end = default_range()
+    return build_care_watch(engine, start, end)
 
 
 @app.get("/v1/families/{family_id}/ledger")
@@ -309,6 +327,50 @@ def declare_coverage(
 
     store.set_profile(family_id, coverage=req.model_dump())
     return build_coverage(store.profile(family_id))
+
+
+@app.put("/v1/families/{family_id}/coverage-model")
+def set_coverage_model(
+    model: CoverageModelIn, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Configure the household's care-coverage model (child, caregivers, school).
+
+    Persisted (encrypted) in the family profile; the Care-Coverage Engine reads
+    it to detect child-supervision gaps for the briefing and the care-gaps API.
+    """
+
+    store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {
+        "family_id": family_id,
+        "status": "saved",
+        "recipient": model.recipient.name,
+        "caregivers": [c.name for c in model.caregivers],
+        "school": model.school.name if model.school else None,
+    }
+
+
+@app.get("/v1/families/{family_id}/care-gaps")
+def get_care_gaps(
+    family_id: str = Depends(require_family_access),
+    from_: date | None = Query(default=None, alias="from"),
+    to: date | None = Query(default=None),
+) -> dict:
+    """Care-supervision gaps over a date range (default: next 14 days).
+
+    Requires a coverage model (see PUT /coverage-model); 404 if none is set.
+    """
+
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    engine = build_engine(CoverageModelIn(**config))
+    default_start, default_end = default_range()
+    start = from_ or default_start
+    end = to or (start + (default_end - default_start))
+    return build_care_watch(engine, start, end)
 
 
 @app.get("/v1/families/{family_id}/drafts")

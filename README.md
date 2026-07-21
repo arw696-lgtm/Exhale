@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (198 tests)
+│   ├── tests/          pytest suite (201 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 198 tests (incl. Postgres integration when reachable)
+python -m pytest             # 201 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -97,6 +97,8 @@ Key endpoints (see `src/exhale/api.py`):
 | `GET` | `/v1/families/{fid}/ledger` | extraction ledger + provenance |
 | `GET` | `/v1/families/{fid}/drafts` | recommended action drafts (§6, §10) |
 | `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
+| `PUT` | `/v1/families/{fid}/coverage-model` | configure the care-coverage model (child, caregivers, school) |
+| `GET` | `/v1/families/{fid}/care-gaps` | child-supervision gaps over a range (Care Watch) |
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 | `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
 | `POST` | `/v1/auth/signup` | create account (+ new family, or join via invite code) |

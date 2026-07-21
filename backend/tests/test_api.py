@@ -224,3 +224,64 @@ def test_coverage_declaration_flows_into_briefing():
 def test_briefing_without_declaration_says_coverage_undeclared():
     briefing = client.get("/v1/families/family_no_coverage/briefing").json()
     assert "undeclared" in briefing["coverage"]["statement"].lower()
+
+
+# --- Care-coverage model + care-gaps (end-to-end) ---------------------------------
+def _coverage_model_payload():
+    """Stevie + Ali (work pattern) + Andy (with the two real concerts) + ISLA."""
+    concerts = [
+        {"title": "Gary Clark Jr.", "start": "2026-09-19T19:30:00",
+         "end": "2026-09-19T21:00:00", "attendees": ["Ali", "Andy"],
+         "source_reference": "shared_cal_gcj"},
+        {"title": "Monrovia Concert", "start": "2026-10-02T19:00:00",
+         "end": "2026-10-02T20:00:00", "attendees": ["Ali", "Andy"]},
+    ]
+    return {
+        "recipient": {"name": "Stevie"},
+        "caregivers": [
+            {"name": "Ali", "role": "PARENT",
+             "work_pattern": {"weekdays": [0, 1, 2, 3, 4],
+                              "start": "07:30:00", "end": "16:30:00",
+                              "basis": "INFERRED"},
+             "events": concerts},
+            {"name": "Andy", "role": "PARENT", "events": concerts},
+        ],
+        "school": {"name": "ISLA", "first_day": "2026-09-01", "last_day": "2027-06-03",
+                   "no_school_days": {"2026-10-15": "MEA break"}},
+    }
+
+
+def test_coverage_model_saves_then_care_gaps_surfaces_concert_sitter_gaps():
+    fam = "family_coverage_model"
+    r = client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    assert r.status_code == 200
+    assert r.json()["recipient"] == "Stevie"
+    assert r.json()["school"] == "ISLA"
+
+    r2 = client.get(f"/v1/families/{fam}/care-gaps",
+                    params={"from": "2026-09-01", "to": "2026-10-31"})
+    assert r2.status_code == 200
+    watch = r2.json()
+    assert watch["view"] == "care_watch"
+    reasons = " ".join(g["reason"] for g in watch["gaps"])
+    assert "Gary Clark Jr." in reasons
+    assert "Monrovia Concert" in reasons
+    # The concert gaps are built from observed calendar events.
+    concert_gaps = [g for g in watch["gaps"] if "Concert" in g["reason"] or "Clark" in g["reason"]]
+    assert concert_gaps and all(not g["depends_on_inference"] for g in concert_gaps)
+
+
+def test_care_gaps_404_without_a_model():
+    r = client.get("/v1/families/family_no_model/care-gaps")
+    assert r.status_code == 404
+
+
+def test_briefing_includes_care_watch_once_model_is_set():
+    fam = "family_briefing_care"
+    # Before configuring: care_watch is null, not an error.
+    assert client.get(f"/v1/families/{fam}/briefing").json()["care_watch"] is None
+
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    briefing = client.get(f"/v1/families/{fam}/briefing").json()
+    assert briefing["care_watch"] is not None
+    assert briefing["care_watch"]["recipient"] == "Stevie"
