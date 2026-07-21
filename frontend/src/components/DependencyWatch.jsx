@@ -1,4 +1,5 @@
 import React from "react";
+import WhyTrace from "./WhyTrace.jsx";
 
 /**
  * Dependency Watch section (Blueprint §7.1, §9.1).
@@ -45,6 +46,7 @@ export default function DependencyWatch({ watchItems = [], completed = [] }) {
                   </button>
                 </p>
               )}
+              <WhyTrace why={w.why} />
             </div>
           </li>
         ))}

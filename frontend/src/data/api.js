@@ -231,6 +231,33 @@ export async function fetchFeedUrl(familyId = DEMO_FAMILY) {
   }
 }
 
+// --- critical-alert notifications ----------------------------------------------
+/** Current notification prefs, or null when unavailable (offline demo / anon). */
+export async function fetchNotifications(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/notifications`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Set (or clear, with null) the address 🔴 alerts go to. */
+export async function saveNotifications(email, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(`/v1/families/${familyId}/notifications`, {
+    method: "PUT",
+    body: JSON.stringify({ email }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
+export function sendTestNotification(familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/notifications/test`);
+}
+
 // --- connections (OAuth) -----------------------------------------------------
 /** What providers this family has connected, or null when unavailable. */
 export async function fetchConnections(familyId = DEMO_FAMILY) {

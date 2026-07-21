@@ -93,6 +93,10 @@ class DependencyGap(BaseModel):
     risk_score: float = Field(ge=0.0, le=1.0)
     threat_level: ThreatLevel
     hours_until_deadline: float
+    # The "why" trace: provenance carried from the obligation so every surfaced
+    # item can show its reasoning (source artifact, tier, observed vs inferred,
+    # named unknowns) — verify the system, don't just trust it.
+    why: dict = Field(default_factory=dict)
 
 
 class ForgettingEngine:
@@ -140,6 +144,13 @@ class ForgettingEngine:
             p_f = float(props.get("likelihood_of_forgetting", 0.5))
             i_f = float(props.get("impact_of_forgetting", 0.5))
 
+            why = {
+                key: props[key]
+                for key in ("source_document_name", "source_reference",
+                            "artifact_tier", "event_date_origin",
+                            "missing_fields", "corroborated")
+                if key in props
+            }
             gaps.append(
                 DependencyGap(
                     anchor_node_id=anchor_node_id,
@@ -153,6 +164,7 @@ class ForgettingEngine:
                     risk_score=score_risk(p_f, i_f),
                     threat_level=stratify(hours, i_f),
                     hours_until_deadline=hours,
+                    why=why,
                 )
             )
 

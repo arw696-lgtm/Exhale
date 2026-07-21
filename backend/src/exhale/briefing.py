@@ -26,6 +26,7 @@ def _gap_to_item(gap: DependencyGap) -> dict:
         "risk_score": round(gap.risk_score, 3),
         "threat_level": gap.threat_level.value,
         "indicator": gap.threat_level.indicator,
+        "why": gap.why,
     }
 
 

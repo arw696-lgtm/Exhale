@@ -33,6 +33,17 @@ services:
       EXHALE_REQUIRE_AUTH: ${EXHALE_REQUIRE_AUTH:-1}
       # Background auto-sync interval in minutes (unset/0 = off):
       EXHALE_AUTO_SYNC_MINUTES: ${EXHALE_AUTO_SYNC_MINUTES:-}
+      # Invite-only signups + basic per-IP rate limiting:
+      EXHALE_INVITE_ONLY: ${EXHALE_INVITE_ONLY:-0}
+      EXHALE_BOOTSTRAP_INVITE: ${EXHALE_BOOTSTRAP_INVITE:-}
+      EXHALE_RATE_LIMIT_PER_MINUTE: ${EXHALE_RATE_LIMIT_PER_MINUTE:-60}
+      # Outbound critical-alert email (unset host = off):
+      EXHALE_SMTP_HOST: ${EXHALE_SMTP_HOST:-}
+      EXHALE_SMTP_PORT: ${EXHALE_SMTP_PORT:-587}
+      EXHALE_SMTP_USER: ${EXHALE_SMTP_USER:-}
+      EXHALE_SMTP_PASSWORD: ${EXHALE_SMTP_PASSWORD:-}
+      EXHALE_SMTP_FROM: ${EXHALE_SMTP_FROM:-}
+      EXHALE_SMTP_TLS: ${EXHALE_SMTP_TLS:-1}
       # Optional live Gmail ingestion (see README):
       EXHALE_GMAIL_ACCESS_TOKEN: ${EXHALE_GMAIL_ACCESS_TOKEN:-}
       EXHALE_GMAIL_REFRESH_TOKEN: ${EXHALE_GMAIL_REFRESH_TOKEN:-}
