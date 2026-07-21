@@ -318,3 +318,88 @@ def test_ics_sync_validates_attendees():
     r = client.post(f"/v1/families/{fam}/sync/ics",
                     json={"url": "https://x/cal.ics", "attendees": []})
     assert r.status_code == 400
+
+
+# --- photo / screenshot extraction ------------------------------------------------
+def test_photo_extraction_503_without_credentials(monkeypatch):
+    monkeypatch.setattr("exhale.api._vision_extractor", lambda: None)
+    r = client.post("/v1/families/fam_photo_none/extractions/photo",
+                    json={"image_base64": "abc", "media_type": "image/png"})
+    assert r.status_code == 503
+
+
+def test_photo_extraction_ingests_items_and_appears_in_briefing(monkeypatch):
+    from datetime import date
+    from exhale.schemas import ArtifactTier, ExtractionPayload
+
+    class _FakeVision:
+        def extract(self, *a, **k):
+            return [ExtractionPayload(
+                extracted_event="Picture Day (from flyer)",
+                event_date=date(2026, 9, 4), action_required=True,
+                confidence_score=0.95, artifact_tier=ArtifactTier.CONFIRMATION,
+                source_document_name="flyer.png", source_reference="photo_x")]
+
+    monkeypatch.setattr("exhale.api._vision_extractor", lambda: _FakeVision())
+    fam = "fam_photo_ok"
+    r = client.post(f"/v1/families/{fam}/extractions/photo",
+                    json={"image_base64": "abc", "media_type": "image/png",
+                          "source_name": "flyer.png"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["extracted"] == 1
+    assert body["items"][0]["status"] == "COMMITTED"
+
+    briefing = client.get(f"/v1/families/{fam}/briefing").json()
+    titles = [i["title"] for sec in ("critical_threats", "dependency_watch", "advisories")
+              for i in briefing[sec]]
+    assert "Picture Day (from flyer)" in titles
+
+
+# --- school-calendar photo → coverage model ---------------------------------------
+def test_school_photo_populates_no_school_days_and_care_gaps(monkeypatch):
+    from datetime import date
+    from exhale.extraction_vision import _SchoolCalendarExtraction, _SchoolClosure
+
+    class _FakeVision:
+        def extract_school_calendar(self, *a, **k):
+            return _SchoolCalendarExtraction(
+                school_name="ISLA", first_day=date(2026, 9, 1), last_day=date(2027, 6, 3),
+                no_school_days=[_SchoolClosure(day=date(2026, 10, 15), reason="MEA break")])
+
+    monkeypatch.setattr("exhale.api._vision_extractor", lambda: _FakeVision())
+    fam = "fam_school_photo"
+    # Need a coverage model first (Andy tied up on the MEA day so a gap appears).
+    payload = _coverage_model_payload()
+    payload["caregivers"][1]["events"].append({
+        "title": "Client review", "start": "2026-10-15T09:00:00",
+        "end": "2026-10-15T12:00:00", "attendees": ["Andy"]})
+    payload["school"] = None  # start with no school calendar
+    client.put(f"/v1/families/{fam}/coverage-model", json=payload)
+
+    r = client.post(f"/v1/families/{fam}/coverage-model/school/photo",
+                    json={"image_base64": "abc", "media_type": "image/png", "grade": "1"})
+    assert r.status_code == 200
+    assert r.json()["school"] == "ISLA"
+    assert r.json()["no_school_days"] == 1
+
+    watch = client.get(f"/v1/families/{fam}/care-gaps",
+                       params={"from": "2026-10-01", "to": "2026-10-31"}).json()
+    reasons = " ".join(g["reason"] for g in watch["gaps"])
+    assert "MEA break" in reasons  # the uploaded calendar now drives a care gap
+
+
+def test_school_photo_404_without_coverage_model(monkeypatch):
+    monkeypatch.setattr("exhale.api._vision_extractor", lambda: object())
+    r = client.post("/v1/families/fam_no_cov/coverage-model/school/photo",
+                    json={"image_base64": "abc"})
+    assert r.status_code == 404
+
+
+def test_school_photo_503_without_credentials(monkeypatch):
+    monkeypatch.setattr("exhale.api._vision_extractor", lambda: None)
+    fam = "fam_school_503"
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    r = client.post(f"/v1/families/{fam}/coverage-model/school/photo",
+                    json={"image_base64": "abc"})
+    assert r.status_code == 503

@@ -233,6 +233,134 @@ def ingest_extraction(payload: ExtractionPayload, family_id: str = Depends(requi
     }
 
 
+class PhotoExtractionRequest(BaseModel):
+    """A photo/screenshot to run through vision extraction (§1–3)."""
+
+    image_base64: str
+    media_type: str = "image/png"
+    source_name: str = "photo"
+    known_children: list[str] = Field(default_factory=list)
+
+
+def _vision_extractor():
+    from exhale.extraction_vision import vision_extractor_from_env
+
+    return vision_extractor_from_env()
+
+
+@app.post("/v1/families/{family_id}/extractions/photo")
+def ingest_photo(
+    req: PhotoExtractionRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Extract trackable items from a photo/screenshot, then route each (§3.3).
+
+    The "just screenshot it and add it in" path: one image can yield several
+    items (a sports schedule, a multi-session camp). Each flows through the same
+    routing + credibility rules as email extraction. 503 if vision isn't
+    configured (no Anthropic credentials).
+    """
+
+    import hashlib
+
+    from exhale.extraction import ExtractionContext
+    from exhale.extraction_vision import VisionUnavailable
+
+    extractor = _vision_extractor()
+    if extractor is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Vision extraction is not configured. Set ANTHROPIC_API_KEY.",
+        )
+    digest = hashlib.sha256(req.image_base64.encode()).hexdigest()[:12]
+    ctx = ExtractionContext(known_children=req.known_children)
+    try:
+        payloads = extractor.extract(
+            req.image_base64, req.media_type,
+            source_name=req.source_name, source_reference=f"photo_{digest}", ctx=ctx,
+        )
+    except VisionUnavailable as exc:
+        raise HTTPException(status_code=422, detail=f"Could not read the image: {exc}") from exc
+
+    results = []
+    for payload in payloads:
+        entry = store.ingest(family_id, payload)
+        results.append({
+            "extraction_id": entry.extraction_id,
+            "extracted_event": payload.extracted_event,
+            "event_date": payload.event_date.isoformat(),
+            "band": entry.decision.band.value,
+            "status": entry.decision.status.value,
+            "obligation_node_id": entry.obligation_node_id,
+        })
+    return {"family_id": family_id, "extracted": len(results), "items": results}
+
+
+class SchoolPhotoRequest(BaseModel):
+    """A school-calendar image to populate the coverage model's no-school days."""
+
+    image_base64: str
+    media_type: str = "image/png"
+    grade: str | None = None  # e.g. "1" — excludes closures for other grades only
+    school_name: str | None = None
+
+
+@app.post("/v1/families/{family_id}/coverage-model/school/photo")
+def ingest_school_calendar_photo(
+    req: SchoolPhotoRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Read a school-calendar photo → the coverage model's no-school days.
+
+    Closes the loop between the photo pipeline and the Care-Coverage Engine:
+    snap the school calendar and the care gaps populate themselves. Requires a
+    coverage model (404) and vision credentials (503).
+    """
+
+    from exhale.extraction_vision import VisionUnavailable
+    from exhale.coverage_config import SchoolCalendarIn
+
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    extractor = _vision_extractor()
+    if extractor is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Vision extraction is not configured. Set ANTHROPIC_API_KEY.",
+        )
+    try:
+        extraction = extractor.extract_school_calendar(
+            req.image_base64, req.media_type, grade=req.grade
+        )
+    except VisionUnavailable as exc:
+        raise HTTPException(status_code=422, detail=f"Could not read the calendar: {exc}") from exc
+
+    if extraction.first_day is None or extraction.last_day is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not read the school-year start/end dates from the image.",
+        )
+
+    school = SchoolCalendarIn(
+        name=req.school_name or extraction.school_name or "School",
+        first_day=extraction.first_day,
+        last_day=extraction.last_day,
+        no_school_days={c.day: c.reason for c in extraction.no_school_days},
+    )
+    model = CoverageModelIn(**config)
+    model = model.model_copy(update={"school": school})
+    store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {
+        "family_id": family_id,
+        "school": school.name,
+        "first_day": school.first_day.isoformat(),
+        "last_day": school.last_day.isoformat(),
+        "no_school_days": len(school.no_school_days),
+    }
+
+
 @app.get("/v1/families/{family_id}/briefing")
 def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     """Assemble the family's Weekly COO Briefing from the current graph.
