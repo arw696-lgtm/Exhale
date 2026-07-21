@@ -233,6 +233,68 @@ def ingest_extraction(payload: ExtractionPayload, family_id: str = Depends(requi
     }
 
 
+class PhotoExtractionRequest(BaseModel):
+    """A photo/screenshot to run through vision extraction (§1–3)."""
+
+    image_base64: str
+    media_type: str = "image/png"
+    source_name: str = "photo"
+    known_children: list[str] = Field(default_factory=list)
+
+
+def _vision_extractor():
+    from exhale.extraction_vision import vision_extractor_from_env
+
+    return vision_extractor_from_env()
+
+
+@app.post("/v1/families/{family_id}/extractions/photo")
+def ingest_photo(
+    req: PhotoExtractionRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Extract trackable items from a photo/screenshot, then route each (§3.3).
+
+    The "just screenshot it and add it in" path: one image can yield several
+    items (a sports schedule, a multi-session camp). Each flows through the same
+    routing + credibility rules as email extraction. 503 if vision isn't
+    configured (no Anthropic credentials).
+    """
+
+    import hashlib
+
+    from exhale.extraction import ExtractionContext
+    from exhale.extraction_vision import VisionUnavailable
+
+    extractor = _vision_extractor()
+    if extractor is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Vision extraction is not configured. Set ANTHROPIC_API_KEY.",
+        )
+    digest = hashlib.sha256(req.image_base64.encode()).hexdigest()[:12]
+    ctx = ExtractionContext(known_children=req.known_children)
+    try:
+        payloads = extractor.extract(
+            req.image_base64, req.media_type,
+            source_name=req.source_name, source_reference=f"photo_{digest}", ctx=ctx,
+        )
+    except VisionUnavailable as exc:
+        raise HTTPException(status_code=422, detail=f"Could not read the image: {exc}") from exc
+
+    results = []
+    for payload in payloads:
+        entry = store.ingest(family_id, payload)
+        results.append({
+            "extraction_id": entry.extraction_id,
+            "extracted_event": payload.extracted_event,
+            "event_date": payload.event_date.isoformat(),
+            "band": entry.decision.band.value,
+            "status": entry.decision.status.value,
+            "obligation_node_id": entry.obligation_node_id,
+        })
+    return {"family_id": family_id, "extracted": len(results), "items": results}
+
+
 @app.get("/v1/families/{family_id}/briefing")
 def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     """Assemble the family's Weekly COO Briefing from the current graph.
