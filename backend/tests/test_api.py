@@ -644,3 +644,50 @@ def test_successful_ics_sync_is_remembered_for_auto_sync(monkeypatch):
     assert r.status_code == 200
     configs = api_mod.store.profile(fam).get("sync_configs")
     assert configs["ics"][0]["url"] == "https://x/shared.ics"
+
+
+# --- Waiting-On ledger + learned rules in the briefing ----------------------------
+def test_waiting_flow_add_watch_resolve():
+    fam = "fam_waiting_1"
+    r = client.post(f"/v1/families/{fam}/waiting",
+                    json={"who": "Hennepin County", "about": "arborist follow-up",
+                          "since": "2026-07-01", "channel": "email"})
+    assert r.status_code == 200
+    item_id = r.json()["id"]
+
+    watch = client.get(f"/v1/families/{fam}/waiting").json()
+    assert watch["summary"]["open"] == 1
+    assert watch["items"][0]["who"] == "Hennepin County"
+    assert watch["items"][0]["threat_level"] in ("IMPORTANT", "CRITICAL")  # weeks old
+
+    # The wait rides on the briefing too.
+    briefing = client.get(f"/v1/families/{fam}/briefing").json()
+    assert briefing["waiting_on"]["summary"]["open"] == 1
+
+    r2 = client.post(f"/v1/families/{fam}/waiting/{item_id}/resolve")
+    assert r2.status_code == 200
+    assert client.get(f"/v1/families/{fam}/waiting").json()["summary"]["open"] == 0
+
+
+def test_resolve_unknown_waiting_is_404():
+    assert client.post("/v1/families/f/waiting/wait_x/resolve").status_code == 404
+
+
+def test_briefing_learns_rules_from_the_ledger():
+    fam = "fam_memory_1"
+    # Three weekly Monday sessions, each with a Wednesday-before deadline.
+    for monday, wednesday in (("2026-06-22", "2026-06-17"),
+                              ("2026-06-29", "2026-06-24"),
+                              ("2026-07-06", "2026-07-01")):
+        client.post(f"/v1/families/{fam}/extractions", json={
+            "extracted_event": f"ISLA Camp this Week {monday[5:7]}/{monday[8:]}",
+            "event_date": monday, "deadline_date": wednesday,
+            "action_required": True, "confidence_score": 0.95,
+            "artifact_tier": "CONFIRMATION"})
+
+    rules = client.get(f"/v1/families/{fam}/briefing").json()["learned_rules"]
+    kinds = {r["kind"] for r in rules}
+    assert "WEEKLY_CADENCE" in kinds
+    assert "DEADLINE_LEAD" in kinds
+    lead = next(r for r in rules if r["kind"] == "DEADLINE_LEAD")
+    assert "Wednesday" in lead["detail"]
