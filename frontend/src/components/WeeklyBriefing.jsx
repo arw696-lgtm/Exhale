@@ -103,7 +103,7 @@ export default function WeeklyBriefing({
       {live && <ReviewQueue familyId={familyId} onChanged={onRefresh} />}
 
       {/* Care Watch — child-supervision gaps */}
-      <CareWatch careWatch={briefing.care_watch} />
+      <CareWatch careWatch={briefing.care_watch} familyId={familyId} live={live} />
 
       {/* Waiting On — threads where the ball is in someone else's court */}
       {live && <WaitingOn familyId={familyId} />}
