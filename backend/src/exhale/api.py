@@ -373,6 +373,81 @@ def get_care_gaps(
     return build_care_watch(engine, start, end)
 
 
+class CalendarSyncRequest(BaseModel):
+    """Sync a caregiver's Google Calendar busy blocks into the coverage model."""
+
+    caregiver_name: str
+    calendar_id: str = "primary"
+    days: int = 120  # horizon to pull busy blocks for
+
+
+def _gcal_connector_from_env(caregiver_name: str, calendar_id: str):
+    """Build a GoogleCalendarConnector from env credentials, or ``None``."""
+
+    import os
+
+    access = os.environ.get("EXHALE_GCAL_ACCESS_TOKEN")
+    refresh = os.environ.get("EXHALE_GCAL_REFRESH_TOKEN")
+    if not access and not refresh:
+        return None
+    from exhale.connectors.gcal import GoogleCalendarConnector
+
+    return GoogleCalendarConnector(
+        caregiver_name=caregiver_name,
+        calendar_id=calendar_id,
+        access_token=access,
+        refresh_token=refresh,
+        client_id=os.environ.get("EXHALE_GCAL_CLIENT_ID"),
+        client_secret=os.environ.get("EXHALE_GCAL_CLIENT_SECRET"),
+    )
+
+
+@app.post("/v1/families/{family_id}/sync/calendar")
+def sync_calendar(
+    req: CalendarSyncRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Pull a caregiver's Google Calendar busy blocks into the coverage model.
+
+    Turns that caregiver's availability from inferred into observed: synced
+    events are stamped OBSERVED, so gaps built on them are high-confidence.
+    Idempotent — re-syncing replaces the previous pull. Requires a configured
+    coverage model (404) and Google Calendar credentials (503).
+    """
+
+    from datetime import timedelta
+
+    from exhale.coverage_config import merge_events
+
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    connector = _gcal_connector_from_env(req.caregiver_name, req.calendar_id)
+    if connector is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Google Calendar is not configured. Set EXHALE_GCAL_ACCESS_TOKEN, "
+                   "or EXHALE_GCAL_REFRESH_TOKEN + EXHALE_GCAL_CLIENT_ID + "
+                   "EXHALE_GCAL_CLIENT_SECRET.",
+        )
+
+    now = datetime.now()
+    events = connector.fetch_busy(now, now + timedelta(days=req.days))
+    try:
+        model = merge_events(CoverageModelIn(**config), req.caregiver_name, events)
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {
+        "family_id": family_id,
+        "caregiver": req.caregiver_name,
+        "calendar_id": req.calendar_id,
+        "synced_busy_events": len(events),
+    }
+
+
 @app.get("/v1/families/{family_id}/drafts")
 def get_drafts(family_id: str = Depends(require_family_access)) -> dict:
     """Layer 6 — recommended, rendered action drafts for each open gap (§6, §10)."""

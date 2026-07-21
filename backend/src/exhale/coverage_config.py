@@ -156,3 +156,41 @@ def default_range(days: int = 14) -> tuple[date, date]:
 
     today = date.today()
     return today, today + timedelta(days=days)
+
+
+# --- merge synced calendar events back into a stored model ------------------------
+_SYNCED_PREFIX = "gcal_"
+
+
+def merge_events(
+    model: CoverageModelIn, caregiver_name: str, events: list
+) -> CoverageModelIn:
+    """Return a copy of ``model`` with ``events`` merged into one caregiver.
+
+    Idempotent: any previously-synced events (source_reference starting
+    ``gcal_``) on that caregiver are dropped first, so re-syncing replaces rather
+    than duplicates. ``events`` are engine :class:`~exhale.coverage.CalendarEvent`
+    instances (e.g. from the Google Calendar connector).
+
+    Raises ``KeyError`` if the named caregiver isn't in the model.
+    """
+
+    data = model.model_dump()
+    for caregiver in data["caregivers"]:
+        if caregiver["name"] != caregiver_name:
+            continue
+        kept = [
+            e for e in caregiver["events"]
+            if not str(e.get("source_reference", "")).startswith(_SYNCED_PREFIX)
+        ]
+        synced = [
+            CalendarEventIn(
+                title=ev.title, start=ev.start, end=ev.end,
+                attendees=list(ev.attendees), source_reference=ev.source_reference,
+                origin=ev.origin,
+            ).model_dump()
+            for ev in events
+        ]
+        caregiver["events"] = kept + synced
+        return CoverageModelIn(**data)
+    raise KeyError(f"No caregiver named {caregiver_name!r} in the coverage model")

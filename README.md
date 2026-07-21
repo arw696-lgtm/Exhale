@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (201 tests)
+│   ├── tests/          pytest suite (213 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 201 tests (incl. Postgres integration when reachable)
+python -m pytest             # 213 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -99,6 +99,7 @@ Key endpoints (see `src/exhale/api.py`):
 | `POST` | `/v1/families/{fid}/actions/approve` | execute a draft → resolve obligation |
 | `PUT` | `/v1/families/{fid}/coverage-model` | configure the care-coverage model (child, caregivers, school) |
 | `GET` | `/v1/families/{fid}/care-gaps` | child-supervision gaps over a range (Care Watch) |
+| `POST` | `/v1/families/{fid}/sync/calendar` | pull a caregiver's Google Calendar busy blocks into the model |
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 | `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
 | `POST` | `/v1/auth/signup` | create account (+ new family, or join via invite code) |
@@ -230,6 +231,17 @@ briefing-ready payload. See it on real data:
 ```bash
 cd backend && PYTHONPATH=src python examples/demo_coverage.py
 ```
+
+**Live caregiver availability (`connectors/gcal.py`).** The Google Calendar
+connector turns a caregiver's availability from *inferred* into *observed*:
+`POST /v1/families/{fid}/sync/calendar` pulls their busy blocks (recurring
+events expanded) and merges them into the coverage model. Only real busy time
+counts — an event marked Free (`transparency: transparent`) or an all-day marker
+does **not** blacked out the day, and cancelled events are skipped. Synced events
+are stamped `OBSERVED`, so a care gap built on them is high-confidence rather than
+assumption-dependent. Auth mirrors Gmail (`EXHALE_GCAL_ACCESS_TOKEN`, or the
+`EXHALE_GCAL_REFRESH_TOKEN` + `EXHALE_GCAL_CLIENT_ID` + `EXHALE_GCAL_CLIENT_SECRET`
+trio); re-syncing is idempotent.
 
 **Action engine (§6, §10).** Each gap advances along the controlled-autonomy
 path `Observe → Recommend → Draft → Execute with Approval → Autonomous`. The

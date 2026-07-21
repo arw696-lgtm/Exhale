@@ -285,3 +285,21 @@ def test_briefing_includes_care_watch_once_model_is_set():
     briefing = client.get(f"/v1/families/{fam}/briefing").json()
     assert briefing["care_watch"] is not None
     assert briefing["care_watch"]["recipient"] == "Stevie"
+
+
+# --- Google Calendar sync endpoint ------------------------------------------------
+def test_calendar_sync_404_without_a_coverage_model():
+    r = client.post("/v1/families/family_no_cov_model/sync/calendar",
+                    json={"caregiver_name": "Andy"})
+    assert r.status_code == 404
+
+
+def test_calendar_sync_503_when_credentials_absent(monkeypatch):
+    for var in ("EXHALE_GCAL_ACCESS_TOKEN", "EXHALE_GCAL_REFRESH_TOKEN"):
+        monkeypatch.delenv(var, raising=False)
+    fam = "family_cal_sync"
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    r = client.post(f"/v1/families/{fam}/sync/calendar",
+                    json={"caregiver_name": "Andy"})
+    assert r.status_code == 503
+    assert "Google Calendar is not configured" in r.json()["detail"]
