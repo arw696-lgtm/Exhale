@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (256 tests)
+│   ├── tests/          pytest suite (280 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 256 tests (incl. Postgres integration when reachable)
+python -m pytest             # 280 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -92,6 +92,9 @@ Key endpoints (see `src/exhale/api.py`):
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/health` | liveness |
+| `GET` | `/v1/families/{fid}/connect/google` | start the "Connect Google" OAuth flow (consent URL) |
+| `GET` | `/v1/oauth/google/callback` | OAuth redirect target — exchanges code, stores tokens |
+| `GET` | `/v1/families/{fid}/connections` | which providers this family has connected |
 | `POST` | `/v1/families/{fid}/extractions` | ingest → route (§3.3) → graph |
 | `POST` | `/v1/families/{fid}/extractions/photo` | extract trackable items from a photo/screenshot → route |
 | `POST` | `/v1/families/{fid}/coverage-model/school/photo` | read a school-calendar photo → coverage no-school days |
@@ -140,6 +143,19 @@ A second path closes the loop with the Care-Coverage Engine: `POST
 and populates the coverage model's no-school days (grade-aware — pass `grade` so
 closures for other grades only are excluded). Snap the school calendar and the
 care gaps populate themselves.
+
+**"Connect Google" (multi-user OAuth, `oauth.py`).** The productization seam:
+the developer registers **one** Google OAuth app (client id/secret via
+`EXHALE_GOOGLE_*`), and every family then connects their own account with a
+single click — no per-user setup. `GET /connect/google` returns Google's consent
+URL (carrying a signed, tamper-evident `state` that binds the flow to the
+family); Google redirects to `GET /v1/oauth/google/callback`, which verifies the
+state, exchanges the code, and stores that family's refresh token **encrypted at
+rest** (the envelope pipeline). The Gmail and Calendar sync endpoints prefer a
+family's own connected tokens, falling back to the single-tenant `EXHALE_GMAIL_*`
+/ `EXHALE_GCAL_*` env vars. `GET /connections` reports what's linked. Read-only
+scopes only. Fully testable without a real Google account (the token exchange
+takes an injectable client; state signing is pure).
 
 **Live Gmail.** `connectors/gmail.py` speaks the Gmail REST API directly
 (OAuth: `EXHALE_GMAIL_ACCESS_TOKEN`, or `EXHALE_GMAIL_REFRESH_TOKEN` +
