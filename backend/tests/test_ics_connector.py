@@ -107,3 +107,66 @@ def test_webcal_scheme_is_rewritten_to_https():
 def test_connector_requires_attendees():
     with pytest.raises(ValueError):
         ICSCalendarConnector("https://x/cal.ics", attendees=())
+
+
+# --- recurring events (RRULE) — the Google/iCloud secret-feed case -----------------
+from datetime import date as _d  # noqa: E402
+
+WIN = (datetime(2026, 9, 1), datetime(2026, 9, 30))
+
+
+def _recurring(rrule, dtstart="20260907T173000", dtend="20260907T190000"):
+    return (
+        "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:rec1\nSUMMARY:Soccer practice\n"
+        f"DTSTART;TZID=America/Chicago:{dtstart}\n"
+        f"DTEND;TZID=America/Chicago:{dtend}\n"
+        f"RRULE:{rrule}\nEND:VEVENT\nEND:VCALENDAR\n"
+    )
+
+
+def test_weekly_recurrence_expands_across_window():
+    evs = parse_ics(_recurring("FREQ=WEEKLY"), ("Andy",),
+                    expand_from=WIN[0], expand_until=WIN[1])
+    dates = [e.start.date() for e in evs]
+    # Sep 7 is a Monday → weekly Mondays in September.
+    assert dates == [_d(2026, 9, 7), _d(2026, 9, 14), _d(2026, 9, 21), _d(2026, 9, 28)]
+    assert all(e.start.time() == time(17, 30) for e in evs)
+
+
+def test_weekly_byday_expands_multiple_weekdays():
+    evs = parse_ics(_recurring("FREQ=WEEKLY;BYDAY=MO,WE"), ("Andy",),
+                    expand_from=WIN[0], expand_until=WIN[1])
+    dates = [e.start.date() for e in evs]
+    assert _d(2026, 9, 7) in dates and _d(2026, 9, 9) in dates   # Mon + Wed
+    assert _d(2026, 9, 16) in dates                               # following Wed
+
+
+def test_count_limits_occurrences():
+    evs = parse_ics(_recurring("FREQ=WEEKLY;COUNT=2"), ("Andy",),
+                    expand_from=WIN[0], expand_until=WIN[1])
+    assert len(evs) == 2
+
+
+def test_until_limits_occurrences():
+    evs = parse_ics(_recurring("FREQ=WEEKLY;UNTIL=20260915T000000Z"), ("Andy",),
+                    expand_from=WIN[0], expand_until=WIN[1])
+    assert [e.start.date() for e in evs] == [_d(2026, 9, 7), _d(2026, 9, 14)]
+
+
+def test_daily_interval():
+    evs = parse_ics(_recurring("FREQ=DAILY;INTERVAL=2;COUNT=3"), ("Andy",),
+                    expand_from=WIN[0], expand_until=WIN[1])
+    assert [e.start.date() for e in evs] == [_d(2026, 9, 7), _d(2026, 9, 9), _d(2026, 9, 11)]
+
+
+def test_unrecognized_rule_falls_back_to_single():
+    evs = parse_ics(_recurring("FREQ=YEARLY"), ("Andy",),
+                    expand_from=WIN[0], expand_until=WIN[1])
+    assert len(evs) == 1
+
+
+def test_recurring_occurrences_have_unique_source_refs():
+    evs = parse_ics(_recurring("FREQ=WEEKLY;COUNT=3"), ("Andy",),
+                    expand_from=WIN[0], expand_until=WIN[1])
+    refs = [e.source_reference for e in evs]
+    assert len(set(refs)) == 3 and all(r.startswith("ics_rec1") for r in refs)

@@ -3,6 +3,7 @@ import ThreatCard from "./ThreatCard.jsx";
 import DependencyWatch from "./DependencyWatch.jsx";
 import CalendarConflicts from "./CalendarConflicts.jsx";
 import CareWatch from "./CareWatch.jsx";
+import ConnectionsPanel from "./ConnectionsPanel.jsx";
 
 /**
  * The Sunday Morning Weekly COO Briefing (Blueprint §9.1).
@@ -80,6 +81,9 @@ export default function WeeklyBriefing({ briefing, drafts = {}, onOpenDraft, use
 
       {/* Care Watch — child-supervision gaps */}
       <CareWatch careWatch={briefing.care_watch} />
+
+      {/* Connections — Connect Google (logged-in households) */}
+      {user && <ConnectionsPanel familyId={user.family_id} />}
 
       {/* Dependency watch */}
       <div className="mb-8">

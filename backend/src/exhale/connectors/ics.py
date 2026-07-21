@@ -21,7 +21,8 @@ limitation surfaced honestly rather than silently mishandled.
 
 from __future__ import annotations
 
-from datetime import datetime
+from dataclasses import replace
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -30,6 +31,11 @@ from exhale.coverage import CalendarEvent
 from exhale.schemas import FactOrigin
 
 DEFAULT_TZ = "America/Chicago"
+
+# How far forward to expand a recurring event when no explicit window is given.
+_DEFAULT_EXPAND_DAYS = 365
+_MAX_OCCURRENCES = 500  # safety cap against a runaway/unbounded rule
+_WEEKDAY = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
 
 def _unfold(text: str) -> list[str]:
@@ -75,14 +81,113 @@ def _parse_dt(value: str, params: dict[str, str], tz: ZoneInfo) -> tuple[datetim
         return None, False
 
 
-def parse_ics(text: str, attendees: tuple[str, ...], *, tz: str = DEFAULT_TZ) -> list[CalendarEvent]:
+def _parse_rrule(value: str) -> dict:
+    parts = {}
+    for token in value.split(";"):
+        k, _, v = token.partition("=")
+        parts[k.upper()] = v
+    return parts
+
+
+def _expand_recurrence(
+    base: CalendarEvent, rrule: str, window_start: datetime, window_end: datetime
+) -> list[CalendarEvent]:
+    """Expand a recurring event into concrete occurrences within a window.
+
+    Supports the common family cases — FREQ=DAILY/WEEKLY/MONTHLY with INTERVAL,
+    COUNT, UNTIL, and (weekly) BYDAY. Anything unrecognized falls back to the
+    single base occurrence rather than being silently dropped or mishandled.
+    """
+
+    rule = _parse_rrule(rrule)
+    freq = rule.get("FREQ", "").upper()
+    interval = max(int(rule.get("INTERVAL", "1") or "1"), 1)
+    count = int(rule["COUNT"]) if rule.get("COUNT") else None
+    until = None
+    if rule.get("UNTIL"):
+        raw = rule["UNTIL"].rstrip("Z")
+        try:
+            until = datetime.strptime(raw[:15], "%Y%m%dT%H%M%S") if "T" in raw \
+                else datetime.combine(datetime.strptime(raw[:8], "%Y%m%d").date(), base.start.time())
+        except ValueError:
+            until = None
+
+    duration = base.end - base.start
+    starts: list[datetime] = []
+
+    def _emit(dt: datetime) -> bool:
+        """Record an occurrence; return False when a stop condition is hit."""
+        if until is not None and dt > until:
+            return False
+        if dt > window_end or len(starts) >= _MAX_OCCURRENCES:
+            return False
+        if dt >= window_start:
+            starts.append(dt)
+        return count is None or len(starts) < count
+
+    if freq == "WEEKLY" and rule.get("BYDAY"):
+        targets = sorted(_WEEKDAY[d] for d in rule["BYDAY"].split(",") if d in _WEEKDAY)
+        week0 = base.start - timedelta(days=base.start.weekday())
+        wk = 0
+        while True:
+            base_week = week0 + timedelta(weeks=wk * interval)
+            stop = False
+            for wd in targets:
+                occ = (base_week + timedelta(days=wd)).replace(
+                    hour=base.start.hour, minute=base.start.minute)
+                if occ < base.start:
+                    continue
+                if not _emit(occ):
+                    stop = True
+                    break
+            if stop or base_week > window_end or wk > 520:
+                break
+            wk += 1
+    elif freq in ("DAILY", "WEEKLY", "MONTHLY"):
+        step_days = {"DAILY": 1, "WEEKLY": 7}.get(freq)
+        occ = base.start
+        guard = 0
+        while guard < _MAX_OCCURRENCES * 2:
+            if not _emit(occ):
+                break
+            if freq == "MONTHLY":
+                m = occ.month - 1 + interval
+                occ = occ.replace(year=occ.year + m // 12, month=m % 12 + 1)
+            else:
+                occ = occ + timedelta(days=step_days * interval)
+            if occ > window_end:
+                break
+            guard += 1
+    else:
+        return [base]  # unrecognized rule → keep the single occurrence
+
+    return [
+        replace(base, start=s, end=s + duration,
+                source_reference=f"{base.source_reference}_{s.date().isoformat()}")
+        for s in starts
+    ]
+
+
+def parse_ics(
+    text: str,
+    attendees: tuple[str, ...],
+    *,
+    tz: str = DEFAULT_TZ,
+    expand_from: datetime | None = None,
+    expand_until: datetime | None = None,
+) -> list[CalendarEvent]:
     """Pure: an iCalendar document → busy :class:`CalendarEvent`s.
 
     ``attendees`` are the caregiver names who are out for these events (for a
-    shared family calendar, typically both parents).
+    shared family calendar, typically both parents). Recurring events (RRULE)
+    are expanded into concrete occurrences within [``expand_from``,
+    ``expand_until``] (defaults: today → +1 year).
     """
 
     zone = ZoneInfo(tz)
+    win_start = expand_from or datetime.combine(date.today(), datetime.min.time())
+    win_end = expand_until or (win_start + timedelta(days=_DEFAULT_EXPAND_DAYS))
+
     events: list[CalendarEvent] = []
     cur: dict | None = None
     for line in _unfold(text):
@@ -93,7 +198,10 @@ def parse_ics(text: str, attendees: tuple[str, ...], *, tz: str = DEFAULT_TZ) ->
             if cur is not None:
                 ev = _build(cur, attendees, zone)
                 if ev is not None:
-                    events.append(ev)
+                    if cur.get("rrule"):
+                        events.extend(_expand_recurrence(ev, cur["rrule"], win_start, win_end))
+                    else:
+                        events.append(ev)
             cur = None
         elif cur is not None:
             if name == "SUMMARY":
@@ -104,6 +212,8 @@ def parse_ics(text: str, attendees: tuple[str, ...], *, tz: str = DEFAULT_TZ) ->
                 cur["status"] = value.upper()
             elif name == "TRANSP":
                 cur["transp"] = value.upper()
+            elif name == "RRULE":
+                cur["rrule"] = value
             elif name == "DTSTART":
                 cur["start"], cur["start_allday"] = _parse_dt(value, params, zone)
             elif name == "DTEND":
