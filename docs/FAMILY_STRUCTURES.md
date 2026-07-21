@@ -42,15 +42,24 @@ One primary decision-maker; one or more people with partial, defined
 access — e.g. visibility into Tuesday/Thursday pickup only, not the full
 household picture.
 
-**What this requires:**
-- A caregiver access tier below "full household visibility" — scoped to
-  specific obligations, days, or children rather than all-or-nothing
+**Status: built (care-days + shared-items tier).** A HELPER is a scoped
+membership role alongside the full MEMBER: a household mints a scoped
+invite code for specific weekdays, and whoever signs up with it joins as
+a helper who sees *only* the care gaps on those days plus obligations the
+household explicitly shares — enforced server-side as **default-deny**
+(every family endpoint except the scoped helper view returns 403 for a
+helper, so a new endpoint can never leak to them by omission). The helper
+gets their own home screen, not a trimmed briefing; the family invite code
+is never handed to a helper (they can't invite full members); and shared
+obligations are stripped to what/who/when — never the provenance
+(source inbox) behind them.
+
+**What remains open here:**
 - Corroboration logic that works with fewer default witnesses: fewer
   sources should lower confidence gracefully, not be treated as an
-  anomaly or a missing-data error
-- This is the **highest-priority build target** — cleanly scoped,
-  broadly applicable, and a natural extension of the existing invite-code
-  system rather than a new subsystem
+  anomaly or a missing-data error (see §5 — still undecided)
+- Per-child and per-obligation-type granularity (today's scope is
+  per-weekday plus an explicit shared-item list)
 
 ### 3.3 Co-parenting across two households
 *(divorced, separated, or otherwise non-cohabiting parents sharing
@@ -73,6 +82,13 @@ care gaps.
   retrofitting partitioned visibility after the fact is significantly
   harder than designing the seams in from the start
 
+**Seam laid (§3.2 build).** The helper tier already draws the first line of
+partitioned visibility: a shared obligation reaches a scoped caregiver as a
+provenance-free summary (the fact, never the inbox it came from). The
+co-parenting case generalizes that same narrowing from "a helper" to "the
+other parent" — the stripping logic (`helpers.shared_obligations`) is where
+it extends.
+
 ### 3.4 Multi-generational or non-parent primary caregiver
 *(grandparent raising a grandchild, legal guardian, foster family)*
 
@@ -88,14 +104,16 @@ at all.
 
 ## 4. Recommended sequencing
 
-1. **Build for 3.2 next** — cleanest permission-tier problem, broad
-   applicability, extends existing infrastructure rather than replacing it
+1. ~~**Build for 3.2 next**~~ **Done** — the HELPER role, scoped invites,
+   default-deny enforcement, and the helper home screen shipped. Remaining
+   §3.2 items (graceful low-witness corroboration, finer granularity) are
+   folded into §5's open questions.
 2. **Design the data model with 3.3 in mind now**, even without full
    implementation — the seams (partitioned visibility, provenance
    display rules) are cheap to leave room for today and expensive to
-   retrofit later
-3. **Handle 3.4 opportunistically** — low cost, can be folded into
-   whichever other work touches the caregiver/role model first
+   retrofit later. *First seam laid: provenance-free shared summaries.*
+3. ~~**Handle 3.4 opportunistically**~~ **Done** — role selector + neutral
+   "primary caregiver" framing (PR #16).
 
 ## 5. What this addendum does not answer
 

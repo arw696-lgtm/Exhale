@@ -19,12 +19,12 @@ from __future__ import annotations
 from datetime import date, datetime, time, timezone
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from exhale import __version__
-from exhale.auth import AuthError, InMemoryAuthStore, User
+from exhale.auth import ROLE_HELPER, ROLE_MEMBER, AuthError, InMemoryAuthStore, User
 from exhale.briefing import build_weekly_briefing
 from exhale.connectors.base import RawMessage
 from exhale.connectors.memory import FixtureConnector
@@ -158,17 +158,47 @@ def current_user(authorization: str | None = Header(default=None)) -> User | Non
     return auth_store.user_for_token(authorization.split(" ", 1)[1])
 
 
+# The only family-scoped paths a HELPER account may reach. Everything else is
+# denied by default — a new endpoint is invisible to helpers until explicitly
+# listed here, which is the safe failure mode for a trust-critical boundary
+# (FAMILY_STRUCTURES §3.2). `/helper-view` is itself fully scope-filtered.
+_HELPER_ALLOWED_SUFFIXES = ("/helper-view",)
+
+
 def require_family_access(
-    family_id: str, user: User | None = Depends(current_user)
+    family_id: str, request: Request, user: User | None = Depends(current_user)
 ) -> str:
-    """Guard for /v1/families/{family_id}/* — the token's family must match."""
+    """Guard for /v1/families/{family_id}/* — the token's family must match.
+
+    A HELPER is additionally confined to the helper allowlist (default-deny):
+    any other family endpoint returns 403, so scoped caregivers never reach the
+    briefing, ledger, connections, or another day's data.
+    """
 
     if user is not None:
         if user.family_id != family_id:
             raise HTTPException(status_code=403, detail="Not a member of this family")
+        if user.role == ROLE_HELPER and not request.url.path.endswith(_HELPER_ALLOWED_SUFFIXES):
+            raise HTTPException(
+                status_code=403,
+                detail="This view isn't available to helper accounts.",
+            )
         return family_id
     if _auth_required():
         raise HTTPException(status_code=401, detail="Authentication required")
+    return family_id
+
+
+def require_full_member(
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> str:
+    """Stricter guard for household-management actions (inviting/scoping
+    helpers). A helper is already blocked by the allowlist; this makes the
+    member-only intent explicit and independent of path spelling."""
+
+    if user is not None and user.role != ROLE_MEMBER:
+        raise HTTPException(status_code=403, detail="Only full members can do this.")
     return family_id
 
 app = FastAPI(
@@ -239,6 +269,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+def _member_invite_code(user: User) -> str | None:
+    """The family's join code — but only for full members. A helper must never
+    receive it, or they could invite full members into the household."""
+
+    return auth_store.invite_code_for(user.family_id) if user.role == ROLE_MEMBER else None
+
+
 def _session_response(user: User, token: str) -> dict:
     return {
         "token": token,
@@ -247,8 +284,9 @@ def _session_response(user: User, token: str) -> dict:
             "email": user.email,
             "display_name": user.display_name,
             "family_id": user.family_id,
+            "role": user.role,
         },
-        "invite_code": auth_store.invite_code_for(user.family_id),
+        "invite_code": _member_invite_code(user),
     }
 
 
@@ -290,6 +328,9 @@ def signup(req: SignupRequest) -> dict:
                    "their invite code.",
         )
 
+    # Resolve the code before signup so a helper join can record its care-day
+    # scope in the household profile the moment the account exists.
+    info = auth_store.invite_info(invite_code) if invite_code else None
     try:
         user, token = auth_store.signup(
             req.email, req.password, req.display_name, invite_code=invite_code
@@ -298,6 +339,15 @@ def signup(req: SignupRequest) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if invite_code is None:
         store.set_profile(user.family_id, parent_first_name=req.display_name)
+    elif info is not None and info.kind == "helper":
+        from exhale.helpers import set_helper_scope
+
+        helpers = set_helper_scope(
+            store.profile(user.family_id).get("helpers") or {},
+            user.user_id, weekdays=info.weekdays, shared_obligation_ids=[],
+        )
+        helpers[user.user_id]["display_name"] = req.display_name
+        store.set_profile(user.family_id, helpers=helpers)
     return _session_response(user, token)
 
 
@@ -326,7 +376,8 @@ def me(user: User | None = Depends(current_user)) -> dict:
         "email": user.email,
         "display_name": user.display_name,
         "family_id": user.family_id,
-        "invite_code": auth_store.invite_code_for(user.family_id),
+        "role": user.role,
+        "invite_code": _member_invite_code(user),
     }
 
 
@@ -843,6 +894,127 @@ def run_notifications_now(family_id: str = Depends(require_family_access)) -> di
             "notified": report["notified"].get(family_id, 0),
             "skipped": report["skipped"].get(family_id),
             "error": report["errors"].get(family_id)}
+
+
+# --- Scoped caregivers (helpers) — FAMILY_STRUCTURES §3.2 ---------------------------
+class HelperInviteRequest(BaseModel):
+    weekdays: list[int] = Field(description="Care days, 0=Mon .. 6=Sun")
+
+
+class HelperScopeUpdate(BaseModel):
+    weekdays: list[int] | None = None
+    shared_obligation_ids: list[str] | None = None
+
+
+def _helper_records(family_id: str) -> dict:
+    return store.profile(family_id).get("helpers") or {}
+
+
+@app.post("/v1/families/{family_id}/helper-invites")
+def create_helper_invite(
+    req: HelperInviteRequest, family_id: str = Depends(require_full_member)
+) -> dict:
+    """Mint a scoped invite code: whoever signs up with it joins as a HELPER
+    covering these weekdays (seeing only those care days + shared items)."""
+
+    from exhale.helpers import WEEKDAY_NAMES
+
+    days = sorted({d for d in req.weekdays if 0 <= d <= 6})
+    if not days:
+        raise HTTPException(status_code=400, detail="Pick at least one care day (0=Mon..6=Sun).")
+    code = auth_store.create_helper_invite(family_id, days)
+    return {"family_id": family_id, "code": code, "weekdays": days,
+            "weekday_labels": [WEEKDAY_NAMES[d] for d in days]}
+
+
+@app.get("/v1/families/{family_id}/helpers")
+def list_helpers(family_id: str = Depends(require_full_member)) -> dict:
+    """The household's helper accounts and each one's scope."""
+
+    from exhale.helpers import WEEKDAY_NAMES
+
+    helpers = []
+    for user_id, rec in _helper_records(family_id).items():
+        days = sorted(rec.get("weekdays") or [])
+        helpers.append({
+            "user_id": user_id,
+            "display_name": rec.get("display_name"),
+            "weekdays": days,
+            "weekday_labels": [WEEKDAY_NAMES[d] for d in days],
+            "shared_obligation_ids": rec.get("shared_obligation_ids") or [],
+        })
+    return {"family_id": family_id, "helpers": helpers}
+
+
+@app.put("/v1/families/{family_id}/helpers/{helper_user_id}")
+def update_helper_scope(
+    helper_user_id: str, req: HelperScopeUpdate,
+    family_id: str = Depends(require_full_member),
+) -> dict:
+    """Change a helper's care days or the obligations shared with them."""
+
+    from exhale.helpers import set_helper_scope
+
+    records = _helper_records(family_id)
+    if helper_user_id not in records:
+        raise HTTPException(status_code=404, detail="No such helper in this family.")
+    weekdays = None if req.weekdays is None else [d for d in req.weekdays if 0 <= d <= 6]
+    # set_helper_scope copies the existing record, so display_name is preserved.
+    helpers = set_helper_scope(
+        records, helper_user_id,
+        weekdays=weekdays, shared_obligation_ids=req.shared_obligation_ids,
+    )
+    store.set_profile(family_id, helpers=helpers)
+    return list_helpers(family_id)
+
+
+@app.delete("/v1/families/{family_id}/helpers/{helper_user_id}")
+def revoke_helper(
+    helper_user_id: str, family_id: str = Depends(require_full_member)
+) -> dict:
+    """Revoke a helper's access: their scope is cleared, so their view goes
+    empty. (The account remains; clearing scope cuts off all household data.)"""
+
+    records = dict(_helper_records(family_id))
+    if records.pop(helper_user_id, None) is None:
+        raise HTTPException(status_code=404, detail="No such helper in this family.")
+    store.set_profile(family_id, helpers=records)
+    return {"family_id": family_id, "revoked": helper_user_id}
+
+
+@app.get("/v1/families/{family_id}/helper-view")
+def get_helper_view(
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+    as_: str | None = Query(default=None, alias="as"),
+) -> dict:
+    """The scoped home screen a helper sees: their care days' gaps + the
+    obligations shared with them, and nothing else.
+
+    A helper always sees their own scope. A full member may preview a specific
+    helper's view with ``?as=<user_id>`` (to check what they've shared).
+    """
+
+    from exhale.helpers import build_helper_view
+
+    if user is not None and user.role == ROLE_MEMBER:
+        target_id = as_
+        if not target_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Members see the full briefing; pass ?as=<helper_user_id> "
+                       "to preview a helper's view.",
+            )
+    else:
+        # Helper (or dev/anon): their own identity. Anon dev mode has no user;
+        # allow ?as= there so the view is exercisable without auth.
+        target_id = (user.user_id if user is not None else as_)
+        if not target_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+    profile = store.profile(family_id)
+    return build_helper_view(profile, store.graph(family_id),
+                             _care_watch_for(profile), target_id)
 
 
 class ScheduleRequest(BaseModel):

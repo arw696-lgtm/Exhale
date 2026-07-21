@@ -118,6 +118,8 @@ Key endpoints (see `src/exhale/api.py`):
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 | `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
 | `GET`/`PUT` | `/v1/families/{fid}/notifications` (+ `/test`, `/run`) | where 🔴 critical alerts get emailed (each exactly once) |
+| `POST`/`GET` | `/v1/families/{fid}/helper-invites` · `/helpers` (+ `PUT`/`DELETE` `/helpers/{id}`) | scoped-caregiver invites + roster (members only) |
+| `GET` | `/v1/families/{fid}/helper-view` | a helper's scoped home: their care days + shared items (only view a helper may reach) |
 | `POST` | `/v1/auth/signup` | create account (+ new family, or join via invite code) |
 | `POST` | `/v1/auth/login` / `logout` | session tokens (opaque bearer, hashed at rest) |
 | `GET` | `/v1/me` | current user + family invite code |
@@ -131,6 +133,17 @@ its invite code (§13.2). For a hosted deployment set `EXHALE_INVITE_ONLY=1`:
 signups then require a code (a family's own code joins it; the operator's
 `EXHALE_BOOTSTRAP_INVITE` mints a new family). Auth and OAuth endpoints carry a
 per-IP rate limit (`EXHALE_RATE_LIMIT_PER_MINUTE`, default 60, `0` = off).
+
+**Scoped caregivers (helpers).** Not every family is two parents sharing
+everything (see `docs/FAMILY_STRUCTURES.md`). A full member can mint a *helper*
+invite for specific weekdays; whoever signs up with it joins as a **HELPER** who
+sees only the care gaps on those days plus obligations the household explicitly
+shares — and nothing else. Enforcement is **default-deny**: every family
+endpoint except the scoped `/helper-view` returns 403 for a helper, so a new
+route can't leak to them by omission. The family join code is never given to a
+helper, and shared obligations reach them as provenance-free summaries
+(what/who/when, never the inbox the fact came from) — the first seam of the
+partitioned visibility the co-parenting case will need.
 
 **Critical-alert email (`notify.py`).** The briefing is pull; 🔴 items also
 *push*. Configure SMTP (`EXHALE_SMTP_HOST/PORT/USER/PASSWORD/FROM/TLS`), have a

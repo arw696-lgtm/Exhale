@@ -42,6 +42,10 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash   CHAR(64)     NOT NULL,
     password_salt   CHAR(32)     NOT NULL,
 
+    -- Membership role (FAMILY_STRUCTURES §3.2): MEMBER = full adult of the
+    -- household; HELPER = scoped secondary caregiver (see helper_invites).
+    role            VARCHAR(16)  NOT NULL DEFAULT 'MEMBER',
+
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_users_family
@@ -49,6 +53,25 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_family ON users (family_id);
+
+-- -----------------------------------------------------------------------------
+-- Helper invites (FAMILY_STRUCTURES §3.2) — a scoped code that joins a family
+-- as a HELPER covering specific weekdays. The care days/shared items a helper
+-- can see live in the encrypted household profile, not here; this table only
+-- carries what the join needs (which family, which days).
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS helper_invites (
+    code            VARCHAR(16)  PRIMARY KEY,
+    family_id       VARCHAR(64)  NOT NULL,
+    -- Comma-separated weekday indices (0=Mon .. 6=Sun), e.g. "1,3".
+    weekdays        VARCHAR(32)  NOT NULL DEFAULT '',
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_helper_invites_family
+        FOREIGN KEY (family_id) REFERENCES families (family_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_helper_invites_family ON helper_invites (family_id);
 
 CREATE TABLE IF NOT EXISTS auth_sessions (
     -- SHA-256 of the opaque bearer token; the token itself is never stored.
@@ -193,3 +216,4 @@ ALTER TABLE family_secure_nodes   ADD COLUMN IF NOT EXISTS wrapped_dek VARCHAR(9
 ALTER TABLE family_secure_edges   ADD COLUMN IF NOT EXISTS wrapped_dek VARCHAR(96);
 ALTER TABLE extraction_ledger     ADD COLUMN IF NOT EXISTS wrapped_dek VARCHAR(96);
 ALTER TABLE extraction_ledger     ADD COLUMN IF NOT EXISTS obligation_node_id VARCHAR(64);
+ALTER TABLE users                 ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT NULL DEFAULT 'MEMBER';

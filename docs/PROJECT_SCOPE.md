@@ -1,6 +1,6 @@
 # Exhale — Full Project Scope & Status
 
-*As of 2026-07-21 · 15 PRs merged · 363 tests (355 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
+*As of 2026-07-21 · 17 PRs merged · 379 tests (371 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
 
 This is the complete map of the project: what Exhale is, what has been built,
 the design laws it runs on, and — most importantly for gap analysis — an honest
@@ -193,7 +193,7 @@ a product — and "not yet" stays the answer until §5C says otherwise.
 | **Care programs (e.g. Aventuras) have no UI** | API-only; no form to enter non-school-day care dates. |
 | **Recurring event writes** | `/schedule` writes single events only (no RRULE creation). |
 | **Timezone is effectively single-household** | `America/Chicago` defaults in several places; fine for the founding family, not multi-region ready. |
-| **Family-structure assumptions** | Architecture assumes a two-parent, shared-everything household: all members see all data, and access is all-or-nothing. Scoped caregiver tiers (single parent + secondary caregiver), partitioned visibility (co-parenting across households), and provenance-display rules are named, sequenced, and recorded in **docs/FAMILY_STRUCTURES.md**; role/language flexibility (non-parent primary caregivers) is closed. |
+| **Family-structure assumptions** | Two of four structures now built: scoped caregiver access (**HELPER** role — per-weekday care visibility + explicitly shared items, default-deny enforced) and non-parent role flexibility. Partitioned visibility for co-parenting across households (§3.3) remains the hard case — named, sequenced, and seam-laid (provenance-free shared summaries) in **docs/FAMILY_STRUCTURES.md**. Open: graceful low-witness corroboration; per-child/per-obligation granularity. |
 
 ### B. Connections not built (deliberate deferrals)
 | Item | Status |
@@ -227,9 +227,9 @@ a product — and "not yet" stays the answer until §5C says otherwise.
 
 1. ~~**Notifications**~~ Done — email alerts shipped; SMS/push when demand appears.
 2. **Deploy pack + hosting** (everything else compounds once it's live).
-3. **Scoped caregiver access** (FAMILY_STRUCTURES §3.2 — the permission tier
-   below full visibility; shape the data model with §3.3's partitioned
-   visibility in mind while building it).
+3. ~~**Scoped caregiver access**~~ Done — HELPER role shipped (FAMILY_STRUCTURES
+   §3.2); §3.3 partitioned visibility is the next structural step when a real
+   co-parenting household needs it.
 4. **Multi-child coverage** (small model change, big correctness win).
 5. **Founder config tasks** (interleaved — each one lights up a built system).
 6. **Thread/conversation state** (the last big extraction-quality item).

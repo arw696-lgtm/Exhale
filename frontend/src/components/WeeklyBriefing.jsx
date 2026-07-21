@@ -4,6 +4,7 @@ import DependencyWatch from "./DependencyWatch.jsx";
 import CalendarConflicts from "./CalendarConflicts.jsx";
 import CareWatch from "./CareWatch.jsx";
 import ConnectionsPanel from "./ConnectionsPanel.jsx";
+import HelperInvitePanel from "./HelperInvitePanel.jsx";
 import PhotoDrop from "./PhotoDrop.jsx";
 import ReviewQueue from "./ReviewQueue.jsx";
 import SetupPanel from "./SetupPanel.jsx";
@@ -127,6 +128,9 @@ export default function WeeklyBriefing({
       {/* Photo ingestion + work windows (live backend only) */}
       {live && <PhotoDrop familyId={familyId} onChanged={onRefresh} />}
       {live && <WorkWindowsPanel familyId={familyId} />}
+
+      {/* Helpers — invite/scope a secondary caregiver (members, live backend) */}
+      {live && user && <HelperInvitePanel familyId={familyId} />}
 
       {/* Connections — Connect Google / Outlook (logged-in households) */}
       {user && <ConnectionsPanel familyId={user.family_id} />}
