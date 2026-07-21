@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (256 tests)
+│   ├── tests/          pytest suite (287 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 256 tests (incl. Postgres integration when reachable)
+python -m pytest             # 287 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -92,6 +92,9 @@ Key endpoints (see `src/exhale/api.py`):
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/health` | liveness |
+| `GET` | `/v1/families/{fid}/connect/google` | start the "Connect Google" OAuth flow (consent URL) |
+| `GET` | `/v1/oauth/google/callback` | OAuth redirect target — exchanges code, stores tokens |
+| `GET` | `/v1/families/{fid}/connections` | which providers this family has connected |
 | `POST` | `/v1/families/{fid}/extractions` | ingest → route (§3.3) → graph |
 | `POST` | `/v1/families/{fid}/extractions/photo` | extract trackable items from a photo/screenshot → route |
 | `POST` | `/v1/families/{fid}/coverage-model/school/photo` | read a school-calendar photo → coverage no-school days |
@@ -103,6 +106,7 @@ Key endpoints (see `src/exhale/api.py`):
 | `GET` | `/v1/families/{fid}/care-gaps` | child-supervision gaps over a range (Care Watch) |
 | `GET` | `/v1/families/{fid}/work-windows` | a caregiver's best open work windows (intent side of coverage) |
 | `POST` | `/v1/families/{fid}/sync/calendar` | pull a caregiver's Google Calendar busy blocks into the model |
+| `POST` | `/v1/families/{fid}/sync/ics` | pull a published iCloud/Outlook/Google `.ics` feed (no OAuth) |
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 | `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
 | `POST` | `/v1/auth/signup` | create account (+ new family, or join via invite code) |
@@ -140,6 +144,19 @@ A second path closes the loop with the Care-Coverage Engine: `POST
 and populates the coverage model's no-school days (grade-aware — pass `grade` so
 closures for other grades only are excluded). Snap the school calendar and the
 care gaps populate themselves.
+
+**"Connect Google" (multi-user OAuth, `oauth.py`).** The productization seam:
+the developer registers **one** Google OAuth app (client id/secret via
+`EXHALE_GOOGLE_*`), and every family then connects their own account with a
+single click — no per-user setup. `GET /connect/google` returns Google's consent
+URL (carrying a signed, tamper-evident `state` that binds the flow to the
+family); Google redirects to `GET /v1/oauth/google/callback`, which verifies the
+state, exchanges the code, and stores that family's refresh token **encrypted at
+rest** (the envelope pipeline). The Gmail and Calendar sync endpoints prefer a
+family's own connected tokens, falling back to the single-tenant `EXHALE_GMAIL_*`
+/ `EXHALE_GCAL_*` env vars. `GET /connections` reports what's linked. Read-only
+scopes only. Fully testable without a real Google account (the token exchange
+takes an injectable client; state signing is pure).
 
 **Live Gmail.** `connectors/gmail.py` speaks the Gmail REST API directly
 (OAuth: `EXHALE_GMAIL_ACCESS_TOKEN`, or `EXHALE_GMAIL_REFRESH_TOKEN` +
@@ -269,6 +286,16 @@ are stamped `OBSERVED`, so a care gap built on them is high-confidence rather th
 assumption-dependent. Auth mirrors Gmail (`EXHALE_GCAL_ACCESS_TOKEN`, or the
 `EXHALE_GCAL_REFRESH_TOKEN` + `EXHALE_GCAL_CLIENT_ID` + `EXHALE_GCAL_CLIENT_SECRET`
 trio); re-syncing is idempotent.
+
+**Calendars with no OAuth (`connectors/ics.py`).** Any calendar that can publish
+a public `.ics` URL — an **iCloud shared calendar**, **Outlook**, or even
+**Google Calendar's own "secret address in iCal format"** — connects with zero
+OAuth via `POST /v1/families/{fid}/sync/ics` (`url` + the caregivers who are out
+for its events). A dependency-free VEVENT parser applies the same Free/all-day/
+cancelled discipline as the Google connector and **expands recurring events**
+(RRULE: DAILY/WEEKLY/MONTHLY with INTERVAL, COUNT, UNTIL, and weekly BYDAY) into
+concrete occurrences within a forward window. This is the low-friction path for
+an MVP: photos + `.ics` calendars need no developer console at all.
 
 **Action engine (§6, §10).** Each gap advances along the controlled-autonomy
 path `Observe → Recommend → Draft → Execute with Approval → Autonomous`. The

@@ -79,6 +79,24 @@ def _build_extractor():
     return extractor_from_env()
 
 
+def _oauth_state_secret() -> str:
+    """Server-side secret for signing OAuth ``state`` tokens."""
+
+    import os
+
+    return os.environ.get("EXHALE_MASTER_SECRET") or "exhale-dev-oauth-state-secret"
+
+
+def _family_google_tokens(family_id: str) -> dict | None:
+    """The family's stored Google OAuth tokens (from the "Connect Google" flow)."""
+
+    conns = store.profile(family_id).get("connections") or {}
+    tokens = conns.get("google")
+    if tokens and (tokens.get("refresh_token") or tokens.get("access_token")):
+        return tokens
+    return None
+
+
 store = _build_store()
 auth_store = _build_auth_store()
 pipeline_extractor = _build_extractor()
@@ -212,6 +230,91 @@ def me(user: User | None = Depends(current_user)) -> dict:
         "display_name": user.display_name,
         "family_id": user.family_id,
         "invite_code": auth_store.invite_code_for(user.family_id),
+    }
+
+
+# --- Google OAuth ("Connect Google") ------------------------------------------------
+def _merge_connection(family_id: str, provider: str, record: dict) -> None:
+    conns = dict(store.profile(family_id).get("connections") or {})
+    conns[provider] = record
+    store.set_profile(family_id, connections=conns)
+
+
+@app.get("/v1/families/{family_id}/connect/google")
+def connect_google(family_id: str = Depends(require_family_access)) -> dict:
+    """Start the Google connection: returns the consent URL the button opens.
+
+    The user is sent to Google's own screen; on approval Google redirects to the
+    callback below. 503 until the developer has registered the OAuth app
+    (EXHALE_GOOGLE_CLIENT_ID / SECRET / REDIRECT_URI) — a one-time, app-wide step.
+    """
+
+    from exhale.oauth import GoogleOAuthConfig, authorization_url
+
+    config = GoogleOAuthConfig.from_env()
+    if config is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Google OAuth is not configured (developer step). Set "
+                   "EXHALE_GOOGLE_CLIENT_ID, EXHALE_GOOGLE_CLIENT_SECRET, "
+                   "EXHALE_GOOGLE_REDIRECT_URI.",
+        )
+    return {"authorization_url": authorization_url(config, family_id, _oauth_state_secret())}
+
+
+@app.get("/v1/oauth/google/callback")
+def google_callback(
+    code: str = Query(...), state: str = Query(...)
+) -> dict:
+    """Google redirects here after consent. Exchanges the code, stores tokens.
+
+    Public by design — identity comes from the signed ``state``, not a session.
+    """
+
+    from datetime import datetime, timezone
+
+    from exhale.oauth import (
+        GoogleOAuthConfig,
+        OAuthStateError,
+        exchange_code,
+        verify_state,
+    )
+
+    config = GoogleOAuthConfig.from_env()
+    if config is None:
+        raise HTTPException(status_code=503, detail="Google OAuth is not configured.")
+    try:
+        family_id = verify_state(state, _oauth_state_secret())
+    except OAuthStateError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid state: {exc}") from exc
+
+    try:
+        tokens = exchange_code(config, code)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Token exchange failed: {exc}") from exc
+
+    _merge_connection(family_id, "google", {
+        "access_token": tokens.get("access_token"),
+        "refresh_token": tokens.get("refresh_token"),
+        "scope": tokens.get("scope", ""),
+        "connected_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"status": "connected", "provider": "google", "family_id": family_id}
+
+
+@app.get("/v1/families/{family_id}/connections")
+def get_connections(family_id: str = Depends(require_family_access)) -> dict:
+    """What this family has connected — for the settings/onboarding UI."""
+
+    conns = store.profile(family_id).get("connections") or {}
+    google = conns.get("google")
+    return {
+        "family_id": family_id,
+        "google": {
+            "connected": bool(google),
+            "scopes": (google.get("scope", "").split() if google else []),
+            "connected_at": (google.get("connected_at") if google else None),
+        },
     }
 
 
@@ -545,17 +648,35 @@ class CalendarSyncRequest(BaseModel):
     days: int = 120  # horizon to pull busy blocks for
 
 
-def _gcal_connector_from_env(caregiver_name: str, calendar_id: str):
-    """Build a GoogleCalendarConnector from env credentials, or ``None``."""
+def _gcal_connector_for_family(family_id: str, caregiver_name: str, calendar_id: str):
+    """Build a GoogleCalendarConnector, preferring the family's OAuth grant.
+
+    A family that clicked "Connect Google" uses its own stored tokens (the app's
+    registered client id/secret drive the refresh). Falls back to the legacy
+    single-tenant ``EXHALE_GCAL_*`` env vars, then ``None``.
+    """
 
     import os
+
+    from exhale.connectors.gcal import GoogleCalendarConnector
+    from exhale.oauth import GoogleOAuthConfig
+
+    tokens = _family_google_tokens(family_id)
+    if tokens is not None:
+        cfg = GoogleOAuthConfig.from_env()
+        return GoogleCalendarConnector(
+            caregiver_name=caregiver_name,
+            calendar_id=calendar_id,
+            access_token=tokens.get("access_token"),
+            refresh_token=tokens.get("refresh_token"),
+            client_id=cfg.client_id if cfg else None,
+            client_secret=cfg.client_secret if cfg else None,
+        )
 
     access = os.environ.get("EXHALE_GCAL_ACCESS_TOKEN")
     refresh = os.environ.get("EXHALE_GCAL_REFRESH_TOKEN")
     if not access and not refresh:
         return None
-    from exhale.connectors.gcal import GoogleCalendarConnector
-
     return GoogleCalendarConnector(
         caregiver_name=caregiver_name,
         calendar_id=calendar_id,
@@ -588,7 +709,7 @@ def sync_calendar(
             status_code=404,
             detail="No coverage model configured. PUT /coverage-model first.",
         )
-    connector = _gcal_connector_from_env(req.caregiver_name, req.calendar_id)
+    connector = _gcal_connector_for_family(family_id, req.caregiver_name, req.calendar_id)
     if connector is None:
         raise HTTPException(
             status_code=503,
@@ -767,22 +888,32 @@ class GmailSyncRequest(BaseModel):
     known_children: list[str] = Field(default_factory=list)
 
 
-def _gmail_connector_from_env():
-    """Build a GmailConnector from environment credentials, or ``None``.
+def _gmail_connector_for_family(family_id: str):
+    """Build a GmailConnector, preferring the family's OAuth grant.
 
-    Either ``EXHALE_GMAIL_ACCESS_TOKEN``, or the OAuth refresh trio
-    ``EXHALE_GMAIL_REFRESH_TOKEN`` + ``EXHALE_GMAIL_CLIENT_ID`` +
-    ``EXHALE_GMAIL_CLIENT_SECRET``.
+    A family that clicked "Connect Google" uses its own stored tokens; falls
+    back to the legacy single-tenant ``EXHALE_GMAIL_*`` env vars, then ``None``.
     """
 
     import os
+
+    from exhale.connectors.gmail import GmailConnector
+    from exhale.oauth import GoogleOAuthConfig
+
+    tokens = _family_google_tokens(family_id)
+    if tokens is not None:
+        cfg = GoogleOAuthConfig.from_env()
+        return GmailConnector(
+            access_token=tokens.get("access_token"),
+            refresh_token=tokens.get("refresh_token"),
+            client_id=cfg.client_id if cfg else None,
+            client_secret=cfg.client_secret if cfg else None,
+        )
 
     access = os.environ.get("EXHALE_GMAIL_ACCESS_TOKEN")
     refresh = os.environ.get("EXHALE_GMAIL_REFRESH_TOKEN")
     if not access and not refresh:
         return None
-    from exhale.connectors.gmail import GmailConnector
-
     return GmailConnector(
         access_token=access,
         refresh_token=refresh,
@@ -799,7 +930,7 @@ def sync_gmail(req: GmailSyncRequest, family_id: str = Depends(require_family_ac
     family profile); first run covers the 180-day retro window.
     """
 
-    connector = _gmail_connector_from_env()
+    connector = _gmail_connector_for_family(family_id)
     if connector is None:
         raise HTTPException(
             status_code=503,

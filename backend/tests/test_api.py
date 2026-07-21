@@ -430,3 +430,76 @@ def test_work_windows_400_for_unknown_caregiver():
     client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
     r = client.get(f"/v1/families/{fam}/work-windows", params={"caregiver": "Nobody"})
     assert r.status_code == 400
+
+
+# --- Google OAuth "Connect Google" flow -------------------------------------------
+def _google_env(monkeypatch):
+    monkeypatch.setenv("EXHALE_GOOGLE_CLIENT_ID", "cid.apps.googleusercontent.com")
+    monkeypatch.setenv("EXHALE_GOOGLE_CLIENT_SECRET", "sec")
+    monkeypatch.setenv("EXHALE_GOOGLE_REDIRECT_URI", "https://app/x/oauth/google/callback")
+
+
+def test_connect_google_503_without_developer_config(monkeypatch):
+    for v in ("EXHALE_GOOGLE_CLIENT_ID", "EXHALE_GOOGLE_CLIENT_SECRET",
+              "EXHALE_GOOGLE_REDIRECT_URI"):
+        monkeypatch.delenv(v, raising=False)
+    r = client.get("/v1/families/fam_oauth_none/connect/google")
+    assert r.status_code == 503
+
+
+def test_connect_returns_consent_url(monkeypatch):
+    _google_env(monkeypatch)
+    r = client.get("/v1/families/fam_oauth_1/connect/google")
+    assert r.status_code == 200
+    assert r.json()["authorization_url"].startswith(
+        "https://accounts.google.com/o/oauth2/v2/auth?")
+
+
+def test_callback_stores_tokens_and_connections_reflects_it(monkeypatch):
+    _google_env(monkeypatch)
+    fam = "fam_oauth_2"
+    # Get a valid signed state from the connect step.
+    url = client.get(f"/v1/families/{fam}/connect/google").json()["authorization_url"]
+    from urllib.parse import parse_qs, urlparse
+    state = parse_qs(urlparse(url).query)["state"][0]
+
+    # Stub the token exchange (no real Google).
+    monkeypatch.setattr("exhale.oauth.exchange_code", lambda cfg, code, **k: {
+        "access_token": "at-1", "refresh_token": "rt-1",
+        "scope": "https://www.googleapis.com/auth/calendar.readonly"})
+    r = client.get("/v1/oauth/google/callback", params={"code": "abc", "state": state})
+    assert r.status_code == 200
+    assert r.json() == {"status": "connected", "provider": "google", "family_id": fam}
+
+    conns = client.get(f"/v1/families/{fam}/connections").json()
+    assert conns["google"]["connected"] is True
+    assert "calendar.readonly" in conns["google"]["scopes"][0]
+
+
+def test_callback_rejects_forged_state(monkeypatch):
+    _google_env(monkeypatch)
+    r = client.get("/v1/oauth/google/callback",
+                   params={"code": "abc", "state": "fam_x:9999999999:deadbeef"})
+    assert r.status_code == 400
+
+
+def test_connected_family_tokens_drive_the_connector(monkeypatch):
+    _google_env(monkeypatch)
+    fam = "fam_oauth_3"
+    from exhale.api import _gcal_connector_for_family
+    # Not connected → no env fallback → None.
+    for v in ("EXHALE_GCAL_ACCESS_TOKEN", "EXHALE_GCAL_REFRESH_TOKEN"):
+        monkeypatch.delenv(v, raising=False)
+    assert _gcal_connector_for_family(fam, "Andy", "primary") is None
+
+    # Connect, then the connector is built from the family's stored token.
+    url = client.get(f"/v1/families/{fam}/connect/google").json()["authorization_url"]
+    from urllib.parse import parse_qs, urlparse
+    state = parse_qs(urlparse(url).query)["state"][0]
+    monkeypatch.setattr("exhale.oauth.exchange_code", lambda cfg, code, **k: {
+        "access_token": "at-1", "refresh_token": "rt-1", "scope": ""})
+    client.get("/v1/oauth/google/callback", params={"code": "abc", "state": state})
+
+    conn = _gcal_connector_for_family(fam, "Andy", "primary")
+    assert conn is not None
+    assert conn._refresh_token == "rt-1"

@@ -128,4 +128,24 @@ export async function approveAction(obligationNodeId, familyId = DEMO_FAMILY) {
   return res.json();
 }
 
+// --- connections (OAuth) -----------------------------------------------------
+/** What providers this family has connected, or null when unavailable. */
+export async function fetchConnections(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/connections`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Begin the "Connect Google" flow — sends the browser to Google's consent. */
+export async function startGoogleConnect(familyId = DEMO_FAMILY) {
+  const res = await apiFetch(`/v1/families/${familyId}/connect/google`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  window.location.href = body.authorization_url;
+}
+
 export { DEMO_FAMILY };
