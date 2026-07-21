@@ -4,14 +4,22 @@ import { saveCoverageModel } from "../data/api.js";
 /**
  * Household Setup — the onboarding form for the coverage model.
  *
- * Turns "PUT a JSON document" into a form a parent can fill in two minutes:
- * the child who needs looking after, the caregivers (with an optional work
- * pattern on whichever days they actually work — nurses, retail, and shift
- * workers aren't Mon–Fri), and optionally the school year. Shown when the
- * household has no coverage model yet; once saved, Care Watch and work
- * windows light up.
+ * Turns "PUT a JSON document" into a form a primary caregiver can fill in two
+ * minutes: the child who needs looking after, the caregivers (whoever they are
+ * — parent, grandparent, guardian; with an optional work pattern on whichever
+ * days they actually work, because nurses, retail, and shift workers aren't
+ * Mon–Fri), and optionally the school year. Shown when the household has no
+ * coverage model yet; once saved, Care Watch and work windows light up.
  */
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// The household runner isn't always "parent" (FAMILY_STRUCTURES §3.4). RELATIVE
+// is the one role the engine treats specially: asked before suggesting a sitter.
+const ROLES = [
+  { value: "PARENT", label: "Parent" },
+  { value: "GUARDIAN", label: "Guardian / foster" },
+  { value: "RELATIVE", label: "Grandparent / relative / friend" },
+  { value: "SITTER", label: "Sitter / nanny" },
+];
 const EMPTY_CG = {
   name: "",
   role: "PARENT",
@@ -100,8 +108,20 @@ export default function SetupPanel({ familyId, onSaved }) {
             <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/50">
               Caregiver {i + 1}{i > 0 ? " (optional)" : ""}
             </label>
-            <input className={input} value={cg.name} placeholder="Name"
-                   onChange={(e) => setCg(i, { name: e.target.value })} />
+            <div className="flex flex-wrap items-center gap-2">
+              <input className={input + " min-w-40 flex-1"} value={cg.name} placeholder="Name"
+                     onChange={(e) => setCg(i, { name: e.target.value })} />
+              <select
+                value={cg.role}
+                onChange={(e) => setCg(i, { role: e.target.value })}
+                aria-label={`Role of caregiver ${i + 1}`}
+                className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-1.5 font-micro text-sm text-sanctuary-navy outline-none focus:border-sage-release"
+              >
+                {ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
             <label className="mt-2 flex items-center gap-2 text-sanctuary-navy/70">
               <input type="checkbox" checked={cg.works}
                      onChange={(e) => setCg(i, { works: e.target.checked })} />

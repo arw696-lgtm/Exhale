@@ -193,6 +193,7 @@ a product — and "not yet" stays the answer until §5C says otherwise.
 | **Care programs (e.g. Aventuras) have no UI** | API-only; no form to enter non-school-day care dates. |
 | **Recurring event writes** | `/schedule` writes single events only (no RRULE creation). |
 | **Timezone is effectively single-household** | `America/Chicago` defaults in several places; fine for the founding family, not multi-region ready. |
+| **Family-structure assumptions** | Architecture assumes a two-parent, shared-everything household: all members see all data, and access is all-or-nothing. Scoped caregiver tiers (single parent + secondary caregiver), partitioned visibility (co-parenting across households), and provenance-display rules are named, sequenced, and recorded in **docs/FAMILY_STRUCTURES.md**; role/language flexibility (non-parent primary caregivers) is closed. |
 
 ### B. Connections not built (deliberate deferrals)
 | Item | Status |
@@ -226,10 +227,13 @@ a product — and "not yet" stays the answer until §5C says otherwise.
 
 1. ~~**Notifications**~~ Done — email alerts shipped; SMS/push when demand appears.
 2. **Deploy pack + hosting** (everything else compounds once it's live).
-3. **Multi-child coverage** (small model change, big correctness win).
-4. **Founder config tasks** (interleaved — each one lights up a built system).
-5. **Thread/conversation state** (the last big extraction-quality item).
-6. Coverage-model edit UI · recurring writes · CalDAV — as demand appears.
+3. **Scoped caregiver access** (FAMILY_STRUCTURES §3.2 — the permission tier
+   below full visibility; shape the data model with §3.3's partitioned
+   visibility in mind while building it).
+4. **Multi-child coverage** (small model change, big correctness win).
+5. **Founder config tasks** (interleaved — each one lights up a built system).
+6. **Thread/conversation state** (the last big extraction-quality item).
+7. Coverage-model edit UI · recurring writes · CalDAV — as demand appears.
 
 ---
 

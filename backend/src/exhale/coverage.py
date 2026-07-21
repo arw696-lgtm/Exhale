@@ -144,7 +144,12 @@ class Caregiver:
     """Someone who can supervise the recipient when free."""
 
     name: str
-    role: str = "PARENT"  # PARENT | RELATIVE | SITTER
+    # PARENT | GUARDIAN | RELATIVE | SITTER — free string by design: the person
+    # running a household isn't always "parent" (grandparent raising a
+    # grandchild, legal guardian, foster family — FAMILY_STRUCTURES §3.4).
+    # Only RELATIVE is special-cased (preferred over hiring when a gap needs
+    # covering); every other role is treated identically.
+    role: str = "PARENT"
     work_pattern: WorkPattern | None = None
     events: list[CalendarEvent] = field(default_factory=list)
 
