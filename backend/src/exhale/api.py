@@ -87,12 +87,19 @@ def _oauth_state_secret() -> str:
     return os.environ.get("EXHALE_MASTER_SECRET") or "exhale-dev-oauth-state-secret"
 
 
-def _family_google_tokens(family_id: str) -> dict | None:
-    """The family's stored Google OAuth tokens (from the "Connect Google" flow)."""
+def _family_tokens(family_id: str, provider: str) -> dict | None:
+    """The family's stored OAuth tokens for ``provider`` (from a "Connect …" flow)."""
 
     conns = store.profile(family_id).get("connections") or {}
-    tokens = conns.get("google")
+    tokens = conns.get(provider)
     if tokens and (tokens.get("refresh_token") or tokens.get("access_token")):
+        return tokens
+    return None
+
+
+def _family_google_tokens(family_id: str) -> dict | None:
+    tokens = _family_tokens(family_id, "google")
+    if tokens:
         return tokens
     return None
 
@@ -233,73 +240,76 @@ def me(user: User | None = Depends(current_user)) -> dict:
     }
 
 
-# --- Google OAuth ("Connect Google") ------------------------------------------------
+# --- OAuth ("Connect Google" / "Connect Outlook") -----------------------------------
+_CONNECTABLE = {"google", "microsoft"}
+
+
 def _merge_connection(family_id: str, provider: str, record: dict) -> None:
     conns = dict(store.profile(family_id).get("connections") or {})
     conns[provider] = record
     store.set_profile(family_id, connections=conns)
 
 
-@app.get("/v1/families/{family_id}/connect/google")
-def connect_google(family_id: str = Depends(require_family_access)) -> dict:
-    """Start the Google connection: returns the consent URL the button opens.
+def _start_connect(provider: str, family_id: str) -> dict:
+    from exhale.oauth import authorization_url, config_from_env
 
-    The user is sent to Google's own screen; on approval Google redirects to the
-    callback below. 503 until the developer has registered the OAuth app
-    (EXHALE_GOOGLE_CLIENT_ID / SECRET / REDIRECT_URI) — a one-time, app-wide step.
-    """
-
-    from exhale.oauth import GoogleOAuthConfig, authorization_url
-
-    config = GoogleOAuthConfig.from_env()
+    config = config_from_env(provider)
     if config is None:
         raise HTTPException(
             status_code=503,
-            detail="Google OAuth is not configured (developer step). Set "
-                   "EXHALE_GOOGLE_CLIENT_ID, EXHALE_GOOGLE_CLIENT_SECRET, "
-                   "EXHALE_GOOGLE_REDIRECT_URI.",
+            detail=f"{provider.title()} OAuth is not configured (developer step).",
         )
     return {"authorization_url": authorization_url(config, family_id, _oauth_state_secret())}
 
 
-@app.get("/v1/oauth/google/callback")
-def google_callback(
-    code: str = Query(...), state: str = Query(...)
-) -> dict:
-    """Google redirects here after consent. Exchanges the code, stores tokens.
-
-    Public by design — identity comes from the signed ``state``, not a session.
-    """
-
+def _handle_callback(provider: str, code: str, state: str) -> dict:
     from datetime import datetime, timezone
 
-    from exhale.oauth import (
-        GoogleOAuthConfig,
-        OAuthStateError,
-        exchange_code,
-        verify_state,
-    )
+    from exhale.oauth import OAuthStateError, config_from_env, exchange_code, verify_state
 
-    config = GoogleOAuthConfig.from_env()
+    config = config_from_env(provider)
     if config is None:
-        raise HTTPException(status_code=503, detail="Google OAuth is not configured.")
+        raise HTTPException(status_code=503, detail=f"{provider.title()} OAuth is not configured.")
     try:
         family_id = verify_state(state, _oauth_state_secret())
     except OAuthStateError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid state: {exc}") from exc
-
     try:
         tokens = exchange_code(config, code)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Token exchange failed: {exc}") from exc
 
-    _merge_connection(family_id, "google", {
+    _merge_connection(family_id, provider, {
         "access_token": tokens.get("access_token"),
         "refresh_token": tokens.get("refresh_token"),
         "scope": tokens.get("scope", ""),
         "connected_at": datetime.now(timezone.utc).isoformat(),
     })
-    return {"status": "connected", "provider": "google", "family_id": family_id}
+    return {"status": "connected", "provider": provider, "family_id": family_id}
+
+
+@app.get("/v1/families/{family_id}/connect/google")
+def connect_google(family_id: str = Depends(require_family_access)) -> dict:
+    """Start the Google connection: returns the consent URL the button opens."""
+    return _start_connect("google", family_id)
+
+
+@app.get("/v1/families/{family_id}/connect/microsoft")
+def connect_microsoft(family_id: str = Depends(require_family_access)) -> dict:
+    """Start the Outlook/Microsoft connection: returns the consent URL."""
+    return _start_connect("microsoft", family_id)
+
+
+@app.get("/v1/oauth/google/callback")
+def google_callback(code: str = Query(...), state: str = Query(...)) -> dict:
+    """Google redirects here after consent — identity comes from the signed state."""
+    return _handle_callback("google", code, state)
+
+
+@app.get("/v1/oauth/microsoft/callback")
+def microsoft_callback(code: str = Query(...), state: str = Query(...)) -> dict:
+    """Microsoft redirects here after consent."""
+    return _handle_callback("microsoft", code, state)
 
 
 @app.get("/v1/families/{family_id}/connections")
@@ -307,14 +317,19 @@ def get_connections(family_id: str = Depends(require_family_access)) -> dict:
     """What this family has connected — for the settings/onboarding UI."""
 
     conns = store.profile(family_id).get("connections") or {}
-    google = conns.get("google")
+
+    def _status(provider: str) -> dict:
+        rec = conns.get(provider)
+        return {
+            "connected": bool(rec),
+            "scopes": (rec.get("scope", "").split() if rec else []),
+            "connected_at": (rec.get("connected_at") if rec else None),
+        }
+
     return {
         "family_id": family_id,
-        "google": {
-            "connected": bool(google),
-            "scopes": (google.get("scope", "").split() if google else []),
-            "connected_at": (google.get("connected_at") if google else None),
-        },
+        "google": _status("google"),
+        "microsoft": _status("microsoft"),
     }
 
 
@@ -659,11 +674,11 @@ def _gcal_connector_for_family(family_id: str, caregiver_name: str, calendar_id:
     import os
 
     from exhale.connectors.gcal import GoogleCalendarConnector
-    from exhale.oauth import GoogleOAuthConfig
+    from exhale.oauth import config_from_env
 
     tokens = _family_google_tokens(family_id)
     if tokens is not None:
-        cfg = GoogleOAuthConfig.from_env()
+        cfg = config_from_env("google")
         return GoogleCalendarConnector(
             caregiver_name=caregiver_name,
             calendar_id=calendar_id,
@@ -789,6 +804,121 @@ def sync_ics(
     }
 
 
+class ICSUploadRequest(BaseModel):
+    """Upload the contents of a `.ics` file directly (no URL/hosting needed)."""
+
+    content: str  # the raw iCalendar text
+    attendees: list[str]
+    holder: str | None = None
+    tz: str = "America/Chicago"
+
+
+@app.post("/v1/families/{family_id}/sync/ics/upload")
+def upload_ics(
+    req: ICSUploadRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Import a `.ics` file's contents directly (drag-and-drop export → coverage).
+
+    The zero-hosting path: a user exports their calendar to a file and uploads
+    it, rather than publishing a public URL. Same parsing/recurrence/merge as
+    the URL sync. Idempotent.
+    """
+
+    from exhale.connectors.ics import parse_ics
+    from exhale.coverage_config import merge_events
+
+    if not req.attendees:
+        raise HTTPException(status_code=400, detail="attendees must be non-empty")
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    holder = req.holder or req.attendees[0]
+    events = parse_ics(req.content, tuple(req.attendees), tz=req.tz)
+    try:
+        model = merge_events(CoverageModelIn(**config), holder, events, source_prefix="ics_")
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {
+        "family_id": family_id,
+        "holder": holder,
+        "attendees": req.attendees,
+        "synced_busy_events": len(events),
+    }
+
+
+class OutlookSyncRequest(BaseModel):
+    """Sync a caregiver's Outlook/Office 365 calendar busy blocks into the model."""
+
+    caregiver_name: str
+    days: int = 120
+
+
+def _msgraph_connector_for_family(family_id: str, caregiver_name: str):
+    """Build a GraphCalendarConnector from the family's Microsoft OAuth grant."""
+
+    from exhale.connectors.msgraph import GraphCalendarConnector
+    from exhale.oauth import config_from_env
+
+    tokens = _family_tokens(family_id, "microsoft")
+    if tokens is None:
+        return None
+    cfg = config_from_env("microsoft")
+    return GraphCalendarConnector(
+        caregiver_name=caregiver_name,
+        access_token=tokens.get("access_token"),
+        refresh_token=tokens.get("refresh_token"),
+        client_id=cfg.client_id if cfg else None,
+        client_secret=cfg.client_secret if cfg else None,
+    )
+
+
+@app.post("/v1/families/{family_id}/sync/outlook")
+def sync_outlook(
+    req: OutlookSyncRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Pull a caregiver's Outlook calendar busy blocks into the coverage model.
+
+    The Microsoft parallel to /sync/calendar (Graph calendarView expands
+    recurrences server-side). Requires a coverage model (404) and a connected
+    Microsoft account (503). Idempotent.
+    """
+
+    from datetime import timedelta
+
+    from exhale.coverage_config import merge_events
+
+    config = store.profile(family_id).get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    connector = _msgraph_connector_for_family(family_id, req.caregiver_name)
+    if connector is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Outlook is not connected. Use /connect/microsoft first.",
+        )
+    now = datetime.now()
+    events = connector.fetch_busy(now, now + timedelta(days=req.days))
+    try:
+        model = merge_events(
+            CoverageModelIn(**config), req.caregiver_name, events, source_prefix="msgraph_"
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {
+        "family_id": family_id,
+        "caregiver": req.caregiver_name,
+        "synced_busy_events": len(events),
+    }
+
+
 @app.get("/v1/families/{family_id}/drafts")
 def get_drafts(family_id: str = Depends(require_family_access)) -> dict:
     """Layer 6 — recommended, rendered action drafts for each open gap (§6, §10)."""
@@ -898,11 +1028,11 @@ def _gmail_connector_for_family(family_id: str):
     import os
 
     from exhale.connectors.gmail import GmailConnector
-    from exhale.oauth import GoogleOAuthConfig
+    from exhale.oauth import config_from_env
 
     tokens = _family_google_tokens(family_id)
     if tokens is not None:
-        cfg = GoogleOAuthConfig.from_env()
+        cfg = config_from_env("google")
         return GmailConnector(
             access_token=tokens.get("access_token"),
             refresh_token=tokens.get("refresh_token"),

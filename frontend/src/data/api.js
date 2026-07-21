@@ -140,9 +140,9 @@ export async function fetchConnections(familyId = DEMO_FAMILY) {
   }
 }
 
-/** Begin the "Connect Google" flow — sends the browser to Google's consent. */
-export async function startGoogleConnect(familyId = DEMO_FAMILY) {
-  const res = await apiFetch(`/v1/families/${familyId}/connect/google`);
+/** Begin a "Connect …" flow — sends the browser to the provider's consent. */
+export async function startConnect(provider, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(`/v1/families/${familyId}/connect/${provider}`);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
   window.location.href = body.authorization_url;
