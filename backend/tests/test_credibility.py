@@ -331,3 +331,47 @@ def test_briefing_always_carries_coverage_block():
     declared = build_coverage({"coverage": {"connected_sources": ["gmail:a"]}})
     briefing = build_weekly_briefing(KnowledgeGraph(), coverage=declared)
     assert briefing["coverage"]["connected_sources"] == ["gmail:a"]
+
+
+# --- Tier floor: high-tier observed facts are never silently rejected ------------------
+def test_confirmation_with_observed_date_is_floored_not_rejected():
+    # The real Airbnb-reservation case: low heuristic score (unlisted domain),
+    # but a confirmation-tier artifact with a date read from the text.
+    decision = route_extraction(_payload(
+        artifact_tier=ArtifactTier.CONFIRMATION,
+        event_date_origin=FactOrigin.OBSERVED,
+        confidence_score=0.68,
+    ))
+    assert decision.status is RecordStatus.PENDING_VERIFICATION
+    assert decision.requires_user_review
+    assert "never silently rejected" in decision.rationale
+
+
+def test_logistics_with_observed_date_is_floored_not_rejected():
+    decision = route_extraction(_payload(
+        artifact_tier=ArtifactTier.LOGISTICS,
+        event_date_origin=FactOrigin.OBSERVED,
+        confidence_score=0.5,
+    ))
+    assert decision.status is RecordStatus.PENDING_VERIFICATION
+
+
+def test_floor_does_not_apply_to_inferred_dates():
+    # A confirmation-tier artifact whose date was only inferred gets no floor —
+    # the fact isn't actually attested, so a low score still rejects.
+    decision = route_extraction(_payload(
+        artifact_tier=ArtifactTier.CONFIRMATION,
+        event_date_origin=FactOrigin.INFERRED,
+        confidence_score=0.5,
+    ))
+    assert decision.status is RecordStatus.REJECTED
+
+
+def test_floor_does_not_apply_to_low_tier_artifacts():
+    # A reminder with a low score is still rejected — no floor for referencing tiers.
+    decision = route_extraction(_payload(
+        artifact_tier=ArtifactTier.REMINDER,
+        event_date_origin=FactOrigin.OBSERVED,
+        confidence_score=0.5,
+    ))
+    assert decision.status is RecordStatus.REJECTED

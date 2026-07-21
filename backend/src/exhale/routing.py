@@ -160,6 +160,32 @@ def route_extraction(payload: ExtractionPayload) -> RoutingDecision:
             ),
         )
 
+    # Tier floor — symmetric with the HIGH-band ceiling above. An artifact that
+    # *establishes* facts (a confirmation/receipt/reservation, or an organizer's
+    # logistics notice) carrying a date read straight from the text is a real,
+    # first-party fact. A low heuristic score usually just means the sender
+    # domain isn't on the trusted list — it must never cause the fact to be
+    # silently discarded. Floor it at PENDING_VERIFICATION so it surfaces for
+    # review instead of vanishing. (Found by running a real Airbnb reservation
+    # through the pipeline: score 0.68, correctly CONFIRMATION, was being dropped.)
+    if (
+        band is ConfidenceBand.LOW
+        and payload.artifact_tier in (ArtifactTier.CONFIRMATION, ArtifactTier.LOGISTICS)
+        and payload.event_date_origin is FactOrigin.OBSERVED
+    ):
+        return RoutingDecision(
+            band=ConfidenceBand.MEDIUM,
+            status=RecordStatus.PENDING_VERIFICATION,
+            commits_to_graph=False,
+            requires_user_review=True,
+            rationale=(
+                f"Score {payload.confidence_score} is LOW-band, but a "
+                f"{payload.artifact_tier.value}-tier artifact with an observed date "
+                "establishes a first-party fact — floored to PENDING_VERIFICATION "
+                "so it is reviewed, never silently rejected."
+            ),
+        )
+
     return RoutingDecision(
         band=band,
         status=RecordStatus.REJECTED,
