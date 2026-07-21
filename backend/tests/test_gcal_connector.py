@@ -153,3 +153,44 @@ def test_merge_events_is_idempotent():
 def test_merge_unknown_caregiver_raises():
     with pytest.raises(KeyError):
         merge_events(_model(), "Nobody", [])
+
+
+# --- event write (the write half of controlled autonomy) --------------------------
+def test_create_event_posts_and_returns_resource():
+    seen = {}
+
+    def handler(request):
+        if request.method == "POST":
+            import json
+            seen["path"] = request.url.path
+            seen["body"] = json.loads(request.content)
+            return httpx.Response(200, json={"id": "evt_1", "htmlLink": "https://cal/evt_1"})
+        return httpx.Response(200, json={})
+
+    conn = GoogleCalendarConnector(
+        caregiver_name="Andy", access_token="tok",
+        http=httpx.Client(transport=httpx.MockTransport(handler)))
+    created = conn.create_event("Gym", datetime(2026, 7, 23, 9, 0),
+                                datetime(2026, 7, 23, 10, 0))
+    assert created["id"] == "evt_1"
+    assert seen["path"].endswith("/calendars/primary/events")
+    assert seen["body"]["summary"] == "Gym"
+    assert seen["body"]["start"]["dateTime"] == "2026-07-23T09:00:00"
+    assert seen["body"]["description"] == "Added by Exhale"
+
+
+def test_create_event_refreshes_on_401():
+    calls = {"n": 0}
+
+    def handler(request):
+        if request.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "fresh"})
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(401)
+        return httpx.Response(200, json={"id": "evt_2"})
+
+    conn = GoogleCalendarConnector(
+        caregiver_name="Andy", refresh_token="r", client_id="c", client_secret="s",
+        http=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert conn.create_event("Gym", datetime(2026, 7, 23, 9), datetime(2026, 7, 23, 10))["id"] == "evt_2"

@@ -215,6 +215,22 @@ export function resolveWaiting(itemId, familyId = DEMO_FAMILY) {
   return postJson(`/v1/families/${familyId}/waiting/${itemId}/resolve`);
 }
 
+// --- calendar write (controlled autonomy) --------------------------------------
+export function scheduleEvent({ title, start, end, description }, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/schedule`, { title, start, end, description });
+}
+
+export async function fetchFeedUrl(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/feed-url`);
+    if (!res.ok) return null;
+    const { path } = await res.json();
+    return `${API_BASE}${path}`;
+  } catch {
+    return null;
+  }
+}
+
 // --- connections (OAuth) -----------------------------------------------------
 /** What providers this family has connected, or null when unavailable. */
 export async function fetchConnections(familyId = DEMO_FAMILY) {

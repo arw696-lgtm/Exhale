@@ -40,7 +40,7 @@ Exhale/
 │   │                   extraction · retro_scan · connectors/ (Data Collection) ·
 │   │                   persistence (encrypted Postgres store) ·
 │   │                   sql/schema.sql (Zero-Knowledge storage schema, §5.3)
-│   ├── tests/          pytest suite (322 tests)
+│   ├── tests/          pytest suite (338 tests)
 │   └── examples/       end-to-end demo pipeline
 └── frontend/           React + Tailwind Sunday COO Briefing UI (§8, §9)
     └── src/            brand tokens · briefing components · API client
@@ -65,7 +65,7 @@ address to open Exhale on a phone).
 ```bash
 cd backend
 pip install -e ".[dev]"      # analytical core + API + test deps
-python -m pytest             # 322 tests (incl. Postgres integration when reachable)
+python -m pytest             # 338 tests (incl. Postgres integration when reachable)
 PYTHONPATH=src python examples/demo_pipeline.py   # extraction → briefing
 
 # Run the HTTP service (seeds a demo household at startup):
@@ -108,6 +108,9 @@ Key endpoints (see `src/exhale/api.py`):
 | `GET` | `/v1/families/{fid}/care-gaps` | child-supervision gaps over a range (Care Watch) |
 | `GET` | `/v1/families/{fid}/work-windows` | a caregiver's best open work windows (intent side of coverage) |
 | `GET`/`POST` | `/v1/families/{fid}/waiting` (+ `/{id}/resolve`) | Waiting-On ledger: replies someone owes the family |
+| `GET`/`PUT` | `/v1/families/{fid}/autonomy` | per-household autonomy dials + earned trust record |
+| `POST` | `/v1/families/{fid}/schedule` | write an event to a family calendar (Google/Outlook/feed) |
+| `GET` | `/v1/families/{fid}/feed-url` → `/v1/feeds/{fid}.ics` | the published Exhale calendar (subscribe → phone/CarPlay) |
 | `POST` | `/v1/families/{fid}/sync/calendar` | pull a caregiver's Google Calendar busy blocks into the model |
 | `POST` | `/v1/families/{fid}/sync/outlook` | pull a caregiver's Outlook/Office 365 calendar (Microsoft Graph) |
 | `POST` | `/v1/families/{fid}/sync/ics` | pull a published iCloud/Outlook/Google `.ics` feed (no OAuth) |
@@ -165,6 +168,20 @@ family's own connected tokens, falling back to the single-tenant `EXHALE_GMAIL_*
 / `EXHALE_GCAL_*` env vars. `GET /connections` reports what's linked. Read-only
 scopes only. Fully testable without a real Google account (the token exchange
 takes an injectable client; state signing is pure).
+
+**Calendar write + controlled autonomy (`autonomy.py`).** The write half of the
+action layer: `POST /schedule` places an event on the family's calendar —
+Google or Outlook when connected (Apple's built-in account sync then carries it
+to iPhone/CarPlay), else the family's **published Exhale feed** (`/feed-url` →
+subscribe once on a phone; zero OAuth). Writing is governed by a per-household
+**autonomy dial** per action category (`OFF / ASK / AUTO`, default ASK — the
+human tap is the approval). The promotion rule: **autonomy is earned, never
+self-granted.** Every review-queue decision scores Exhale's judgment
+(confirmed = right, dismissed = wrong); when the record clears the bar (≥10
+decisions, ≥90% right) the trust endpoint reports `eligible_for_auto` so the
+UI can *propose* the upgrade — only a human flips the dial. OAuth scopes add
+`calendar.events` (Google) / `Calendars.ReadWrite` (Microsoft); events only,
+never calendar management.
 
 **Layer-4 memory (`memory.py`).** The graph remembers facts; the memory engine
 learns *patterns* — the implicit rhythms no single email states. Two

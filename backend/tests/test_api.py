@@ -691,3 +691,81 @@ def test_briefing_learns_rules_from_the_ledger():
     assert "DEADLINE_LEAD" in kinds
     lead = next(r for r in rules if r["kind"] == "DEADLINE_LEAD")
     assert "Wednesday" in lead["detail"]
+
+
+# --- Controlled autonomy: dials, schedule, and the Exhale feed --------------------
+def test_autonomy_defaults_and_update():
+    fam = "fam_auto_1"
+    r = client.get(f"/v1/families/{fam}/autonomy").json()
+    assert r["settings"] == {"calendar_write": "ASK"}
+    assert r["trust"]["decisions"] == 0
+
+    r2 = client.put(f"/v1/families/{fam}/autonomy", json={"calendar_write": "AUTO"})
+    assert r2.json()["settings"]["calendar_write"] == "AUTO"
+    assert client.put(f"/v1/families/{fam}/autonomy",
+                      json={"calendar_write": "SOMETIMES"}).status_code == 400
+
+
+def test_schedule_off_is_refused():
+    fam = "fam_auto_off"
+    client.put(f"/v1/families/{fam}/autonomy", json={"calendar_write": "OFF"})
+    r = client.post(f"/v1/families/{fam}/schedule", json={
+        "title": "Gym", "start": "2026-07-23T09:00:00", "end": "2026-07-23T10:00:00"})
+    assert r.status_code == 403
+
+
+def test_schedule_falls_back_to_feed_and_feed_serves_it():
+    fam = "fam_auto_feed"
+    r = client.post(f"/v1/families/{fam}/schedule", json={
+        "title": "Gym", "start": "2026-07-23T09:00:00", "end": "2026-07-23T10:00:00"})
+    assert r.status_code == 200
+    assert r.json()["provider"] == "feed"  # nothing connected → published feed
+
+    path = client.get(f"/v1/families/{fam}/feed-url").json()["path"]
+    feed = client.get(path)
+    assert feed.status_code == 200
+    assert "text/calendar" in feed.headers["content-type"]
+    assert "SUMMARY:Gym" in feed.text
+    assert "DTSTART:20260723T090000" in feed.text
+
+
+def test_feed_rejects_bad_token():
+    fam = "fam_auto_feed2"
+    client.get(f"/v1/families/{fam}/feed-url")  # mint the real token
+    assert client.get(f"/v1/feeds/{fam}.ics", params={"token": "wrong"}).status_code == 403
+
+
+def test_schedule_writes_to_google_when_connected(monkeypatch):
+    _google_env(monkeypatch)
+    fam = "fam_auto_google"
+    # Connect Google via the OAuth flow (stubbed exchange).
+    url = client.get(f"/v1/families/{fam}/connect/google").json()["authorization_url"]
+    from urllib.parse import parse_qs, urlparse
+    state = parse_qs(urlparse(url).query)["state"][0]
+    monkeypatch.setattr("exhale.oauth.exchange_code", lambda cfg, code, **k: {
+        "access_token": "at", "refresh_token": "rt", "scope": ""})
+    client.get("/v1/oauth/google/callback", params={"code": "c", "state": state})
+
+    created = {}
+
+    class _FakeGcal:
+        def __init__(self, **kw):
+            pass
+
+        def create_event(self, title, start, end, **kw):
+            created["title"] = title
+            return {"id": "evt_google_1"}
+
+    monkeypatch.setattr("exhale.connectors.gcal.GoogleCalendarConnector", _FakeGcal)
+    r = client.post(f"/v1/families/{fam}/schedule", json={
+        "title": "Gym", "start": "2026-07-23T09:00:00", "end": "2026-07-23T10:00:00"})
+    assert r.status_code == 200
+    assert r.json()["provider"] == "google"
+    assert r.json()["reference"] == "evt_google_1"
+    assert created["title"] == "Gym"
+
+
+def test_schedule_rejects_backwards_window():
+    r = client.post("/v1/families/fam_auto_bad/schedule", json={
+        "title": "Gym", "start": "2026-07-23T10:00:00", "end": "2026-07-23T09:00:00"})
+    assert r.status_code == 400

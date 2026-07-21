@@ -639,6 +639,163 @@ def dismiss_extraction(
     return {"family_id": family_id, "extraction_id": extraction_id, "status": "dismissed"}
 
 
+# --- Controlled autonomy: dials, trust record, and calendar write -------------------
+class AutonomyUpdate(BaseModel):
+    calendar_write: str | None = None  # OFF | ASK | AUTO
+
+
+@app.get("/v1/families/{family_id}/autonomy")
+def get_autonomy(family_id: str = Depends(require_family_access)) -> dict:
+    """The household's autonomy dials + Exhale's earned trust record."""
+
+    from exhale.autonomy import autonomy_settings, trust_record
+
+    profile = store.profile(family_id)
+    return {
+        "family_id": family_id,
+        "settings": autonomy_settings(profile),
+        "trust": trust_record(store.ledger(family_id), _dismissed_ids(family_id)),
+    }
+
+
+@app.put("/v1/families/{family_id}/autonomy")
+def set_autonomy(
+    req: AutonomyUpdate, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Move a dial. Only a human calls this — Exhale never promotes itself."""
+
+    from exhale.autonomy import AutonomyLevel, autonomy_settings
+
+    updates = {k: v for k, v in req.model_dump().items() if v is not None}
+    for key, value in updates.items():
+        if value not in AutonomyLevel.__members__:
+            raise HTTPException(status_code=400, detail=f"{key} must be OFF, ASK, or AUTO")
+    current = dict(store.profile(family_id).get("autonomy") or {})
+    current.update(updates)
+    store.set_profile(family_id, autonomy=current)
+    return {"family_id": family_id, "settings": autonomy_settings(store.profile(family_id))}
+
+
+class ScheduleRequest(BaseModel):
+    """An event to place on a family calendar (the write half of autonomy)."""
+
+    title: str
+    start: datetime
+    end: datetime
+    description: str = ""
+    provider: str | None = None  # google | microsoft | feed; auto-picked if omitted
+
+
+@app.post("/v1/families/{family_id}/schedule")
+def schedule_event(
+    req: ScheduleRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Write an event to the family's calendar, governed by the autonomy dial.
+
+    OFF → refused. ASK/AUTO → written (at ASK, the human tap that triggered
+    this call *is* the approval). Provider auto-selection: a connected Google
+    account, else a connected Microsoft account, else the published Exhale
+    feed (which the phone subscribes to — the zero-OAuth path to CarPlay).
+    """
+
+    from exhale.autonomy import AutonomyLevel, level_for
+
+    profile = store.profile(family_id)
+    if level_for(profile, "calendar_write") is AutonomyLevel.OFF:
+        raise HTTPException(
+            status_code=403,
+            detail="Calendar writing is turned OFF for this household "
+                   "(PUT /autonomy to change).",
+        )
+    if req.end <= req.start:
+        raise HTTPException(status_code=400, detail="end must be after start")
+
+    provider = req.provider
+    if provider is None:
+        if _family_tokens(family_id, "google"):
+            provider = "google"
+        elif _family_tokens(family_id, "microsoft"):
+            provider = "microsoft"
+        else:
+            provider = "feed"
+
+    start = req.start.replace(tzinfo=None)
+    end = req.end.replace(tzinfo=None)
+    if provider == "google":
+        connector = _gcal_connector_for_family(family_id, caregiver_name="_writer",
+                                               calendar_id="primary")
+        if connector is None:
+            raise HTTPException(status_code=503, detail="Google is not connected.")
+        created = connector.create_event(req.title, start, end, description=req.description)
+        ref = created.get("id", "")
+    elif provider == "microsoft":
+        connector = _msgraph_connector_for_family(family_id, caregiver_name="_writer")
+        if connector is None:
+            raise HTTPException(status_code=503, detail="Outlook is not connected.")
+        created = connector.create_event(req.title, start, end, description=req.description)
+        ref = created.get("id", "")
+    elif provider == "feed":
+        events = list(profile.get("scheduled_events") or [])
+        import uuid as _uuid
+
+        ref = f"exhale_{_uuid.uuid4().hex[:10]}"
+        events.append({"uid": ref, "title": req.title, "start": start.isoformat(),
+                       "end": end.isoformat(), "description": req.description})
+        store.set_profile(family_id, scheduled_events=events)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown provider {provider!r}")
+
+    return {"family_id": family_id, "provider": provider, "reference": ref,
+            "title": req.title, "start": start.isoformat(), "end": end.isoformat()}
+
+
+@app.get("/v1/families/{family_id}/feed-url")
+def get_feed_url(family_id: str = Depends(require_family_access)) -> dict:
+    """The family's private Exhale-calendar URL (subscribe on a phone → CarPlay).
+
+    Token minted once per family, stored in the encrypted profile; knowing the
+    URL is the credential, so treat it like a password.
+    """
+
+    import secrets
+
+    profile = store.profile(family_id)
+    token = profile.get("feed_token")
+    if not token:
+        token = secrets.token_urlsafe(24)
+        store.set_profile(family_id, feed_token=token)
+    return {"family_id": family_id,
+            "path": f"/v1/feeds/{family_id}.ics?token={token}"}
+
+
+@app.get("/v1/feeds/{family_id}.ics")
+def serve_feed(family_id: str, token: str = Query(...)):
+    """The published Exhale calendar — every event scheduled via the feed provider.
+
+    Deliberately outside the auth guard (calendar apps can't send bearer
+    tokens); the secret token in the URL is the credential.
+    """
+
+    from fastapi.responses import Response
+
+    profile = store.profile(family_id)
+    expected = profile.get("feed_token")
+    if not expected or token != expected:
+        raise HTTPException(status_code=403, detail="Bad feed token")
+
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Exhale//Family Feed//EN",
+             "X-WR-CALNAME:Exhale"]
+    for ev in profile.get("scheduled_events") or []:
+        start = datetime.fromisoformat(ev["start"]).strftime("%Y%m%dT%H%M%S")
+        end = datetime.fromisoformat(ev["end"]).strftime("%Y%m%dT%H%M%S")
+        lines += ["BEGIN:VEVENT", f"UID:{ev['uid']}", f"SUMMARY:{ev['title']}",
+                  f"DTSTART:{start}", f"DTEND:{end}",
+                  f"DESCRIPTION:{ev.get('description') or 'Added by Exhale'}",
+                  "END:VEVENT"]
+    lines.append("END:VCALENDAR")
+    return Response("\r\n".join(lines) + "\r\n", media_type="text/calendar")
+
+
 # --- Waiting-On ledger: the ball is in someone else's court -------------------------
 class WaitingItemIn(BaseModel):
     """Someone owes the family a response."""

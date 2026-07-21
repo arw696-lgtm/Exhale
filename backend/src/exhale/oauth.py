@@ -54,6 +54,9 @@ GOOGLE = OAuthProvider(
     token_url="https://oauth2.googleapis.com/token",
     scopes=(
         "https://www.googleapis.com/auth/calendar.readonly",
+        # Event read/write — lets Exhale add approved blocks to the user's
+        # calendar (never delete/manage calendars themselves).
+        "https://www.googleapis.com/auth/calendar.events",
         "https://www.googleapis.com/auth/gmail.readonly",
         "openid",
         "email",
@@ -71,7 +74,7 @@ MICROSOFT = OAuthProvider(
     token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",
     scopes=(
         "offline_access",  # required for a refresh token on the MS identity platform
-        "https://graph.microsoft.com/Calendars.Read",
+        "https://graph.microsoft.com/Calendars.ReadWrite",
         "https://graph.microsoft.com/Mail.Read",
         "openid",
         "email",

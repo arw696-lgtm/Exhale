@@ -117,7 +117,7 @@ class GraphCalendarConnector:
                 "refresh_token": self._refresh_token,
                 "client_id": self._client_id,
                 "client_secret": self._client_secret,
-                "scope": "https://graph.microsoft.com/Calendars.Read offline_access",
+                "scope": "https://graph.microsoft.com/Calendars.ReadWrite offline_access",
             },
         )
         resp.raise_for_status()
@@ -137,6 +137,33 @@ class GraphCalendarConnector:
                     # Ask Graph to return times already in the household's zone.
                     "Prefer": f'outlook.timezone="{self.tz}"',
                 },
+            )
+            if resp.status_code == 401 and attempt == 1:
+                self._refresh_access_token()
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        raise RuntimeError("unreachable")
+
+    # -- write -----------------------------------------------------------------
+    def create_event(
+        self, title: str, start: datetime, end: datetime,
+        *, description: str = "",
+    ) -> dict:
+        """Create an event on the user's Outlook calendar; returns Graph's resource."""
+
+        if self._access_token is None:
+            self._refresh_access_token()
+        body = {
+            "subject": title,
+            "body": {"contentType": "text", "content": description or "Added by Exhale"},
+            "start": {"dateTime": start.isoformat(), "timeZone": self.tz},
+            "end": {"dateTime": end.isoformat(), "timeZone": self.tz},
+        }
+        for attempt in (1, 2):
+            resp = self._http.post(
+                f"{GRAPH_API}/me/events", json=body,
+                headers={"Authorization": f"Bearer {self._access_token}"},
             )
             if resp.status_code == 401 and attempt == 1:
                 self._refresh_access_token()
