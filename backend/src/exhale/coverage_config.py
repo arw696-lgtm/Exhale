@@ -160,9 +160,9 @@ def default_range(days: int = 14) -> tuple[date, date]:
 
 # --- merge synced calendar events back into a stored model ------------------------
 # Source-reference prefixes that mark a machine-synced event (vs. a manual one),
-# so re-syncing replaces rather than duplicates. gcal_ = Google, ics_ = published
-# iCloud/Outlook feed.
-_SYNCED_PREFIXES = ("gcal_", "ics_")
+# so re-syncing replaces rather than duplicates. gcal_ = Google, msgraph_ =
+# Outlook/Office 365, ics_ = published iCloud/Outlook/Google feed.
+_SYNCED_PREFIXES = ("gcal_", "msgraph_", "ics_")
 
 
 def merge_events(

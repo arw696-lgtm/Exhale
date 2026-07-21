@@ -503,3 +503,70 @@ def test_connected_family_tokens_drive_the_connector(monkeypatch):
     conn = _gcal_connector_for_family(fam, "Andy", "primary")
     assert conn is not None
     assert conn._refresh_token == "rt-1"
+
+
+# --- Connect Outlook (Microsoft) + .ics upload ------------------------------------
+def _msft_env(monkeypatch):
+    monkeypatch.setenv("EXHALE_MSFT_CLIENT_ID", "mcid")
+    monkeypatch.setenv("EXHALE_MSFT_CLIENT_SECRET", "msec")
+    monkeypatch.setenv("EXHALE_MSFT_REDIRECT_URI", "https://app/x/oauth/microsoft/callback")
+
+
+def test_connect_microsoft_503_without_config(monkeypatch):
+    for v in ("EXHALE_MSFT_CLIENT_ID", "EXHALE_MSFT_CLIENT_SECRET", "EXHALE_MSFT_REDIRECT_URI"):
+        monkeypatch.delenv(v, raising=False)
+    r = client.get("/v1/families/fam_ms_none/connect/microsoft")
+    assert r.status_code == 503
+
+
+def test_connect_microsoft_returns_ms_consent_url(monkeypatch):
+    _msft_env(monkeypatch)
+    r = client.get("/v1/families/fam_ms_1/connect/microsoft")
+    assert r.status_code == 200
+    assert "login.microsoftonline.com" in r.json()["authorization_url"]
+
+
+def test_microsoft_callback_stores_tokens_and_connections_shows_both(monkeypatch):
+    _msft_env(monkeypatch)
+    fam = "fam_ms_2"
+    url = client.get(f"/v1/families/{fam}/connect/microsoft").json()["authorization_url"]
+    from urllib.parse import parse_qs, urlparse
+    state = parse_qs(urlparse(url).query)["state"][0]
+    monkeypatch.setattr("exhale.oauth.exchange_code", lambda cfg, code, **k: {
+        "access_token": "at", "refresh_token": "rt", "scope": "Calendars.Read"})
+    r = client.get("/v1/oauth/microsoft/callback", params={"code": "abc", "state": state})
+    assert r.status_code == 200
+    assert r.json()["provider"] == "microsoft"
+
+    conns = client.get(f"/v1/families/{fam}/connections").json()
+    assert conns["microsoft"]["connected"] is True
+    assert conns["google"]["connected"] is False  # both providers reported
+
+
+def test_sync_outlook_503_without_connection():
+    fam = "fam_outlook_noconn"
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    r = client.post(f"/v1/families/{fam}/sync/outlook", json={"caregiver_name": "Ali"})
+    assert r.status_code == 503
+
+
+def test_ics_upload_imports_events_into_model():
+    fam = "fam_ics_upload"
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    ics = (
+        "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:u1\nSUMMARY:Recital\n"
+        "DTSTART;TZID=America/Chicago:20260919T180000\n"
+        "DTEND;TZID=America/Chicago:20260919T193000\nEND:VEVENT\nEND:VCALENDAR\n"
+    )
+    r = client.post(f"/v1/families/{fam}/sync/ics/upload",
+                    json={"content": ics, "attendees": ["Ali", "Andy"]})
+    assert r.status_code == 200
+    assert r.json()["synced_busy_events"] == 1
+
+
+def test_ics_upload_validates_attendees():
+    fam = "fam_ics_upload_bad"
+    client.put(f"/v1/families/{fam}/coverage-model", json=_coverage_model_payload())
+    r = client.post(f"/v1/families/{fam}/sync/ics/upload",
+                    json={"content": "BEGIN:VCALENDAR\nEND:VCALENDAR\n", "attendees": []})
+    assert r.status_code == 400

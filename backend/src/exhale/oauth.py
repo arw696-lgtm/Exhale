@@ -1,22 +1,21 @@
-"""Google OAuth 2.0 authorization flow (productization: the "Connect Google" button).
+"""OAuth 2.0 authorization flow — provider-generic ("Connect Google/Outlook").
 
-The one-time developer registration (a Google Cloud project → one client id +
-secret) is shared by *every* user; each family that signs up just clicks
-"Connect Google" and grants access to their own account. This module implements
-that flow, provider-agnostic in spirit but Google-shaped in specifics:
+The one-time developer registration (one OAuth app per provider) is shared by
+*every* user; each family that signs up connects their own account with a single
+click. The authorization-code flow is identical across providers — only the
+endpoints, scopes, and a couple of auth params differ — so this module is
+parameterized by :class:`OAuthProvider` and serves Google and Microsoft (and any
+future provider) through the same functions:
 
-* :func:`authorization_url` — where "Connect Google" sends the user (Google's own
-  consent screen), carrying a signed ``state`` so the callback can trust which
-  family is returning.
-* :func:`exchange_code` — turn the one-time code Google hands back into an
-  access + refresh token for that family.
+* :func:`authorization_url` — where the "Connect …" button sends the user
+  (the provider's own consent screen), carrying a signed ``state`` so the
+  callback can trust which family is returning.
+* :func:`exchange_code` — turn the one-time code into an access + refresh token.
 
-The refresh token is the durable grant; connectors mint fresh access tokens from
-it. Tokens are stored per-family (encrypted at rest by the existing envelope
-pipeline) — never in the code, never shared between families.
-
-Nothing here needs a real Google account to build or test: the token exchange
-takes an injectable HTTP client, and the state signing is pure.
+Refresh tokens are the durable grant; connectors mint fresh access tokens from
+them. Tokens are stored per-family, encrypted at rest. Nothing here needs a real
+provider account to build or test: the exchange takes an injectable HTTP client,
+and state signing is pure.
 """
 
 from __future__ import annotations
@@ -26,26 +25,11 @@ import hmac
 import os
 import time
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 
-GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-
-# Read-only scopes — Exhale observes, it does not write to the user's account.
-GOOGLE_SCOPES = (
-    "https://www.googleapis.com/auth/calendar.readonly",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "openid",
-    "email",
-)
-
-STATE_MAX_AGE_SECONDS = 600  # a consent round-trip should take well under 10 min
-
-
-class OAuthNotConfigured(Exception):
-    """The Google OAuth app credentials are not set (developer-side, one time)."""
+STATE_MAX_AGE_SECONDS = 600  # a consent round-trip is well under 10 min
 
 
 class OAuthStateError(Exception):
@@ -53,31 +37,79 @@ class OAuthStateError(Exception):
 
 
 @dataclass(frozen=True)
-class GoogleOAuthConfig:
-    """The developer's single registered OAuth app — one set, all users."""
+class OAuthProvider:
+    """Everything provider-specific about an OAuth 2.0 authorization-code flow."""
 
+    name: str
+    authorize_url: str
+    token_url: str
+    scopes: tuple[str, ...]
+    extra_auth_params: dict[str, str] = field(default_factory=dict)
+    token_request_includes_scope: bool = False  # Microsoft wants it; Google ignores
+
+
+GOOGLE = OAuthProvider(
+    name="google",
+    authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
+    token_url="https://oauth2.googleapis.com/token",
+    scopes=(
+        "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "openid",
+        "email",
+    ),
+    extra_auth_params={
+        "access_type": "offline",   # get a refresh token
+        "prompt": "consent",        # force it even on re-consent
+        "include_granted_scopes": "true",
+    },
+)
+
+MICROSOFT = OAuthProvider(
+    name="microsoft",
+    authorize_url="https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    scopes=(
+        "offline_access",  # required for a refresh token on the MS identity platform
+        "https://graph.microsoft.com/Calendars.Read",
+        "https://graph.microsoft.com/Mail.Read",
+        "openid",
+        "email",
+    ),
+    extra_auth_params={"prompt": "select_account"},
+    token_request_includes_scope=True,
+)
+
+PROVIDERS: dict[str, OAuthProvider] = {"google": GOOGLE, "microsoft": MICROSOFT}
+_ENV_PREFIX = {"google": "EXHALE_GOOGLE", "microsoft": "EXHALE_MSFT"}
+
+
+@dataclass(frozen=True)
+class OAuthAppConfig:
+    """The developer's single registered app for one provider — all users share it."""
+
+    provider: OAuthProvider
     client_id: str
     client_secret: str
     redirect_uri: str
 
-    @classmethod
-    def from_env(cls) -> "GoogleOAuthConfig | None":
-        cid = os.environ.get("EXHALE_GOOGLE_CLIENT_ID")
-        secret = os.environ.get("EXHALE_GOOGLE_CLIENT_SECRET")
-        redirect = os.environ.get("EXHALE_GOOGLE_REDIRECT_URI")
-        if not (cid and secret and redirect):
-            return None
-        return cls(client_id=cid, client_secret=secret, redirect_uri=redirect)
+
+def config_from_env(provider_name: str) -> OAuthAppConfig | None:
+    """Build the app config for a provider from env, or ``None`` if unset."""
+
+    provider = PROVIDERS[provider_name]
+    prefix = _ENV_PREFIX[provider_name]
+    cid = os.environ.get(f"{prefix}_CLIENT_ID")
+    secret = os.environ.get(f"{prefix}_CLIENT_SECRET")
+    redirect = os.environ.get(f"{prefix}_REDIRECT_URI")
+    if not (cid and secret and redirect):
+        return None
+    return OAuthAppConfig(provider, cid, secret, redirect)
 
 
 # --- signed state (CSRF protection + identity carry-through) -----------------------
 def sign_state(family_id: str, secret: str, *, now: float | None = None) -> str:
-    """A tamper-evident ``state`` token binding the flow to ``family_id``.
-
-    Google echoes ``state`` back to the callback verbatim; signing it lets the
-    callback trust which family is returning without a session cookie, and
-    rejects forged or replayed callbacks.
-    """
+    """A tamper-evident ``state`` binding the flow to ``family_id``."""
 
     ts = str(int(now if now is not None else time.time()))
     payload = f"{family_id}:{ts}"
@@ -104,45 +136,34 @@ def verify_state(state: str, secret: str, *, now: float | None = None) -> str:
 
 # --- the flow ----------------------------------------------------------------------
 def authorization_url(
-    config: GoogleOAuthConfig,
-    family_id: str,
-    state_secret: str,
-    *,
-    scopes: tuple[str, ...] = GOOGLE_SCOPES,
-    now: float | None = None,
+    config: OAuthAppConfig, family_id: str, state_secret: str, *, now: float | None = None
 ) -> str:
-    """The URL the "Connect Google" button sends the user to (Google's consent)."""
+    """The URL a "Connect …" button sends the user to (the provider's consent)."""
 
     params = {
         "client_id": config.client_id,
         "redirect_uri": config.redirect_uri,
         "response_type": "code",
-        "scope": " ".join(scopes),
-        "access_type": "offline",   # ask for a refresh token
-        "prompt": "consent",        # force the refresh token even on re-consent
-        "include_granted_scopes": "true",
+        "scope": " ".join(config.provider.scopes),
         "state": sign_state(family_id, state_secret, now=now),
+        **config.provider.extra_auth_params,
     }
-    return f"{GOOGLE_AUTH_ENDPOINT}?{urllib.parse.urlencode(params)}"
+    return f"{config.provider.authorize_url}?{urllib.parse.urlencode(params)}"
 
 
-def exchange_code(config: GoogleOAuthConfig, code: str, *, http: httpx.Client | None = None) -> dict:
-    """Exchange the one-time authorization code for tokens.
-
-    Returns Google's token response (``access_token``, ``refresh_token``,
-    ``expires_in``, ``scope``, …).
-    """
+def exchange_code(config: OAuthAppConfig, code: str, *, http: httpx.Client | None = None) -> dict:
+    """Exchange the one-time authorization code for tokens."""
 
     client = http or httpx.Client(timeout=30)
-    resp = client.post(
-        GOOGLE_TOKEN_ENDPOINT,
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "client_id": config.client_id,
-            "client_secret": config.client_secret,
-            "redirect_uri": config.redirect_uri,
-        },
-    )
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": config.client_id,
+        "client_secret": config.client_secret,
+        "redirect_uri": config.redirect_uri,
+    }
+    if config.provider.token_request_includes_scope:
+        data["scope"] = " ".join(config.provider.scopes)
+    resp = client.post(config.provider.token_url, data=data)
     resp.raise_for_status()
     return resp.json()
