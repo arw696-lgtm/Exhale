@@ -372,8 +372,9 @@ class CoverageEngine:
 
         windows: list[WorkWindow] = []
         for ws, we in workable:
-            if we <= self.now:  # skip windows already in the past
+            if we <= self.now:  # skip windows already fully in the past
                 continue
+            ws = max(ws, self.now)  # trim the elapsed portion of a live window
             labels = tuple(sorted({
                 label for iv, label in coverers if _overlaps((ws, we), iv)
             }))

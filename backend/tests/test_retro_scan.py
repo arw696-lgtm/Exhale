@@ -65,3 +65,19 @@ def test_retro_scan_snapshot_headline_reports_counts():
         now=NOW,
     )
     assert "scanned 3 recent items" in result.snapshot["headline"]
+
+
+def test_rerunning_the_scan_does_not_duplicate_obligations():
+    # A repeated /scan batch (or a crashed-and-retried sync) must not mint the
+    # same obligations twice.
+    store = HouseholdStore()
+    ctx = ExtractionContext(known_children=["Olivia", "Leo"], reference_date=NOW.date())
+    first = run_retro_scan(FixtureConnector(_corpus()), store, "fam1", ctx, now=NOW)
+    second = run_retro_scan(FixtureConnector(_corpus()), store, "fam1", ctx, now=NOW)
+
+    assert first.committed == 2
+    assert second.committed == 0
+    assert second.duplicates >= 2  # the previously-ingested messages were skipped
+    obligations = [n for n in store.graph("fam1").nodes.values()
+                   if n.type.value == "OBLIGATION"]
+    assert len(obligations) == 2  # still two, not four

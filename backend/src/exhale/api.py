@@ -421,8 +421,22 @@ def ingest_photo(
     except VisionUnavailable as exc:
         raise HTTPException(status_code=422, detail=f"Could not read the image: {exc}") from exc
 
+    # Dedupe: the same image re-uploaded (double-tap, second family member)
+    # must not mint duplicate obligations. The content digest makes the same
+    # bytes yield the same source_reference; an item already ledgered from it
+    # is skipped and reported, not re-ingested.
+    seen = {
+        (e.payload.source_reference, e.payload.extracted_event, e.payload.event_date)
+        for e in store.ledger(family_id)
+    }
     results = []
+    duplicates = 0
     for payload in payloads:
+        key = (payload.source_reference, payload.extracted_event, payload.event_date)
+        if key in seen:
+            duplicates += 1
+            continue
+        seen.add(key)
         entry = store.ingest(family_id, payload)
         results.append({
             "extraction_id": entry.extraction_id,
@@ -432,7 +446,8 @@ def ingest_photo(
             "status": entry.decision.status.value,
             "obligation_node_id": entry.obligation_node_id,
         })
-    return {"family_id": family_id, "extracted": len(results), "items": results}
+    return {"family_id": family_id, "extracted": len(results),
+            "duplicates_skipped": duplicates, "items": results}
 
 
 class SchoolPhotoRequest(BaseModel):
@@ -573,6 +588,8 @@ def correct_extraction(
         entry = store.correct(family_id, extraction_id, **fixes)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:  # already superseded — a repeat would duplicate
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"family_id": family_id, **entry.to_dict()}
 
 
@@ -618,6 +635,8 @@ def confirm_extraction(
         entry = store.correct(family_id, extraction_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:  # double-confirm — would mint a duplicate obligation
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"family_id": family_id, **entry.to_dict()}
 
 
@@ -707,7 +726,12 @@ def schedule_event(
             detail="Calendar writing is turned OFF for this household "
                    "(PUT /autonomy to change).",
         )
-    if req.end <= req.start:
+    # Normalize to naive local wall-clock (the policy everywhere in coverage)
+    # BEFORE comparing — a mixed aware/naive pair must be a clean 400, not a
+    # TypeError 500.
+    start = req.start.replace(tzinfo=None)
+    end = req.end.replace(tzinfo=None)
+    if end <= start:
         raise HTTPException(status_code=400, detail="end must be after start")
 
     provider = req.provider
@@ -719,8 +743,6 @@ def schedule_event(
         else:
             provider = "feed"
 
-    start = req.start.replace(tzinfo=None)
-    end = req.end.replace(tzinfo=None)
     if provider == "google":
         connector = _gcal_connector_for_family(family_id, caregiver_name="_writer",
                                                calendar_id="primary")
@@ -776,21 +798,31 @@ def serve_feed(family_id: str, token: str = Query(...)):
     tokens); the secret token in the URL is the credential.
     """
 
+    import hmac as _hmac
+
     from fastapi.responses import Response
 
     profile = store.profile(family_id)
     expected = profile.get("feed_token")
-    if not expected or token != expected:
+    if not expected or not _hmac.compare_digest(token, expected):
         raise HTTPException(status_code=403, detail="Bad feed token")
+
+    def esc(text: str) -> str:
+        """RFC 5545 TEXT escaping — a comma or newline in a title must not
+        corrupt the feed's line structure."""
+
+        return (text.replace("\\", "\\\\").replace(";", "\\;")
+                .replace(",", "\\,").replace("\r\n", "\\n")
+                .replace("\n", "\\n").replace("\r", "\\n"))
 
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Exhale//Family Feed//EN",
              "X-WR-CALNAME:Exhale"]
     for ev in profile.get("scheduled_events") or []:
         start = datetime.fromisoformat(ev["start"]).strftime("%Y%m%dT%H%M%S")
         end = datetime.fromisoformat(ev["end"]).strftime("%Y%m%dT%H%M%S")
-        lines += ["BEGIN:VEVENT", f"UID:{ev['uid']}", f"SUMMARY:{ev['title']}",
+        lines += ["BEGIN:VEVENT", f"UID:{ev['uid']}", f"SUMMARY:{esc(ev['title'])}",
                   f"DTSTART:{start}", f"DTEND:{end}",
-                  f"DESCRIPTION:{ev.get('description') or 'Added by Exhale'}",
+                  f"DESCRIPTION:{esc(ev.get('description') or 'Added by Exhale')}",
                   "END:VEVENT"]
     lines.append("END:VCALENDAR")
     return Response("\r\n".join(lines) + "\r\n", media_type="text/calendar")

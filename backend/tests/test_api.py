@@ -769,3 +769,61 @@ def test_schedule_rejects_backwards_window():
     r = client.post("/v1/families/fam_auto_bad/schedule", json={
         "title": "Gym", "start": "2026-07-23T10:00:00", "end": "2026-07-23T09:00:00"})
     assert r.status_code == 400
+
+
+# --- Bug-hunt regressions (found in the full-code review) -------------------------
+def test_schedule_mixed_timezone_input_is_400_not_500():
+    # Aware start + naive end used to raise TypeError -> 500.
+    r = client.post("/v1/families/fam_bug_tz/schedule", json={
+        "title": "Gym", "start": "2026-07-23T10:00:00Z", "end": "2026-07-23T09:00:00"})
+    assert r.status_code == 400  # backwards after normalization -> clean 400
+    r2 = client.post("/v1/families/fam_bug_tz/schedule", json={
+        "title": "Gym", "start": "2026-07-23T09:00:00Z", "end": "2026-07-23T10:00:00"})
+    assert r2.status_code == 200
+
+
+def test_feed_escapes_titles_and_descriptions():
+    fam = "fam_bug_feed"
+    client.post(f"/v1/families/{fam}/schedule", json={
+        "title": "Dentist, then errands; maybe gym",
+        "start": "2026-07-23T09:00:00", "end": "2026-07-23T10:00:00",
+        "description": "line one\nline two"})
+    path = client.get(f"/v1/families/{fam}/feed-url").json()["path"]
+    text = client.get(path).text
+    assert "SUMMARY:Dentist\\, then errands\; maybe gym" in text
+    assert "DESCRIPTION:line one\\nline two" in text
+    # No raw continuation garbage: every line is a known ICS property.
+    assert not any(line == "line two" for line in text.splitlines())
+
+
+def test_double_confirm_is_409_and_single_obligation():
+    fam = "fam_bug_dupconfirm"
+    client.post(f"/v1/families/{fam}/extractions", json=_pending_payload("Dup guard"))
+    eid = client.get(f"/v1/families/{fam}/review").json()["pending"][0]["extraction_id"]
+    assert client.post(f"/v1/families/{fam}/extractions/{eid}/confirm").status_code == 200
+    assert client.post(f"/v1/families/{fam}/extractions/{eid}/confirm").status_code == 409
+    ledger = client.get(f"/v1/families/{fam}/ledger").json()["entries"]
+    assert sum(1 for e in ledger if e["obligation_node_id"]) == 1
+
+
+def test_photo_reupload_skips_duplicates(monkeypatch):
+    from datetime import date
+    from exhale.schemas import ArtifactTier, ExtractionPayload
+
+    class _FakeVision:
+        def extract(self, image_base64, media_type, *, source_name, source_reference, ctx):
+            return [ExtractionPayload(
+                extracted_event="Picture Day", event_date=date(2026, 9, 4),
+                action_required=True, confidence_score=0.95,
+                artifact_tier=ArtifactTier.CONFIRMATION,
+                source_document_name=source_name, source_reference=source_reference)]
+
+    monkeypatch.setattr("exhale.api._vision_extractor", lambda: _FakeVision())
+    fam = "fam_bug_photodup"
+    body = {"image_base64": "same-bytes", "media_type": "image/png"}
+    r1 = client.post(f"/v1/families/{fam}/extractions/photo", json=body)
+    r2 = client.post(f"/v1/families/{fam}/extractions/photo", json=body)
+    assert r1.json()["extracted"] == 1
+    assert r2.json()["extracted"] == 0 and r2.json()["duplicates_skipped"] == 1
+    ledger = client.get(f"/v1/families/{fam}/ledger").json()["entries"]
+    assert len(ledger) == 1
