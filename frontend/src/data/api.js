@@ -263,8 +263,20 @@ export function addIntention({ description, type }, familyId = DEMO_FAMILY) {
   return postJson(`/v1/families/${familyId}/intentions`, { description, type });
 }
 
-export function setIntentionStatus(intentionId, status, familyId = DEMO_FAMILY) {
-  return postJson(`/v1/families/${familyId}/intentions/${intentionId}/status`, { status });
+export function setIntentionStatus(intentionId, status, familyId = DEMO_FAMILY, window = null) {
+  return postJson(`/v1/families/${familyId}/intentions/${intentionId}/status`, {
+    status,
+    window_start: window?.start ?? null,
+    window_end: window?.end ?? null,
+  });
+}
+
+export function reconfirmIntention(intentionId, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/intentions/${intentionId}/reconfirm`);
+}
+
+export function answerIntentionFollowUp(intentionId, outcome, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/intentions/${intentionId}/follow-up`, { outcome });
 }
 
 // --- scoped caregivers (helpers) — FAMILY_STRUCTURES §3.2 ----------------------

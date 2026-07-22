@@ -688,7 +688,7 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
         learned_rules=[r.to_dict() for r in learn_rules(store.ledger(family_id))],
         waiting_on=build_waiting_watch(waiting_items) if waiting_items else None,
         handled=handled_this_week(profile),
-        time_for_what_matters=_time_for_what_matters(profile),
+        time_for_what_matters=_time_for_what_matters(family_id, profile),
     )
 
 
@@ -709,22 +709,39 @@ def _care_watch_for(profile: dict) -> dict | None:
     return watch
 
 
-def _time_for_what_matters(profile: dict) -> dict | None:
+def _time_for_what_matters(family_id: str, profile: dict) -> dict | None:
     """Open windows next to open intentions for the briefing.
 
     Reuses the engine's own ranking (:func:`suggest_work_windows`) for every
     caregiver in the coverage model — no new window math, no auto-assignment.
     Returns ``None`` without a coverage model *and* without intentions (nothing
     to say); with intentions but no model, the block carries them windowless.
+
+    Surfacing is *state*: this pass stamps counters (weekly-debounced),
+    promotes long-ignored intentions to a check-in, retires ignored check-ins
+    to ``stale``, arms/expires the one matched follow-up, and remembers that
+    the "add one anytime" line has been shown so it never becomes a weekly nag.
     """
 
     from exhale.coverage import suggest_work_windows
-    from exhale.intentions import build_time_for_what_matters
+    from exhale.intentions import build_time_for_what_matters, surface
 
     intentions = list(profile.get("intentions") or [])
     config = profile.get("coverage_model")
     if not config and not intentions:
         return None
+
+    updated, groups = surface(intentions)
+    if updated != intentions:
+        store.set_profile(family_id, intentions=updated)
+
+    # The low-key "add one anytime" line: shown until it has been on screen
+    # once with nothing logged; after that, silence (the form itself stays).
+    show_add_nudge = True
+    if not intentions:
+        show_add_nudge = not profile.get("intentions_nudge_shown")
+        if show_add_nudge:
+            store.set_profile(family_id, intentions_nudge_shown=True)
 
     windows: list[dict] = []
     if config:
@@ -741,7 +758,8 @@ def _time_for_what_matters(profile: dict) -> dict | None:
         # The household's best few, longest first, presented chronologically.
         windows.sort(key=lambda w: -w["duration_hours"])
         windows = sorted(windows[:3], key=lambda w: w["start"])
-    return build_time_for_what_matters(windows, intentions)
+    return build_time_for_what_matters(windows, groups, updated,
+                                       show_add_nudge=show_add_nudge)
 
 
 @app.get("/v1/families/{family_id}/ledger")
@@ -1308,6 +1326,13 @@ class IntentionIn(BaseModel):
 
 class IntentionStatusIn(BaseModel):
     status: str  # open | matched | dismissed
+    # When matched: the window it was matched to (arms the one-week follow-up).
+    window_start: str | None = None
+    window_end: str | None = None
+
+
+class FollowUpIn(BaseModel):
+    outcome: str  # happened | didnt_happen
 
 
 @app.get("/v1/families/{family_id}/intentions")
@@ -1350,15 +1375,58 @@ def set_intention_status(
 
     from exhale.intentions import set_status
 
+    matched_window = (
+        {"start": req.window_start, "end": req.window_end}
+        if req.status == "matched" and req.window_start else None
+    )
     items = list(store.profile(family_id).get("intentions") or [])
     try:
-        items = set_status(items, intention_id, req.status)
+        items = set_status(items, intention_id, req.status,
+                           matched_window=matched_window)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     store.set_profile(family_id, intentions=items)
     return {"family_id": family_id, "intention_id": intention_id, "status": req.status}
+
+
+@app.post("/v1/families/{family_id}/intentions/{intention_id}/reconfirm")
+def reconfirm_intention(
+    intention_id: str, family_id: str = Depends(require_family_access)
+) -> dict:
+    """The check-in's "still want this here" — keeps it, resets the clock."""
+
+    from exhale.intentions import reconfirm
+
+    items = list(store.profile(family_id).get("intentions") or [])
+    try:
+        items = reconfirm(items, intention_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    store.set_profile(family_id, intentions=items)
+    return {"family_id": family_id, "intention_id": intention_id, "status": "open"}
+
+
+@app.post("/v1/families/{family_id}/intentions/{intention_id}/follow-up")
+def answer_follow_up(
+    intention_id: str, req: FollowUpIn,
+    family_id: str = Depends(require_family_access),
+) -> dict:
+    """Answer the one "did that happen?" — logged once, never asked again."""
+
+    from exhale.intentions import record_follow_up
+
+    items = list(store.profile(family_id).get("intentions") or [])
+    try:
+        items = record_follow_up(items, intention_id, req.outcome)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    store.set_profile(family_id, intentions=items)
+    return {"family_id": family_id, "intention_id": intention_id,
+            "follow_up_outcome": req.outcome}
 
 
 class MissingSourceIn(BaseModel):
