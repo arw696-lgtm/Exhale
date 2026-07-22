@@ -119,6 +119,13 @@ def test_profile_survives_restart(store, family_id):
 def test_database_stores_no_plaintext(store, family_id):
     store.ingest(family_id, _payload())
     store.set_profile(family_id, parent_first_name="Andrew")
+    # A child's birthdate is among the most sensitive fields the profile holds
+    # — pin that it rides the same encrypted-profile envelope as everything
+    # else (the coverage model lives inside the profile blob).
+    store.set_profile(family_id, coverage_model={
+        "children": [{"recipient": {"name": "Stevie", "birthdate": "2020-06-15"}}],
+        "caregivers": [{"name": "Andrew"}],
+    })
 
     with psycopg.connect(DSN) as conn:
         for table in ("family_secure_nodes", "family_secure_edges",
@@ -130,6 +137,8 @@ def test_database_stores_no_plaintext(store, family_id):
             assert "Olivia" not in blob, f"plaintext name leaked in {table}"
             assert "Permission Slip" not in blob, f"plaintext event leaked in {table}"
             assert "Andrew" not in blob, f"plaintext profile leaked in {table}"
+            assert "Stevie" not in blob, f"plaintext child name leaked in {table}"
+            assert "2020-06-15" not in blob, f"plaintext birthdate leaked in {table}"
 
 
 def test_wrong_master_secret_fails_loudly(store, family_id):
