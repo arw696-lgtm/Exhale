@@ -9,6 +9,7 @@ import HelperInvitePanel from "./HelperInvitePanel.jsx";
 import PhotoDrop from "./PhotoDrop.jsx";
 import ReviewQueue from "./ReviewQueue.jsx";
 import SetupPanel from "./SetupPanel.jsx";
+import TimeForWhatMatters from "./TimeForWhatMatters.jsx";
 import WaitingOn from "./WaitingOn.jsx";
 import WorkWindowsPanel from "./WorkWindowsPanel.jsx";
 
@@ -123,6 +124,14 @@ export default function WeeklyBriefing({
 
       {/* Waiting On — threads where the ball is in someone else's court */}
       {live && <WaitingOn familyId={familyId} />}
+
+      {/* Time For What Matters — open windows next to open intentions */}
+      <TimeForWhatMatters
+        block={briefing.time_for_what_matters}
+        familyId={familyId}
+        live={live}
+        onRefresh={onRefresh}
+      />
 
       {/* Learned rules — the household's recurring rhythms, with evidence */}
       {(briefing.learned_rules?.length ?? 0) > 0 && (

@@ -40,6 +40,7 @@ def build_weekly_briefing(
     learned_rules: list[dict] | None = None,
     waiting_on: dict | None = None,
     handled: dict | None = None,
+    time_for_what_matters: dict | None = None,
 ) -> dict:
     """Assemble the Weekly COO Briefing payload from a family's graph.
 
@@ -87,4 +88,7 @@ def build_weekly_briefing(
         # Closing note: what resolved this week (None = log not supplied;
         # count 0 = a genuinely quiet week, rendered honestly, never padded).
         "handled": handled,
+        # Open windows laid next to open personal intentions — what the found
+        # time is for (None = not supplied, e.g. no coverage model).
+        "time_for_what_matters": time_for_what_matters,
     }

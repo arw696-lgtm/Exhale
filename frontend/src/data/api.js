@@ -258,6 +258,15 @@ export function sendTestNotification(familyId = DEMO_FAMILY) {
   return postJson(`/v1/families/${familyId}/notifications/test`);
 }
 
+// --- personal intentions (Time For What Matters) --------------------------------
+export function addIntention({ description, type }, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/intentions`, { description, type });
+}
+
+export function setIntentionStatus(intentionId, status, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/intentions/${intentionId}/status`, { status });
+}
+
 // --- scoped caregivers (helpers) — FAMILY_STRUCTURES §3.2 ----------------------
 /** The logged-in helper's scoped home: their care days' gaps + shared items. */
 export async function fetchHelperView(familyId = DEMO_FAMILY, asUserId = null) {
