@@ -675,6 +675,7 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     next two weeks rides along.
     """
 
+    from exhale.handled import handled_this_week
     from exhale.memory import learn_rules
     from exhale.waiting import build_waiting_watch
 
@@ -686,6 +687,7 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
         care_watch=_care_watch_for(profile),
         learned_rules=[r.to_dict() for r in learn_rules(store.ledger(family_id))],
         waiting_on=build_waiting_watch(waiting_items) if waiting_items else None,
+        handled=handled_this_week(profile),
     )
 
 
@@ -792,6 +794,17 @@ def confirm_extraction(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:  # double-confirm — would mint a duplicate obligation
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    # A held item just became ground truth — that's a catch worth remembering
+    # (reuses the extraction's own text; the recap writes no new descriptions).
+    from exhale.handled import log_resolved
+
+    who = f" for {entry.payload.target_person_name}" if entry.payload.target_person_name else ""
+    log_resolved(
+        store, family_id,
+        item_id=extraction_id, resolved_type="dependency_gap",
+        brief_description=f"{entry.payload.extracted_event}{who} — confirmed by you",
+    )
     return {"family_id": family_id, **entry.to_dict()}
 
 
@@ -1227,14 +1240,23 @@ def resolve_waiting(
 ) -> dict:
     """They responded — mark the wait resolved (kept in the record)."""
 
+    from exhale.handled import log_resolved
     from exhale.waiting import resolve_item
 
+    resolved = next((i for i in store.profile(family_id).get("waiting_on") or []
+                     if i.get("id") == item_id), None)
     items = list(store.profile(family_id).get("waiting_on") or [])
     try:
         items = resolve_item(items, item_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     store.set_profile(family_id, waiting_on=items)
+    if resolved is not None:  # loop closed — remember the catch (reuses item text)
+        log_resolved(
+            store, family_id,
+            item_id=item_id, resolved_type="waiting_on",
+            brief_description=f"{resolved['who']} — {resolved['about']} (loop closed)",
+        )
     return {"family_id": family_id, "item_id": item_id, "status": "resolved"}
 
 
@@ -1649,6 +1671,20 @@ def approve_action(req: ApproveActionRequest, family_id: str = Depends(require_f
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # The gap just dropped off the briefing — log the catch (the obligation
+    # node's own name/person; no new description logic).
+    from exhale.handled import log_resolved
+
+    node = store.graph(family_id).nodes.get(req.obligation_node_id)
+    if node is not None:
+        props = node.properties
+        who = f" for {props['target_person_name']}" if props.get("target_person_name") else ""
+        log_resolved(
+            store, family_id,
+            item_id=req.obligation_node_id, resolved_type="dependency_gap",
+            brief_description=f"{props.get('name', req.obligation_node_id)}{who} — handled",
+        )
     return {
         "family_id": family_id,
         "obligation_node_id": req.obligation_node_id,

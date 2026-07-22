@@ -4,6 +4,7 @@ import DependencyWatch from "./DependencyWatch.jsx";
 import CalendarConflicts from "./CalendarConflicts.jsx";
 import CareWatch from "./CareWatch.jsx";
 import ConnectionsPanel from "./ConnectionsPanel.jsx";
+import HandledRecap from "./HandledRecap.jsx";
 import HelperInvitePanel from "./HelperInvitePanel.jsx";
 import PhotoDrop from "./PhotoDrop.jsx";
 import ReviewQueue from "./ReviewQueue.jsx";
@@ -159,6 +160,9 @@ export default function WeeklyBriefing({
 
       {/* Calendar conflicts */}
       <CalendarConflicts conflicts={briefing.calendar_conflicts} />
+
+      {/* Closing note — what resolved this week, so the family didn't carry it */}
+      <HandledRecap handled={briefing.handled} />
 
       <footer className="mt-10 text-center font-micro text-xs text-sanctuary-navy/40">
         Take a deep breath — your memory systems are secure.
