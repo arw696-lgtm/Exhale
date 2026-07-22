@@ -957,42 +957,73 @@ def set_autonomy(
 
 # --- outbound notifications (🔴 critical-alert emails) ------------------------------
 class NotificationPrefs(BaseModel):
-    email: str | None = None  # None switches alerts off for the family
+    email: str | None = None  # None switches alerts off for THIS member
+
+
+def _notify_slot(user: User | None) -> str:
+    """Whose preference a notifications call touches: the logged-in member's
+    own slot (anonymous dev mode uses the legacy/primary slot)."""
+
+    from exhale.connections import LEGACY_KEY
+
+    return user.user_id if user else LEGACY_KEY
+
+
+def _member_email(profile: dict, slot: str) -> str | None:
+    from exhale.notify import member_recipients
+
+    return member_recipients(profile).get(slot)
 
 
 @app.get("/v1/families/{family_id}/notifications")
-def get_notifications(family_id: str = Depends(require_family_access)) -> dict:
-    """Where (and whether) this family gets 🔴 critical-alert emails."""
+def get_notifications(
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
+    """Whether *you* get 🔴 critical-alert emails — each member decides."""
 
-    from exhale.notify import SmtpConfig
+    from exhale.notify import SmtpConfig, member_recipients, _sent_keys
 
     profile = store.profile(family_id)
+    slot = _notify_slot(user)
     return {
         "family_id": family_id,
-        "email": profile.get("notify_email"),
+        "email": _member_email(profile, slot),
         # Honest about the transport: an address with no SMTP configured
         # means alerts are armed but cannot leave the building yet.
         "smtp_configured": SmtpConfig.from_env() is not None,
-        "alerts_sent": len(profile.get("notified_alerts") or []),
+        "alerts_sent": len(_sent_keys(profile, slot)),
+        "members_opted_in": len(member_recipients(profile)),
     }
 
 
 @app.put("/v1/families/{family_id}/notifications")
 def set_notifications(
-    req: NotificationPrefs, family_id: str = Depends(require_family_access)
+    req: NotificationPrefs,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
 ) -> dict:
-    """Opt the family in (set an address) or out (null) of critical alerts."""
+    """Opt *yourself* in (set an address) or out (null) of critical alerts.
+
+    Per-member: your spouse's alerts are theirs to switch, not yours.
+    """
 
     email = (req.email or "").strip() or None
     if email and "@" not in email:
         raise HTTPException(status_code=400, detail="That doesn't look like an email address")
-    store.set_profile(family_id, notify_email=email)
-    return get_notifications(family_id)
+    slot = _notify_slot(user)
+    prefs = dict(store.profile(family_id).get("member_notifications") or {})
+    prefs[slot] = {"email": email}  # email=None is an explicit opt-out
+    store.set_profile(family_id, member_notifications=prefs)
+    return get_notifications(family_id, user)
 
 
 @app.post("/v1/families/{family_id}/notifications/test")
-def send_test_notification(family_id: str = Depends(require_family_access)) -> dict:
-    """Prove the pipe: send a test email to the family's notify address."""
+def send_test_notification(
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
+    """Prove the pipe: send a test email to *your* notify address."""
 
     from exhale.notify import notifier_from_env
 
@@ -1003,7 +1034,7 @@ def send_test_notification(family_id: str = Depends(require_family_access)) -> d
             detail="SMTP is not configured (set EXHALE_SMTP_HOST and "
                    "EXHALE_SMTP_FROM on the server).",
         )
-    to = store.profile(family_id).get("notify_email")
+    to = _member_email(store.profile(family_id), _notify_slot(user))
     if not to:
         raise HTTPException(
             status_code=400,
@@ -1892,10 +1923,18 @@ def sync_outlook(
 
 
 @app.get("/v1/families/{family_id}/drafts")
-def get_drafts(family_id: str = Depends(require_family_access)) -> dict:
-    """Layer 6 — recommended, rendered action drafts for each open gap (§6, §10)."""
+def get_drafts(
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
+    """Layer 6 — recommended, rendered action drafts for each open gap (§6, §10).
 
-    drafts = store.drafts(family_id)
+    Greetings address whoever is looking: "Hey Alicia" when Alicia is logged
+    in, not the founding member's name for everyone forever.
+    """
+
+    viewer = user.display_name.split()[0] if user and user.display_name else None
+    drafts = store.drafts(family_id, viewer_first_name=viewer)
     return {
         "family_id": family_id,
         "drafts": [d.model_dump(mode="json") for d in drafts],

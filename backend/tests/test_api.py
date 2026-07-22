@@ -857,16 +857,78 @@ def test_notification_prefs_roundtrip():
     fam = "fam_notify_prefs"
     r = client.get(f"/v1/families/{fam}/notifications")
     assert r.json() == {"family_id": fam, "email": None,
-                        "smtp_configured": False, "alerts_sent": 0}
+                        "smtp_configured": False, "alerts_sent": 0,
+                        "members_opted_in": 0}
 
     r = client.put(f"/v1/families/{fam}/notifications", json={"email": "andy@test"})
     assert r.json()["email"] == "andy@test"
+    assert r.json()["members_opted_in"] == 1
     # Opt back out with null.
     r = client.put(f"/v1/families/{fam}/notifications", json={"email": None})
     assert r.json()["email"] is None
+    assert r.json()["members_opted_in"] == 0
     # Garbage is refused, not stored.
     assert client.put(f"/v1/families/{fam}/notifications",
                       json={"email": "not-an-address"}).status_code == 400
+
+
+def test_notification_prefs_are_per_member():
+    """Each member flips their own alerts — never their spouse's."""
+
+    r = client.post("/v1/auth/signup", json={
+        "email": "np-a@example.com", "password": "password123",
+        "display_name": "Andrew"})
+    a = r.json()
+    fam = a["user"]["family_id"]
+    ha = {"Authorization": f"Bearer {a['token']}"}
+    b = client.post("/v1/auth/signup", json={
+        "email": "np-b@example.com", "password": "password123",
+        "display_name": "Alicia", "invite_code": a["invite_code"]}).json()
+    hb = {"Authorization": f"Bearer {b['token']}"}
+
+    client.put(f"/v1/families/{fam}/notifications", headers=ha,
+               json={"email": "andy@test"})
+    # B sees their own (unset) slot, not A's address.
+    assert client.get(f"/v1/families/{fam}/notifications", headers=hb).json()["email"] is None
+    client.put(f"/v1/families/{fam}/notifications", headers=hb,
+               json={"email": "ali@test"})
+    got = client.get(f"/v1/families/{fam}/notifications", headers=hb).json()
+    assert got["email"] == "ali@test"
+    assert got["members_opted_in"] == 2
+    # B opting out leaves A opted in.
+    client.put(f"/v1/families/{fam}/notifications", headers=hb, json={"email": None})
+    assert client.get(f"/v1/families/{fam}/notifications",
+                      headers=ha).json()["members_opted_in"] == 1
+
+
+def test_draft_greeting_addresses_the_viewer():
+    """"Hey Alicia" when Alicia looks — not the founder's name for everyone."""
+
+    from datetime import date, timedelta
+
+    r = client.post("/v1/auth/signup", json={
+        "email": "greet-a@example.com", "password": "password123",
+        "display_name": "Andrew Ward"})
+    a = r.json()
+    fam = a["user"]["family_id"]
+    ha = {"Authorization": f"Bearer {a['token']}"}
+    b = client.post("/v1/auth/signup", json={
+        "email": "greet-b@example.com", "password": "password123",
+        "display_name": "Alicia Ward", "invite_code": a["invite_code"]}).json()
+    hb = {"Authorization": f"Bearer {b['token']}"}
+
+    # Deadline tomorrow → 🔴 critical draft, the template that greets by name.
+    tomorrow = date.today() + timedelta(days=1)
+    client.post(f"/v1/families/{fam}/extractions", headers=ha, json={
+        "extracted_event": "Permission slip", "target_person_name": "Stevie",
+        "event_date": (tomorrow + timedelta(days=10)).isoformat(),
+        "deadline_date": tomorrow.isoformat(),
+        "action_required": True, "confidence_score": 0.97})
+
+    drafts_a = client.get(f"/v1/families/{fam}/drafts", headers=ha).text
+    drafts_b = client.get(f"/v1/families/{fam}/drafts", headers=hb).text
+    assert "Andrew" in drafts_a and "Alicia" not in drafts_a
+    assert "Alicia" in drafts_b and "Andrew" not in drafts_b
 
 
 def test_notification_test_send_requires_smtp_and_address(monkeypatch):

@@ -302,9 +302,9 @@ class PersistentHouseholdStore(HouseholdStore):
         self._persist_ledger_entry(family_id, entry)
         return entry
 
-    def drafts(self, family_id: str):
+    def drafts(self, family_id: str, viewer_first_name: str | None = None):
         self._hydrate(family_id)
-        return super().drafts(family_id)
+        return super().drafts(family_id, viewer_first_name=viewer_first_name)
 
     def approve_action(self, family_id: str, obligation_node_id: str, *, resolution: str = "COMPLETED") -> None:
         self._hydrate(family_id)

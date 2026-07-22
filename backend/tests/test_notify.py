@@ -114,12 +114,12 @@ def test_find_critical_alerts_includes_imminent_care_gaps():
 # --- the cycle -----------------------------------------------------------------
 def test_cycle_sends_one_digest_then_never_repeats():
     store = _seeded_store()
-    store.set_profile(DEMO_FAMILY_ID, notify_email="andy@test")
+    store.set_profile(DEMO_FAMILY_ID, notify_email="andy@test")  # legacy opt-in
     log: list = []
     notifier = _notifier(log)
 
     first = run_notification_cycle(store, notifier)
-    assert first["notified"][DEMO_FAMILY_ID] >= 1
+    assert first["notified"][DEMO_FAMILY_ID]["primary"] >= 1
     (msg,) = _sent_messages(log)  # one digest, not one email per alert
     assert msg["To"] == "andy@test"
     assert "🔴" in msg.get_content()
@@ -129,11 +129,45 @@ def test_cycle_sends_one_digest_then_never_repeats():
     assert len(_sent_messages(log)) == 1  # alert-once held
 
 
-def test_cycle_skips_families_without_notify_email():
+def test_cycle_skips_families_where_nobody_opted_in():
     store = _seeded_store()
     log: list = []
     report = run_notification_cycle(store, _notifier(log))
-    assert report["skipped"][DEMO_FAMILY_ID] == "no notify_email set"
+    assert report["skipped"][DEMO_FAMILY_ID] == "nobody opted in"
+    assert _sent_messages(log) == []
+
+
+def test_each_opted_in_member_gets_their_own_digest():
+    store = _seeded_store()
+    store.set_profile(DEMO_FAMILY_ID, member_notifications={
+        "user_andy": {"email": "andy@test"},
+        "user_ali": {"email": "ali@test"},
+    })
+    log: list = []
+    report = run_notification_cycle(store, _notifier(log))
+    assert set(report["notified"][DEMO_FAMILY_ID]) == {"user_andy", "user_ali"}
+    assert {m["To"] for m in _sent_messages(log)} == {"andy@test", "ali@test"}
+
+    # A member opting in later gets the open alerts once; the spouse is NOT re-sent.
+    store.set_profile(DEMO_FAMILY_ID, member_notifications={
+        "user_andy": {"email": "andy@test"},
+        "user_ali": {"email": "ali@test"},
+        "user_late": {"email": "late@test"},
+    })
+    second = run_notification_cycle(store, _notifier(log))
+    assert set(second["notified"][DEMO_FAMILY_ID]) == {"user_late"}
+    assert sum(1 for m in _sent_messages(log) if m["To"] == "late@test") == 1
+    assert sum(1 for m in _sent_messages(log) if m["To"] == "andy@test") == 1
+
+
+def test_member_opt_out_overrides_legacy_family_address():
+    store = _seeded_store()
+    store.set_profile(DEMO_FAMILY_ID,
+                      notify_email="andy@test",  # legacy → primary slot
+                      member_notifications={"primary": {"email": None}})  # opted out
+    log: list = []
+    report = run_notification_cycle(store, _notifier(log))
+    assert report["skipped"][DEMO_FAMILY_ID] == "nobody opted in"
     assert _sent_messages(log) == []
 
 
@@ -147,9 +181,9 @@ def test_cycle_isolates_send_failures():
 
     cfg = SmtpConfig(host="x", port=587, username=None, password=None, sender="x@x")
     report = run_notification_cycle(store, Exploding(cfg))
-    assert "smtp down" in report["errors"][DEMO_FAMILY_ID]
+    assert "smtp down" in report["errors"][f"{DEMO_FAMILY_ID}/primary"]
     # Nothing marked as sent — next healthy cycle retries the same alerts.
-    assert not store.profile(DEMO_FAMILY_ID).get("notified_alerts")
+    assert not store.profile(DEMO_FAMILY_ID).get("notified_alerts_by_member")
 
 
 def test_auto_sync_cycle_runs_notifications_when_notifier_present():
@@ -157,7 +191,7 @@ def test_auto_sync_cycle_runs_notifications_when_notifier_present():
     store.set_profile(DEMO_FAMILY_ID, notify_email="andy@test")
     log: list = []
     report = run_cycle(store, extractor=None, notifier=_notifier(log))
-    assert report["notifications"]["notified"][DEMO_FAMILY_ID] >= 1
+    assert report["notifications"]["notified"][DEMO_FAMILY_ID]["primary"] >= 1
     assert len(_sent_messages(log)) == 1
 
     no_notifier = run_cycle(store, extractor=None)

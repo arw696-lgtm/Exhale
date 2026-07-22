@@ -131,45 +131,92 @@ def find_critical_alerts(store, family_id: str, *, now: datetime | None = None) 
     return alerts
 
 
-def run_notification_cycle(store, notifier: EmailNotifier, *, now: datetime | None = None) -> dict:
-    """One pass over all families: email each its *new* critical alerts.
+def member_recipients(profile: dict) -> dict[str, str]:
+    """Who gets 🔴 alerts: each opted-in member's address, keyed by member.
 
-    Sent alert keys persist in the profile so nothing is re-sent; one digest
-    per family per cycle; per-family failures isolated like auto-sync.
+    Per-member entries live in ``member_notifications`` ({user_id: {email}}).
+    A legacy family-level ``notify_email`` reads as the ``primary`` member's
+    opt-in unless a per-member entry has since overridden that slot (including
+    overriding it to None — an explicit opt-out beats the legacy value).
+    """
+
+    from exhale.connections import LEGACY_KEY
+
+    recipients: dict[str, str] = {}
+    legacy = profile.get("notify_email")
+    if legacy:
+        recipients[LEGACY_KEY] = legacy
+    for member, prefs in (profile.get("member_notifications") or {}).items():
+        email = (prefs or {}).get("email")
+        if email:
+            recipients[member] = email
+        else:
+            recipients.pop(member, None)  # explicit opt-out
+    return recipients
+
+
+def _sent_keys(profile: dict, member: str) -> set[str]:
+    """A member's already-alerted keys (legacy family-level set seeds the
+    primary member so nothing is re-sent across the upgrade)."""
+
+    from exhale.connections import LEGACY_KEY
+
+    by_member = profile.get("notified_alerts_by_member") or {}
+    keys = set(by_member.get(member) or [])
+    if member == LEGACY_KEY:
+        keys |= set(profile.get("notified_alerts") or [])
+    return keys
+
+
+def run_notification_cycle(store, notifier: EmailNotifier, *, now: datetime | None = None) -> dict:
+    """One pass over all families: email each opted-in member their *new*
+    critical alerts.
+
+    Each member decides individually whether they get alerts and carries
+    their own sent-keys set (a member who opts in later gets the currently
+    open alerts once — their spouse is not re-sent them). One digest per
+    member per cycle; per-member and per-family failures isolated.
     """
 
     report: dict = {"notified": {}, "skipped": {}, "errors": {}}
     for family_id in store.family_ids():
         try:
             profile = store.profile(family_id)
-            to = profile.get("notify_email")
-            if not to:
-                report["skipped"][family_id] = "no notify_email set"
+            recipients = member_recipients(profile)
+            if not recipients:
+                report["skipped"][family_id] = "nobody opted in"
                 continue
-            already = set(profile.get("notified_alerts") or [])
-            alerts = [a for a in find_critical_alerts(store, family_id, now=now)
-                      if a["key"] not in already]
-            if not alerts:
+            alerts = find_critical_alerts(store, family_id, now=now)
+            by_member = dict(profile.get("notified_alerts_by_member") or {})
+            notified: dict[str, int] = {}
+            for member, to in sorted(recipients.items()):
+                try:
+                    already = _sent_keys(profile, member)
+                    fresh = [a for a in alerts if a["key"] not in already]
+                    if not fresh:
+                        continue
+                    lines = "\n".join(a["line"] for a in fresh)
+                    notifier.send(
+                        to,
+                        subject=f"Exhale: {len(fresh)} critical item"
+                                f"{'s' if len(fresh) != 1 else ''} need attention",
+                        body=(
+                            f"{lines}\n\n"
+                            "Open your Exhale briefing to act on these.\n"
+                            "— Exhale (you get each alert once; the briefing "
+                            "always has the live picture)"
+                        ),
+                    )
+                    by_member[member] = sorted(already | {a["key"] for a in fresh})
+                    notified[member] = len(fresh)
+                except Exception as exc:  # noqa: BLE001 — one member never blocks another
+                    log.warning("notify %s/%s failed: %s", family_id, member, exc)
+                    report["errors"][f"{family_id}/{member}"] = str(exc)
+            if notified:
+                store.set_profile(family_id, notified_alerts_by_member=by_member)
+                report["notified"][family_id] = notified
+            elif family_id not in {k.split("/")[0] for k in report["errors"]}:
                 report["skipped"][family_id] = "nothing new"
-                continue
-
-            lines = "\n".join(a["line"] for a in alerts)
-            notifier.send(
-                to,
-                subject=f"Exhale: {len(alerts)} critical item"
-                        f"{'s' if len(alerts) != 1 else ''} need attention",
-                body=(
-                    f"{lines}\n\n"
-                    "Open your Exhale briefing to act on these.\n"
-                    "— Exhale (you get each alert once; the briefing always has "
-                    "the live picture)"
-                ),
-            )
-            store.set_profile(
-                family_id,
-                notified_alerts=sorted(already | {a["key"] for a in alerts}),
-            )
-            report["notified"][family_id] = len(alerts)
         except Exception as exc:  # noqa: BLE001 — one family never stalls another
             log.warning("notify %s failed: %s", family_id, exc)
             report["errors"][family_id] = str(exc)
