@@ -1,6 +1,6 @@
 # Exhale — Full Project Scope & Status
 
-*As of 2026-07-22 · 21 PRs merged · 412 tests (404 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
+*As of 2026-07-22 · 23 PRs merged · 422 tests (414 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
 
 This is the complete map of the project: what Exhale is, what has been built,
 the design laws it runs on, and — most importantly for gap analysis — an honest
@@ -166,7 +166,40 @@ run hard enough to earn the right to be a product.
   + feed link), **Add-to-calendar** on work windows *and* care gaps.
 - ~30 REST endpoints (see README table); auth-gated; CI: pytest + vite build.
 
-### 3.9 Validation performed on real data
+### 3.9 Added since the first edition of this document (PRs #14–#23)
+- **Full-code bug hunt** — seven reproduced-then-fixed defects (tz-mixed
+  scheduling 500, month-end RRULE crash, invalid ICS output, duplicate
+  confirms/photos/scans, elapsed-time work windows) + feed-token hardening.
+- **Outbound notifications** (`notify.py`) — 🔴 items emailed, one digest per
+  cycle, each alert exactly once; runs with auto-sync; per-family opt-in.
+- **Why-traces** — every briefing item expands to its provenance (source
+  document, tier, observed/inferred, named unknowns).
+- **Signup lockdown** — invite-only flag + bootstrap code; per-IP rate
+  limiting on auth/OAuth surfaces.
+- **Family-structure work** (see `FAMILY_STRUCTURES.md`) — role-flexible
+  caregivers; the **HELPER** tier (weekday-scoped invites, default-deny
+  enforcement, provenance-free sharing — the §3.3 seam).
+- **Multi-child coverage** — N children over shared caregivers; gaps merge
+  per child, work windows intersect (free only when *every* child is
+  covered); legacy profiles normalize automatically.
+- **Birthdates** (`ages.py`) — aging-out prompts, sibling-sitter
+  suggestions, grade inference; asks only, never decisions; encryption
+  pinned by a live-Postgres no-plaintext test.
+- **Founder's thesis** (§1.1) + **time-back language pass** across the
+  product surface ("Find Your Time", day-specific confirmations, honest
+  two-state all-clear).
+- **"What Exhale Handled This Week"** (`handled.py`) — resolved-items log
+  (hooks at existing resolution points only), relief-toned closing recap,
+  and the quiet-week distinction (zero resolved + open 🔴/🟡 never reads
+  as calm).
+- **Personal intentions → "Time For What Matters"** (`intentions.py`) —
+  a 30-second input laid next to the engine's real windows (human decides,
+  no auto-assignment), anti-guilt staleness (4-week check-in → reconfirm /
+  let go / auto-stale), one matched-window follow-up ("did that happen?" —
+  the thesis's only measurement point; stored, not yet aggregated), and a
+  nudge that shows once, never weekly.
+
+### 3.10 Validation performed on real data
 - Retro-scan and live searches over the founder's actual Gmail surfaced real
   obligations (camps, forms, reschedules) and exposed the failure modes that
   produced the credibility layer.
