@@ -5,8 +5,13 @@ import React from "react";
  *
  * Relief, not achievement-bragging: the point isn't that the software did
  * things, it's that the family didn't have to carry them. Renders only real
- * entries from the resolved-items log; a quiet week says so honestly and a
- * missing log (offline fixture) renders nothing.
+ * entries from the resolved-items log; a missing log (offline fixture)
+ * renders nothing.
+ *
+ * The quiet-week distinction: zero resolutions reads "a quiet week" ONLY
+ * when nothing urgent is open either (backend stamps `open_urgent`). Zero
+ * resolutions while 🔴/🟡 items sit open gets a neutral line instead —
+ * a week where the system is behind must never read as calm.
  */
 const TYPE_ICON = {
   dependency_gap: "✓",
@@ -29,9 +34,15 @@ export default function HandledRecap({ handled }) {
         🌬 What Exhale Handled This Week
       </h2>
       {count === 0 ? (
-        <p className="font-micro text-sm text-sanctuary-navy/60">
-          A quiet week — nothing needed catching.
-        </p>
+        (handled.open_urgent ?? 0) === 0 ? (
+          <p className="font-micro text-sm text-sanctuary-navy/60">
+            A quiet week — nothing needed catching.
+          </p>
+        ) : (
+          <p className="font-micro text-sm text-sanctuary-navy/60">
+            Nothing resolved yet this week — the items above are still open.
+          </p>
+        )
       ) : (
         <>
           <p className="mb-3 font-micro text-sm text-sanctuary-navy/70">
