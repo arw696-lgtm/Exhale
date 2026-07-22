@@ -95,16 +95,19 @@ def run_incremental_sync(
     *,
     now: datetime | None = None,
     extractor=extract_payload,
+    watermark_key: str = "last_sync_at",
 ) -> RetroScanResult:
     """Sync only what's new since the last run (Blueprint §2 Layer 1).
 
     The last-sync watermark lives in the family profile, so under the
     persistent store it survives restarts. First run falls back to the full
-    6-month retro scan window.
+    6-month retro scan window. ``watermark_key`` scopes the watermark per
+    connected account — two members' inboxes each advance their own clock
+    (sharing one would make the newer account silently skip its older mail).
     """
 
     now = now or datetime.now(timezone.utc)
-    last = store.profile(family_id).get("last_sync_at")
+    last = store.profile(family_id).get(watermark_key)
     if last:
         since = datetime.fromisoformat(last)
         days = max((now - since).total_seconds() / 86400.0, 0.0)
@@ -114,7 +117,7 @@ def run_incremental_sync(
     result = run_retro_scan(
         connector, store, family_id, ctx, days=days, now=now, extractor=extractor
     )
-    store.set_profile(family_id, last_sync_at=now.isoformat())
+    store.set_profile(family_id, **{watermark_key: now.isoformat()})
     return result
 
 

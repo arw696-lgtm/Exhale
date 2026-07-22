@@ -469,10 +469,13 @@ def test_callback_stores_tokens_and_connections_reflects_it(monkeypatch):
         "scope": "https://www.googleapis.com/auth/calendar.readonly"})
     r = client.get("/v1/oauth/google/callback", params={"code": "abc", "state": state})
     assert r.status_code == 200
-    assert r.json() == {"status": "connected", "provider": "google", "family_id": fam}
+    # Anonymous dev-mode connect files under the legacy/primary account slot.
+    assert r.json() == {"status": "connected", "provider": "google",
+                        "family_id": fam, "account": "primary"}
 
     conns = client.get(f"/v1/families/{fam}/connections").json()
     assert conns["google"]["connected"] is True
+    assert conns["google"]["accounts"] == 1
     assert "calendar.readonly" in conns["google"]["scopes"][0]
 
 
