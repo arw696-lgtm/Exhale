@@ -30,7 +30,7 @@ const EMPTY_CG = {
 };
 
 export default function SetupPanel({ familyId, onSaved }) {
-  const [children, setChildren] = useState([""]);
+  const [children, setChildren] = useState([{ name: "", birthdate: "" }]);
   const [caregivers, setCaregivers] = useState([{ ...EMPTY_CG }, { ...EMPTY_CG }]);
   const [school, setSchool] = useState({ name: "", first: "", last: "" });
   const [busy, setBusy] = useState(false);
@@ -38,13 +38,15 @@ export default function SetupPanel({ familyId, onSaved }) {
 
   const setCg = (i, patch) =>
     setCaregivers((cgs) => cgs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
-  const setChildName = (i, name) =>
-    setChildren((cs) => cs.map((c, j) => (j === i ? name : c)));
+  const setChild = (i, patch) =>
+    setChildren((cs) => cs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
 
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
-    const kids = children.map((c) => c.trim()).filter(Boolean);
+    const kids = children
+      .map((c) => ({ ...c, name: c.name.trim() }))
+      .filter((c) => c.name);
     const named = caregivers.filter((c) => c.name.trim());
     if (kids.length === 0 || named.length === 0) {
       setError("Name at least one child and one caregiver.");
@@ -59,7 +61,10 @@ export default function SetupPanel({ familyId, onSaved }) {
         ? { name: school.name.trim(), first_day: school.first, last_day: school.last }
         : null;
     const model = {
-      children: kids.map((name) => ({ recipient: { name }, school: schoolIn })),
+      children: kids.map((c) => ({
+        recipient: { name: c.name, birthdate: c.birthdate || null },
+        school: schoolIn,
+      })),
       caregivers: named.map((c) => ({
         name: c.name.trim(),
         role: c.role,
@@ -103,11 +108,15 @@ export default function SetupPanel({ familyId, onSaved }) {
             Children who need supervision
           </label>
           <div className="space-y-2">
-            {children.map((name, i) => (
+            {children.map((child, i) => (
               <div key={i} className="flex items-center gap-2">
-                <input className={input} value={name}
+                <input className={input} value={child.name}
                        placeholder={i === 0 ? "e.g. Stevie" : "Another child"}
-                       onChange={(e) => setChildName(i, e.target.value)} />
+                       onChange={(e) => setChild(i, { name: e.target.value })} />
+                <input type="date" value={child.birthdate} className={input}
+                       aria-label={`Birthdate of child ${i + 1} (optional)`}
+                       title="Birthdate (optional) — powers age-based prompts and grade lookup; Exhale never changes supervision on its own"
+                       onChange={(e) => setChild(i, { birthdate: e.target.value })} />
                 {children.length > 1 && (
                   <button type="button" aria-label={`Remove child ${i + 1}`}
                           onClick={() => setChildren((cs) => cs.filter((_, j) => j !== i))}
@@ -118,10 +127,15 @@ export default function SetupPanel({ familyId, onSaved }) {
               </div>
             ))}
           </div>
-          <button type="button" onClick={() => setChildren((cs) => [...cs, ""])}
+          <button type="button"
+                  onClick={() => setChildren((cs) => [...cs, { name: "", birthdate: "" }])}
                   className="mt-2 text-xs font-medium text-sanctuary-navy/60 underline-offset-2 hover:underline">
             + Add another child
           </button>
+          <p className="mt-1.5 text-xs text-sanctuary-navy/50">
+            Birthdate is optional — it lets Exhale ask the right questions as
+            kids grow (and look up their grade), never decide for you.
+          </p>
         </div>
 
         {caregivers.map((cg, i) => (
