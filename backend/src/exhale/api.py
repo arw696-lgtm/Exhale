@@ -688,6 +688,7 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
         learned_rules=[r.to_dict() for r in learn_rules(store.ledger(family_id))],
         waiting_on=build_waiting_watch(waiting_items) if waiting_items else None,
         handled=handled_this_week(profile),
+        time_for_what_matters=_time_for_what_matters(profile),
     )
 
 
@@ -706,6 +707,41 @@ def _care_watch_for(profile: dict) -> dict | None:
     # Age-triggered questions ride along (asks, never actions — exhale.ages).
     watch["age_prompts"] = age_prompts(model)
     return watch
+
+
+def _time_for_what_matters(profile: dict) -> dict | None:
+    """Open windows next to open intentions for the briefing.
+
+    Reuses the engine's own ranking (:func:`suggest_work_windows`) for every
+    caregiver in the coverage model — no new window math, no auto-assignment.
+    Returns ``None`` without a coverage model *and* without intentions (nothing
+    to say); with intentions but no model, the block carries them windowless.
+    """
+
+    from exhale.coverage import suggest_work_windows
+    from exhale.intentions import build_time_for_what_matters
+
+    intentions = list(profile.get("intentions") or [])
+    config = profile.get("coverage_model")
+    if not config and not intentions:
+        return None
+
+    windows: list[dict] = []
+    if config:
+        model = CoverageModelIn(**config)
+        family = build_family(model)
+        start, end = default_range(days=7)
+        for caregiver in model.caregivers:
+            try:
+                for w in suggest_work_windows(family, caregiver.name, start, end,
+                                              count=3, min_hours=1.5):
+                    windows.append(w.to_dict())
+            except KeyError:
+                continue
+        # The household's best few, longest first, presented chronologically.
+        windows.sort(key=lambda w: -w["duration_hours"])
+        windows = sorted(windows[:3], key=lambda w: w["start"])
+    return build_time_for_what_matters(windows, intentions)
 
 
 @app.get("/v1/families/{family_id}/ledger")
@@ -1258,6 +1294,71 @@ def resolve_waiting(
             brief_description=f"{resolved['who']} — {resolved['about']} (loop closed)",
         )
     return {"family_id": family_id, "item_id": item_id, "status": "resolved"}
+
+
+# --- Personal intentions: what the found time is FOR --------------------------------
+class IntentionIn(BaseModel):
+    """One thing someone is trying to find time for. A sentence, not a task."""
+
+    description: str
+    type: str = "standing"  # standing | one_off
+    target_deadline: str | None = None
+    created_by: str | None = None  # defaults to the logged-in member's name
+
+
+class IntentionStatusIn(BaseModel):
+    status: str  # open | matched | dismissed
+
+
+@app.get("/v1/families/{family_id}/intentions")
+def get_intentions(family_id: str = Depends(require_family_access)) -> dict:
+    """Every intention with its status (open ones drive Time For What Matters)."""
+
+    items = list(store.profile(family_id).get("intentions") or [])
+    return {"family_id": family_id, "count": len(items), "intentions": items}
+
+
+@app.post("/v1/families/{family_id}/intentions")
+def add_intention(
+    req: IntentionIn,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
+    """Log an intention — under 30 seconds, by design."""
+
+    from exhale.intentions import new_intention
+
+    created_by = req.created_by or (user.display_name if user else "household")
+    try:
+        item = new_intention(family_id, created_by, req.description,
+                             type_=req.type, target_deadline=req.target_deadline)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    items = list(store.profile(family_id).get("intentions") or [])
+    items.append(item)
+    store.set_profile(family_id, intentions=items)
+    return {"family_id": family_id, **item}
+
+
+@app.post("/v1/families/{family_id}/intentions/{intention_id}/status")
+def set_intention_status(
+    intention_id: str,
+    req: IntentionStatusIn,
+    family_id: str = Depends(require_family_access),
+) -> dict:
+    """Matched (you scheduled it), dismissed (no longer relevant), or reopened."""
+
+    from exhale.intentions import set_status
+
+    items = list(store.profile(family_id).get("intentions") or [])
+    try:
+        items = set_status(items, intention_id, req.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    store.set_profile(family_id, intentions=items)
+    return {"family_id": family_id, "intention_id": intention_id, "status": req.status}
 
 
 class MissingSourceIn(BaseModel):

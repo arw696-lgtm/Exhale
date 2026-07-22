@@ -118,6 +118,7 @@ Key endpoints (see `src/exhale/api.py`):
 | `POST` | `/v1/families/{fid}/scan` | retro-scan raw messages → snapshot (§6) |
 | `POST` | `/v1/families/{fid}/sync/gmail` | pull new Gmail mail through the pipeline (§1) |
 | `GET`/`PUT` | `/v1/families/{fid}/notifications` (+ `/test`, `/run`) | where 🔴 critical alerts get emailed (each exactly once) |
+| `GET`/`POST` | `/v1/families/{fid}/intentions` (+ `/{id}/status`) | personal intentions — what the found time is *for* (Time For What Matters) |
 | `POST`/`GET` | `/v1/families/{fid}/helper-invites` · `/helpers` (+ `PUT`/`DELETE` `/helpers/{id}`) | scoped-caregiver invites + roster (members only) |
 | `GET` | `/v1/families/{fid}/helper-view` | a helper's scoped home: their care days + shared items (only view a helper may reach) |
 | `POST` | `/v1/auth/signup` | create account (+ new family, or join via invite code) |
