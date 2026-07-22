@@ -107,14 +107,20 @@ class HouseholdStore:
             return sorted(set(self._graphs) | set(self._profiles) | set(self._ledger))
 
     # -- action layer (§6, §10) ----------------------------------------------
-    def drafts(self, family_id: str) -> list[ActionDraft]:
-        """Generate approvable action drafts for every open dependency gap."""
+    def drafts(self, family_id: str, viewer_first_name: str | None = None) -> list[ActionDraft]:
+        """Generate approvable action drafts for every open dependency gap.
+
+        Drafts render fresh per call, so the greeting can address whoever is
+        actually looking — pass the viewing member's first name; the founding
+        member's stored name is only the anonymous-mode fallback.
+        """
 
         with self._lock:
             graph = self._graphs.get(family_id)
             if graph is None:
                 return []
-            parent = self._profiles.get(family_id, {}).get("parent_first_name", "there")
+            parent = (viewer_first_name
+                      or self._profiles.get(family_id, {}).get("parent_first_name", "there"))
             return ActionEngine(graph, parent_first_name=parent).draft_all()
 
     def approve_action(
