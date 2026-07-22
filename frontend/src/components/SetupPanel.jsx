@@ -99,7 +99,8 @@ export default function SetupPanel({ familyId, onSaved }) {
       </header>
       <p className="mb-4 font-micro text-sm text-sanctuary-navy/60">
         Tell Exhale who needs looking after and who's around. Two minutes — then
-        care gaps and work windows start computing themselves.
+        Exhale starts spotting the gaps that need covering and the time that's
+        actually yours.
       </p>
 
       <form onSubmit={submit} className="space-y-4 font-micro text-sm">

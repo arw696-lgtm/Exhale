@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import { fetchWorkWindows, scheduleEvent } from "../data/api.js";
 
 /**
- * Work Windows — "when can I work this week?"
+ * Find Your Time — "when is my time actually mine this week?"
  *
  * The intent side of the coverage math: a caregiver's open windows are the
- * times they're free AND the child is covered by someone else. Renders each
- * suggested block with what makes it workable ("Stevie at ISLA").
+ * times they're free AND the children are covered by someone else. The math
+ * is unchanged — only the framing: this is time back for work, a workout, or
+ * a call you owe someone, not "schedule optimization."
  */
 function fmt(iso) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -20,6 +21,15 @@ function fmtDay(iso) {
   });
 }
 
+function dayPart(iso) {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString(undefined, { weekday: "long" });
+  const h = d.getHours();
+  return `${day} ${h < 12 ? "morning" : h < 17 ? "afternoon" : "evening"}`;
+}
+
+const PROVIDER_LABEL = { google: "Google", microsoft: "Outlook", feed: "Exhale" };
+
 export default function WorkWindowsPanel({ familyId }) {
   const [caregiver, setCaregiver] = useState("");
   const [plan, setPlan] = useState(null);
@@ -31,8 +41,8 @@ export default function WorkWindowsPanel({ familyId }) {
     setError(null);
     try {
       const result = await scheduleEvent(
-        { title: `Work block (Exhale)`, start: w.start, end: w.end,
-          description: `Suggested by Exhale — ${w.child_covered_by.join(", ")}` },
+        { title: `Protected time (Exhale)`, start: w.start, end: w.end,
+          description: `Time that's yours — ${w.child_covered_by.join(", ")}. (Exhale)` },
         familyId
       );
       setAdded((a) => ({ ...a, [w.start]: result.provider }));
@@ -64,7 +74,7 @@ export default function WorkWindowsPanel({ familyId }) {
     <section className="mb-8 rounded-card bg-white p-5 shadow-card">
       <header className="mb-3">
         <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-          ⏳ When Can I Work?
+          ⏳ Find Your Time
         </h2>
       </header>
 
@@ -80,7 +90,7 @@ export default function WorkWindowsPanel({ familyId }) {
           disabled={busy || !caregiver.trim()}
           className="whitespace-nowrap rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-1.5 font-micro text-sm font-medium text-sanctuary-navy transition hover:bg-sage-release/20 disabled:opacity-50"
         >
-          {busy ? "Looking…" : "Find my windows"}
+          {busy ? "Looking…" : "Find my time"}
         </button>
       </form>
 
@@ -88,8 +98,9 @@ export default function WorkWindowsPanel({ familyId }) {
         <div className="mt-4">
           {plan.windows.length === 0 ? (
             <p className="font-micro text-sm text-sanctuary-navy/60">
-              No open windows found in the next week — every free stretch has the
-              kids uncovered.
+              Couldn't find you a clear stretch this week — every free moment,
+              the kids need someone. Syncing more calendars sometimes surfaces
+              time you can't see from here.
             </p>
           ) : (
             <ul className="space-y-2">
@@ -105,14 +116,15 @@ export default function WorkWindowsPanel({ familyId }) {
                   </span>
                   {added[w.start] ? (
                     <span className="whitespace-nowrap text-xs font-medium text-sanctuary-navy/60">
-                      ✓ on your {added[w.start] === "feed" ? "Exhale" : added[w.start]} calendar
+                      ✓ {dayPart(w.start)} is yours — on your{" "}
+                      {PROVIDER_LABEL[added[w.start]] ?? added[w.start]} calendar
                     </span>
                   ) : (
                     <button
                       onClick={() => addToCalendar(w)}
                       className="whitespace-nowrap rounded-full border border-sage-release/40 bg-sage-release/10 px-3 py-1 text-xs font-medium text-sanctuary-navy transition hover:bg-sage-release/20"
                     >
-                      + Add to my calendar
+                      + Keep this time
                     </button>
                   )}
                 </li>
@@ -120,8 +132,9 @@ export default function WorkWindowsPanel({ familyId }) {
             </ul>
           )}
           <p className="mt-3 font-micro text-xs text-sanctuary-navy/40">
-            {plan.summary.total_hours}h suggested across the next week — times
-            you're free and the kids are covered.
+            {plan.windows.length} window{plan.windows.length === 1 ? "" : "s"} of
+            real time this week — {plan.summary.total_hours} hours that are
+            genuinely yours: you're free, and the kids are looked after.
           </p>
         </div>
       )}
