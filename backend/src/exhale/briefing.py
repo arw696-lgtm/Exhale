@@ -39,6 +39,7 @@ def build_weekly_briefing(
     care_watch: dict | None = None,
     learned_rules: list[dict] | None = None,
     waiting_on: dict | None = None,
+    handled: dict | None = None,
 ) -> dict:
     """Assemble the Weekly COO Briefing payload from a family's graph.
 
@@ -83,4 +84,7 @@ def build_weekly_briefing(
         "learned_rules": learned_rules or [],
         # Threads where the ball is in someone else's court (None = none tracked).
         "waiting_on": waiting_on,
+        # Closing note: what resolved this week (None = log not supplied;
+        # count 0 = a genuinely quiet week, rendered honestly, never padded).
+        "handled": handled,
     }

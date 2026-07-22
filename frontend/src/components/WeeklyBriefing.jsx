@@ -4,6 +4,7 @@ import DependencyWatch from "./DependencyWatch.jsx";
 import CalendarConflicts from "./CalendarConflicts.jsx";
 import CareWatch from "./CareWatch.jsx";
 import ConnectionsPanel from "./ConnectionsPanel.jsx";
+import HandledRecap from "./HandledRecap.jsx";
 import HelperInvitePanel from "./HelperInvitePanel.jsx";
 import PhotoDrop from "./PhotoDrop.jsx";
 import ReviewQueue from "./ReviewQueue.jsx";
@@ -60,18 +61,32 @@ export default function WeeklyBriefing({
         <p className="font-micro text-sm text-sanctuary-navy/60">{briefing.week_of}</p>
       </header>
 
-      {/* Fresh-household hero */}
-      {isAllClear && (
-        <section className="mb-8 rounded-card bg-white p-8 text-center shadow-card">
-          <p className="font-display text-2xl italic text-sanctuary-navy">
-            All clear. Breathe out.
-          </p>
-          <p className="mx-auto mt-3 max-w-md font-micro text-sm text-sanctuary-navy/60">
-            Your household graph is empty so far. Connect Gmail or forward a school
-            email, and Exhale will start catching obligations before they catch you.
-          </p>
-        </section>
-      )}
+      {/* All-clear hero. Two very different quiets: an established household
+          with nothing urgent gets relief (the whole point of the product);
+          a brand-new one gets onboarding. */}
+      {isAllClear &&
+        (briefing.care_watch || (briefing.learned_rules?.length ?? 0) > 0 ? (
+          <section className="mb-8 rounded-card bg-white p-8 text-center shadow-card">
+            <p className="font-display text-2xl italic text-sanctuary-navy">
+              Nothing urgent this week. Breathe out.
+            </p>
+            <p className="mx-auto mt-3 max-w-md font-micro text-sm text-sanctuary-navy/60">
+              Exhale is watching the calendars and the inbox — nothing needs you
+              right now. A good week to take something back: the workout, the
+              call you owe someone. "Find Your Time" below can tell you when.
+            </p>
+          </section>
+        ) : (
+          <section className="mb-8 rounded-card bg-white p-8 text-center shadow-card">
+            <p className="font-display text-2xl italic text-sanctuary-navy">
+              All clear. Breathe out.
+            </p>
+            <p className="mx-auto mt-3 max-w-md font-micro text-sm text-sanctuary-navy/60">
+              Your household graph is empty so far. Connect Gmail or forward a school
+              email, and Exhale will start catching obligations before they catch you.
+            </p>
+          </section>
+        ))}
 
       {/* Critical threats */}
       {criticalCount > 0 && (
@@ -145,6 +160,9 @@ export default function WeeklyBriefing({
 
       {/* Calendar conflicts */}
       <CalendarConflicts conflicts={briefing.calendar_conflicts} />
+
+      {/* Closing note — what resolved this week, so the family didn't carry it */}
+      <HandledRecap handled={briefing.handled} />
 
       <footer className="mt-10 text-center font-micro text-xs text-sanctuary-navy/40">
         Take a deep breath — your memory systems are secure.

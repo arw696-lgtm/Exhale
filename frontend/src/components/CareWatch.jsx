@@ -29,6 +29,17 @@ function formatWindow(gap) {
 
 const gapKey = (gap) => `${gap.recipient ?? ""}|${gap.start}|${gap.end}`;
 
+const PROVIDER_LABEL = { google: "Google", microsoft: "Outlook", feed: "Exhale" };
+
+// "Saturday" / "Thursday afternoon" — the concrete stretch this covers.
+function coveredLabel(gap) {
+  const d = new Date(gap.start);
+  const day = d.toLocaleDateString(undefined, { weekday: "long" });
+  if ((gap.duration_hours ?? 24) >= 8) return day; // most of the day → just the day
+  const h = d.getHours();
+  return `${day} ${h < 12 ? "morning" : h < 17 ? "afternoon" : "evening"}`;
+}
+
 export default function CareWatch({ careWatch, familyId, live = false }) {
   const [added, setAdded] = useState({}); // gap key → provider it landed on
   const [error, setError] = useState(null);
@@ -98,7 +109,8 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
                 {live &&
                   (added[gapKey(gap)] ? (
                     <span className="text-xs font-medium text-sanctuary-navy/60">
-                      ✓ on your {added[gapKey(gap)] === "feed" ? "Exhale" : added[gapKey(gap)]} calendar
+                      ✓ {coveredLabel(gap)} is handled — sitter reminder on your{" "}
+                      {PROVIDER_LABEL[added[gapKey(gap)]] ?? added[gapKey(gap)]} calendar
                     </span>
                   ) : (
                     <button
