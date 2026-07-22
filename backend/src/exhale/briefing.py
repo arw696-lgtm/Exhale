@@ -65,6 +65,22 @@ def build_weekly_briefing(
     ]
     advisory = [_gap_to_item(g) for g in gaps if g.threat_level is ThreatLevel.ADVISORY]
 
+    # The handled recap must never read "quiet week" while 🔴/🟡 items are
+    # still open — "nothing needed catching" and "the system is behind" are
+    # different weeks. Count every open urgent item across the blocks this
+    # briefing carries and stamp it on the recap for the UI to honor.
+    if handled is not None:
+        open_urgent = len(critical) + len(dependency_watch)
+        if care_watch:
+            cw = care_watch.get("summary") or {}
+            open_urgent += int(cw.get("critical") or 0) + int(cw.get("important") or 0)
+        if waiting_on:
+            open_urgent += sum(
+                1 for item in waiting_on.get("items", [])
+                if item.get("threat_level") in ("CRITICAL", "IMPORTANT")
+            )
+        handled = {**handled, "open_urgent": open_urgent}
+
     return {
         "product": "Exhale",
         "view": "weekly_coo_briefing",

@@ -74,11 +74,16 @@ def test_quiet_week_is_zero_not_fabricated():
 
 # --- the hooks (API) --------------------------------------------------------------
 def _committed_obligation(fam: str) -> str:
+    """Commit an obligation whose deadline is 5 days out → 🟡 IMPORTANT band."""
+
+    from datetime import date as _date
+
+    soon = _date.today() + timedelta(days=5)
     client.post(f"/v1/families/{fam}/extractions", json={
         "extracted_event": "Camp registration",
         "target_person_name": "Stevie",
-        "event_date": "2026-09-10",
-        "deadline_date": "2026-08-30",
+        "event_date": (soon + timedelta(days=10)).isoformat(),
+        "deadline_date": soon.isoformat(),
         "action_required": True,
         "confidence_score": 0.97,
     })
@@ -143,3 +148,50 @@ def test_untouched_family_has_honest_quiet_recap():
     handled = client.get(f"/v1/families/{fam}/briefing").json()["handled"]
     assert handled["count"] == 0
     assert handled["items"] == []
+    # Nothing open either → the UI may honestly say "a quiet week".
+    assert handled["open_urgent"] == 0
+
+
+def test_zero_resolved_with_open_urgent_items_is_not_a_quiet_week():
+    """A week where the system is behind must never read as calm."""
+
+    fam = "fam_handled_behind"
+    _committed_obligation(fam)  # open 🔴/🟡 gap, nothing resolved yet
+    briefing = client.get(f"/v1/families/{fam}/briefing").json()
+    assert (briefing["summary"]["critical_count"]
+            + briefing["summary"]["dependency_watch_count"]) >= 1
+    handled = briefing["handled"]
+    assert handled["count"] == 0
+    assert handled["open_urgent"] >= 1  # UI shows the neutral line, not "quiet"
+
+
+def test_open_urgent_counts_care_gaps_and_stale_waits():
+    fam = "fam_handled_urgent_mix"
+    # A child uncovered while the only caregiver works every day → 🔴 gaps.
+    client.put(f"/v1/families/{fam}/coverage-model", json={
+        "children": [{"recipient": {"name": "Stevie", "supervised_start": "08:00:00",
+                                    "supervised_end": "18:00:00"}}],
+        "caregivers": [{"name": "Andy", "work_pattern": {
+            "weekdays": [0, 1, 2, 3, 4, 5, 6], "start": "08:00:00",
+            "end": "18:00:00", "basis": "OBSERVED"}}],
+    })
+    # A wait that has gone critically stale (>14 days of silence).
+    client.post(f"/v1/families/{fam}/waiting", json={
+        "who": "Hennepin County", "about": "arborist follow-up",
+        "since": "2026-06-01",
+    })
+    handled = client.get(f"/v1/families/{fam}/briefing").json()["handled"]
+    assert handled["count"] == 0
+    assert handled["open_urgent"] >= 2  # care gaps + the stale wait both count
+
+
+def test_resolving_everything_restores_the_quiet_week():
+    fam = "fam_handled_requiet"
+    ob_id = _committed_obligation(fam)
+    before = client.get(f"/v1/families/{fam}/briefing").json()["handled"]
+    assert before["open_urgent"] >= 1
+    client.post(f"/v1/families/{fam}/actions/approve",
+                json={"obligation_node_id": ob_id})
+    after = client.get(f"/v1/families/{fam}/briefing").json()["handled"]
+    assert after["count"] == 1       # the catch is remembered...
+    assert after["open_urgent"] == 0  # ...and nothing urgent remains open
