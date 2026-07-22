@@ -23,21 +23,35 @@ therefore built on the credibility discipline (see §4).
 
 ### 1.1 The second-family thesis
 
-Exhale is being built inside one real household first, and that is a strategy,
-not a limitation: every design law in §4 was forced by a live failure on this
-family's actual data, which is evidence no synthetic test set produces. The
-thesis is that the machinery is family-shaped, not Ward-shaped — obligations
-arriving by email and photo, coverage gaps around school hours and work
-schedules, one parent asking "when can I actually work this week?" — and that
-what's genuinely specific to this household lives in configuration (the
-coverage model, learned rules, connected calendars), not in code. The honest
-qualifier: that thesis is **untested until a second family runs it**, and the
-gate is deliberate — §5C (security audit, invite-only signup, hosting, Google
-verification) is the checklist that must clear before a family we don't share
-a dinner table with is invited in. So the answer to "is this a product or a
-family tool?" is: a family tool being run hard enough to earn the right to be
-a product — and "not yet" stays the answer until §5C says otherwise.
-*(Founder's voice to refine — this paragraph states the intent as built.)*
+In the founder's words:
+
+> I was a pretty functional adult for a long time — I got married later in
+> life, had a child later in life. Then add a wife, a child, a house, a dog,
+> and all the responsibilities that come with them, and life got genuinely
+> hard to manage. There are people I want to connect with and I can't find
+> the time. I want to exercise. I want to be a great parent, a great
+> financial planner — most of all a great husband. I need help finding time.
+> Ali needs help finding time — for doctor's appointments, for exercise, to
+> go get a facial, to do the things that are good for all of us. If this
+> product can help us do that, then I know a lot of other families it could
+> maybe help too. Exhale is exactly what it's meant to be: **a breath for
+> people.**
+>
+> — Andy Ward, founder
+
+The engineering corollary: the bet is that "help us find time" is
+family-shaped, not Ward-shaped. The overload Andy describes — obligations
+arriving faster than anyone can track, care gaps nobody wrote down, two
+adults who can't see where their own hours went — is the modern-household
+default, and what's genuinely specific to this house lives in configuration
+(the coverage model, learned rules, connected calendars), not in code. Every
+design law in §4 was forced by a live failure on this family's actual data —
+evidence no synthetic test set produces. The honest qualifier stands: the
+thesis is **untested until a second family runs it**, and the gate is
+deliberate — §5C (security audit, invite-only signup, hosting, Google
+verification) must clear before a family we don't share a dinner table with
+is invited in. Until then, "not yet" stays the answer — a family tool being
+run hard enough to earn the right to be a product.
 
 ## 2. Architecture (blueprint v2.0, six layers + cross-cutting)
 
