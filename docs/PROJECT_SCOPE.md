@@ -1,6 +1,6 @@
 # Exhale — Full Project Scope & Status
 
-*As of 2026-07-22 · 23 PRs merged · 422 tests (414 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
+*As of 2026-07-22 · 24 PRs merged · 431 tests (423 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
 
 This is the complete map of the project: what Exhale is, what has been built,
 the design laws it runs on, and — most importantly for gap analysis — an honest
@@ -259,6 +259,7 @@ run hard enough to earn the right to be a product.
 | **Client-side key custody** | KEKs derive from a server master secret; true device-held keys are a designed-for swap (§5.1) not yet done. |
 | ~~Open signup~~ **Closed** | `EXHALE_INVITE_ONLY=1` requires an invite code; `EXHALE_BOOTSTRAP_INVITE` lets the operator mint new families. |
 | ~~Rate limiting~~ **Basic** | Per-IP sliding-window limit on auth/OAuth endpoints (`EXHALE_RATE_LIMIT_PER_MINUTE`, in-memory, single-process). Broader abuse controls (captcha, lockout, per-account limits) unbuilt. |
+| ~~OAuth connection displacement~~ **Closed** | Connections are keyed per member (`connections.py`): a second parent connecting Gmail adds their account alongside the first — every sync path iterates all grants, each inbox on its own watermark. Remaining member-level singletons (deliberate, small): one `notify_email` per family; drafts greet the founding member. |
 | **Backups / disaster recovery** | Nothing automated. |
 | **Ledger growth** | Append-only with full-graph rewrite persistence; fine at family scale, needs upsert strategy at scale. |
 | **Observability** | Logs only; no metrics/alerting. |

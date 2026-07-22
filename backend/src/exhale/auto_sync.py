@@ -22,6 +22,7 @@ import logging
 import threading
 from datetime import datetime, timedelta
 
+from exhale.connections import accounts_for, first_account, watermark_key
 from exhale.connectors.gcal import GoogleCalendarConnector
 from exhale.connectors.gmail import GmailConnector
 from exhale.connectors.ics import ICSCalendarConnector
@@ -34,12 +35,20 @@ from exhale.retro_scan import run_incremental_sync
 log = logging.getLogger("exhale.auto_sync")
 
 
-def _tokens(profile: dict, provider: str) -> dict | None:
-    conns = profile.get("connections") or {}
-    tokens = conns.get(provider)
-    if tokens and (tokens.get("refresh_token") or tokens.get("access_token")):
-        return tokens
-    return None
+def _accounts(profile: dict, provider: str) -> dict[str, dict]:
+    """Every member's usable grant for ``provider`` (legacy shape included)."""
+
+    return accounts_for(profile.get("connections"), provider)
+
+
+def _tokens(profile: dict, provider: str, account: str | None = None) -> dict | None:
+    """One grant — the remembered ``account``'s if it still exists, else the
+    first available (a revoked member's replay degrades, never breaks)."""
+
+    accounts = _accounts(profile, provider)
+    if account and account in accounts:
+        return accounts[account]
+    return first_account(profile.get("connections"), provider)
 
 
 def _known_children(profile: dict) -> list[str]:
@@ -55,23 +64,37 @@ def _known_children(profile: dict) -> list[str]:
 
 
 def _sync_gmail(store, family_id: str, profile: dict, extractor) -> dict:
-    tokens = _tokens(profile, "google")
-    if tokens is None:
+    """Pull EVERY connected member's inbox — two parents' Gmails both feed the
+    family graph, each on its own watermark. Per-account failures isolated."""
+
+    accounts = _accounts(profile, "google")
+    if not accounts:
         return {"skipped": "google not connected"}
     cfg = config_from_env("google")
-    connector = GmailConnector(
-        access_token=tokens.get("access_token"),
-        refresh_token=tokens.get("refresh_token"),
-        client_id=cfg.client_id if cfg else None,
-        client_secret=cfg.client_secret if cfg else None,
-    )
     ctx = ExtractionContext(known_children=_known_children(profile))
-    result = run_incremental_sync(connector, store, family_id, ctx, extractor=extractor)
-    return {"scanned": result.scanned, "committed": result.committed}
+    report: dict = {}
+    for user_key, tokens in sorted(accounts.items()):
+        try:
+            connector = GmailConnector(
+                access_token=tokens.get("access_token"),
+                refresh_token=tokens.get("refresh_token"),
+                client_id=cfg.client_id if cfg else None,
+                client_secret=cfg.client_secret if cfg else None,
+            )
+            result = run_incremental_sync(
+                connector, store, family_id, ctx, extractor=extractor,
+                watermark_key=watermark_key("google", user_key),
+            )
+            report[user_key] = {"scanned": result.scanned,
+                                "committed": result.committed}
+        except Exception as exc:  # noqa: BLE001 — one inbox never blocks the other
+            log.warning("gmail auto-sync %s/%s failed: %s", family_id, user_key, exc)
+            report[user_key] = {"error": str(exc)}
+    return report
 
 
 def _replay_calendar(store, family_id: str, profile: dict, config: dict) -> dict:
-    tokens = _tokens(profile, "google")
+    tokens = _tokens(profile, "google", account=config.get("account"))
     model_cfg = profile.get("coverage_model")
     if tokens is None or not model_cfg:
         return {"skipped": "google not connected or no coverage model"}
@@ -93,7 +116,7 @@ def _replay_calendar(store, family_id: str, profile: dict, config: dict) -> dict
 
 
 def _replay_outlook(store, family_id: str, profile: dict, config: dict) -> dict:
-    tokens = _tokens(profile, "microsoft")
+    tokens = _tokens(profile, "microsoft", account=config.get("account"))
     model_cfg = profile.get("coverage_model")
     if tokens is None or not model_cfg:
         return {"skipped": "microsoft not connected or no coverage model"}

@@ -87,21 +87,26 @@ def _oauth_state_secret() -> str:
     return os.environ.get("EXHALE_MASTER_SECRET") or "exhale-dev-oauth-state-secret"
 
 
-def _family_tokens(family_id: str, provider: str) -> dict | None:
-    """The family's stored OAuth tokens for ``provider`` (from a "Connect …" flow)."""
+def _provider_accounts(family_id: str, provider: str) -> dict[str, dict]:
+    """Every member's stored OAuth tokens for ``provider`` (may be several)."""
 
-    conns = store.profile(family_id).get("connections") or {}
-    tokens = conns.get(provider)
-    if tokens and (tokens.get("refresh_token") or tokens.get("access_token")):
-        return tokens
-    return None
+    from exhale.connections import accounts_for
+
+    return accounts_for(store.profile(family_id).get("connections"), provider)
+
+
+def _family_tokens(family_id: str, provider: str) -> dict | None:
+    """*One* usable grant for ``provider`` — for write paths that need a
+    calendar, not every calendar. Read/sync paths iterate
+    :func:`_provider_accounts` instead."""
+
+    from exhale.connections import first_account
+
+    return first_account(store.profile(family_id).get("connections"), provider)
 
 
 def _family_google_tokens(family_id: str) -> dict | None:
-    tokens = _family_tokens(family_id, "google")
-    if tokens:
-        return tokens
-    return None
+    return _family_tokens(family_id, "google")
 
 
 def _remember_sync(family_id: str, kind: str, config: dict) -> None:
@@ -385,13 +390,30 @@ def me(user: User | None = Depends(current_user)) -> dict:
 _CONNECTABLE = {"google", "microsoft"}
 
 
-def _merge_connection(family_id: str, provider: str, record: dict) -> None:
-    conns = dict(store.profile(family_id).get("connections") or {})
-    conns[provider] = record
+def _merge_connection(family_id: str, provider: str, user_key: str, record: dict) -> None:
+    """Store one member's grant WITHOUT displacing anyone else's.
+
+    Connections are keyed per member: a second parent connecting Gmail adds
+    their account alongside the first — both inboxes feed the family graph.
+    """
+
+    from exhale.connections import merge_account
+
+    conns = merge_account(store.profile(family_id).get("connections"),
+                          provider, user_key, record)
     store.set_profile(family_id, connections=conns)
 
 
-def _start_connect(provider: str, family_id: str) -> dict:
+def _connect_subject(family_id: str, user: User | None) -> str:
+    """What the signed OAuth ``state`` binds: the family AND the member, so
+    the callback files the tokens under whoever clicked Connect."""
+
+    from exhale.connections import LEGACY_KEY
+
+    return f"{family_id}|{user.user_id if user else LEGACY_KEY}"
+
+
+def _start_connect(provider: str, family_id: str, user: User | None) -> dict:
     from exhale.oauth import authorization_url, config_from_env
 
     config = config_from_env(provider)
@@ -400,45 +422,58 @@ def _start_connect(provider: str, family_id: str) -> dict:
             status_code=503,
             detail=f"{provider.title()} OAuth is not configured (developer step).",
         )
-    return {"authorization_url": authorization_url(config, family_id, _oauth_state_secret())}
+    return {"authorization_url": authorization_url(
+        config, _connect_subject(family_id, user), _oauth_state_secret())}
 
 
 def _handle_callback(provider: str, code: str, state: str) -> dict:
     from datetime import datetime, timezone
 
+    from exhale.connections import LEGACY_KEY
     from exhale.oauth import OAuthStateError, config_from_env, exchange_code, verify_state
 
     config = config_from_env(provider)
     if config is None:
         raise HTTPException(status_code=503, detail=f"{provider.title()} OAuth is not configured.")
     try:
-        family_id = verify_state(state, _oauth_state_secret())
+        subject = verify_state(state, _oauth_state_secret())
     except OAuthStateError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid state: {exc}") from exc
+    # "family|user" (in-flight states minted before per-member keying carry
+    # only the family — file those under the legacy account slot).
+    family_id, _, user_key = subject.partition("|")
+    user_key = user_key or LEGACY_KEY
     try:
         tokens = exchange_code(config, code)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Token exchange failed: {exc}") from exc
 
-    _merge_connection(family_id, provider, {
+    _merge_connection(family_id, provider, user_key, {
         "access_token": tokens.get("access_token"),
         "refresh_token": tokens.get("refresh_token"),
         "scope": tokens.get("scope", ""),
         "connected_at": datetime.now(timezone.utc).isoformat(),
     })
-    return {"status": "connected", "provider": provider, "family_id": family_id}
+    return {"status": "connected", "provider": provider, "family_id": family_id,
+            "account": user_key}
 
 
 @app.get("/v1/families/{family_id}/connect/google")
-def connect_google(family_id: str = Depends(require_family_access)) -> dict:
+def connect_google(
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
     """Start the Google connection: returns the consent URL the button opens."""
-    return _start_connect("google", family_id)
+    return _start_connect("google", family_id, user)
 
 
 @app.get("/v1/families/{family_id}/connect/microsoft")
-def connect_microsoft(family_id: str = Depends(require_family_access)) -> dict:
+def connect_microsoft(
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
     """Start the Outlook/Microsoft connection: returns the consent URL."""
-    return _start_connect("microsoft", family_id)
+    return _start_connect("microsoft", family_id, user)
 
 
 @app.get("/v1/oauth/google/callback")
@@ -457,14 +492,17 @@ def microsoft_callback(code: str = Query(...), state: str = Query(...)) -> dict:
 def get_connections(family_id: str = Depends(require_family_access)) -> dict:
     """What this family has connected — for the settings/onboarding UI."""
 
-    conns = store.profile(family_id).get("connections") or {}
-
     def _status(provider: str) -> dict:
-        rec = conns.get(provider)
+        accounts = _provider_accounts(family_id, provider)
+        latest = max((r.get("connected_at") or "" for r in accounts.values()),
+                     default=None) or None
+        scopes = sorted({s for r in accounts.values()
+                         for s in (r.get("scope", "") or "").split()})
         return {
-            "connected": bool(rec),
-            "scopes": (rec.get("scope", "").split() if rec else []),
-            "connected_at": (rec.get("connected_at") if rec else None),
+            "connected": bool(accounts),
+            "accounts": len(accounts),
+            "scopes": scopes,
+            "connected_at": latest,
         }
 
     return {
@@ -1548,7 +1586,8 @@ class CalendarSyncRequest(BaseModel):
     days: int = 120  # horizon to pull busy blocks for
 
 
-def _gcal_connector_for_family(family_id: str, caregiver_name: str, calendar_id: str):
+def _gcal_connector_for_family(family_id: str, caregiver_name: str, calendar_id: str,
+                               account: str | None = None):
     """Build a GoogleCalendarConnector, preferring the family's OAuth grant.
 
     A family that clicked "Connect Google" uses its own stored tokens (the app's
@@ -1561,7 +1600,7 @@ def _gcal_connector_for_family(family_id: str, caregiver_name: str, calendar_id:
     from exhale.connectors.gcal import GoogleCalendarConnector
     from exhale.oauth import config_from_env
 
-    tokens = _family_google_tokens(family_id)
+    _key, tokens = _pick_account(family_id, "google", account)
     if tokens is not None:
         cfg = config_from_env("google")
         return GoogleCalendarConnector(
@@ -1589,7 +1628,9 @@ def _gcal_connector_for_family(family_id: str, caregiver_name: str, calendar_id:
 
 @app.post("/v1/families/{family_id}/sync/calendar")
 def sync_calendar(
-    req: CalendarSyncRequest, family_id: str = Depends(require_family_access)
+    req: CalendarSyncRequest,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
 ) -> dict:
     """Pull a caregiver's Google Calendar busy blocks into the coverage model.
 
@@ -1609,7 +1650,11 @@ def sync_calendar(
             status_code=404,
             detail="No coverage model configured. PUT /coverage-model first.",
         )
-    connector = _gcal_connector_for_family(family_id, req.caregiver_name, req.calendar_id)
+    # Prefer the calling member's own grant ("sync MY calendar" means mine).
+    account_key, _tokens = _pick_account(
+        family_id, "google", user.user_id if user else None)
+    connector = _gcal_connector_for_family(
+        family_id, req.caregiver_name, req.calendar_id, account=account_key)
     if connector is None:
         raise HTTPException(
             status_code=503,
@@ -1630,6 +1675,8 @@ def sync_calendar(
     _remember_sync(family_id, "gcal", {
         "caregiver_name": req.caregiver_name, "calendar_id": req.calendar_id,
         "days": req.days,
+        # Which member's grant this sync used — auto-sync replays the same one.
+        **({"account": account_key} if account_key else {}),
     })
     return {
         "family_id": family_id,
@@ -1749,13 +1796,37 @@ class OutlookSyncRequest(BaseModel):
     days: int = 120
 
 
-def _msgraph_connector_for_family(family_id: str, caregiver_name: str):
-    """Build a GraphCalendarConnector from the family's Microsoft OAuth grant."""
+def _pick_account(
+    family_id: str, provider: str, preferred: str | None
+) -> tuple[str | None, dict | None]:
+    """Choose which member's grant a sync should use.
+
+    The member who clicked Sync gets their own connection when they have one
+    ("sync MY calendar" means mine); otherwise the legacy slot, then the
+    first available — never silently nothing when a grant exists.
+    """
+
+    from exhale.connections import LEGACY_KEY
+
+    accounts = _provider_accounts(family_id, provider)
+    if not accounts:
+        return None, None
+    if preferred and preferred in accounts:
+        return preferred, accounts[preferred]
+    if LEGACY_KEY in accounts:
+        return LEGACY_KEY, accounts[LEGACY_KEY]
+    key = sorted(accounts)[0]
+    return key, accounts[key]
+
+
+def _msgraph_connector_for_family(family_id: str, caregiver_name: str,
+                                  account: str | None = None):
+    """Build a GraphCalendarConnector from one member's Microsoft grant."""
 
     from exhale.connectors.msgraph import GraphCalendarConnector
     from exhale.oauth import config_from_env
 
-    tokens = _family_tokens(family_id, "microsoft")
+    _key, tokens = _pick_account(family_id, "microsoft", account)
     if tokens is None:
         return None
     cfg = config_from_env("microsoft")
@@ -1770,7 +1841,9 @@ def _msgraph_connector_for_family(family_id: str, caregiver_name: str):
 
 @app.post("/v1/families/{family_id}/sync/outlook")
 def sync_outlook(
-    req: OutlookSyncRequest, family_id: str = Depends(require_family_access)
+    req: OutlookSyncRequest,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
 ) -> dict:
     """Pull a caregiver's Outlook calendar busy blocks into the coverage model.
 
@@ -1789,7 +1862,10 @@ def sync_outlook(
             status_code=404,
             detail="No coverage model configured. PUT /coverage-model first.",
         )
-    connector = _msgraph_connector_for_family(family_id, req.caregiver_name)
+    account_key, _tokens = _pick_account(
+        family_id, "microsoft", user.user_id if user else None)
+    connector = _msgraph_connector_for_family(family_id, req.caregiver_name,
+                                              account=account_key)
     if connector is None:
         raise HTTPException(
             status_code=503,
@@ -1806,6 +1882,7 @@ def sync_outlook(
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
     _remember_sync(family_id, "outlook", {
         "caregiver_name": req.caregiver_name, "days": req.days,
+        **({"account": account_key} if account_key else {}),
     })
     return {
         "family_id": family_id,
@@ -1927,68 +2004,87 @@ class GmailSyncRequest(BaseModel):
     known_children: list[str] = Field(default_factory=list)
 
 
-def _gmail_connector_for_family(family_id: str):
-    """Build a GmailConnector, preferring the family's OAuth grant.
+def _gmail_connectors_for_family(family_id: str) -> list[tuple[str, object]]:
+    """Every Gmail connector this family has — one per connected member.
 
-    A family that clicked "Connect Google" uses its own stored tokens; falls
-    back to the legacy single-tenant ``EXHALE_GMAIL_*`` env vars, then ``None``.
+    Each member's "Connect Google" grant gets its own connector (and its own
+    sync watermark); the legacy single-tenant ``EXHALE_GMAIL_*`` env vars are
+    the fallback when nobody has connected. Empty list = not configured.
     """
 
     import os
 
+    from exhale.connections import LEGACY_KEY
     from exhale.connectors.gmail import GmailConnector
     from exhale.oauth import config_from_env
 
-    tokens = _family_google_tokens(family_id)
-    if tokens is not None:
+    accounts = _provider_accounts(family_id, "google")
+    if accounts:
         cfg = config_from_env("google")
-        return GmailConnector(
-            access_token=tokens.get("access_token"),
-            refresh_token=tokens.get("refresh_token"),
-            client_id=cfg.client_id if cfg else None,
-            client_secret=cfg.client_secret if cfg else None,
-        )
+        return [
+            (user_key, GmailConnector(
+                access_token=tokens.get("access_token"),
+                refresh_token=tokens.get("refresh_token"),
+                client_id=cfg.client_id if cfg else None,
+                client_secret=cfg.client_secret if cfg else None,
+            ))
+            for user_key, tokens in sorted(accounts.items())
+        ]
 
     access = os.environ.get("EXHALE_GMAIL_ACCESS_TOKEN")
     refresh = os.environ.get("EXHALE_GMAIL_REFRESH_TOKEN")
     if not access and not refresh:
-        return None
-    return GmailConnector(
+        return []
+    return [(LEGACY_KEY, GmailConnector(
         access_token=access,
         refresh_token=refresh,
         client_id=os.environ.get("EXHALE_GMAIL_CLIENT_ID"),
         client_secret=os.environ.get("EXHALE_GMAIL_CLIENT_SECRET"),
-    )
+    ))]
 
 
 @app.post("/v1/families/{family_id}/sync/gmail")
 def sync_gmail(req: GmailSyncRequest, family_id: str = Depends(require_family_access)) -> dict:
     """Pull new Gmail messages through extract → route → graph (§1, §2 Layer 1).
 
-    Incremental: only messages since the last sync (watermark persisted in the
-    family profile); first run covers the 180-day retro window.
+    Every connected member's inbox is pulled — two parents' Gmails feed the
+    same family graph independently (downstream dedupe handles repeats), each
+    on its own watermark. Incremental per account; a first run covers the
+    180-day retro window.
     """
 
-    connector = _gmail_connector_for_family(family_id)
-    if connector is None:
+    from exhale.connections import watermark_key
+
+    connectors = _gmail_connectors_for_family(family_id)
+    if not connectors:
         raise HTTPException(
             status_code=503,
-            detail="Gmail is not configured. Set EXHALE_GMAIL_ACCESS_TOKEN, or "
-                   "EXHALE_GMAIL_REFRESH_TOKEN + EXHALE_GMAIL_CLIENT_ID + "
-                   "EXHALE_GMAIL_CLIENT_SECRET.",
+            detail="Gmail is not configured. Connect Google, or set "
+                   "EXHALE_GMAIL_ACCESS_TOKEN / EXHALE_GMAIL_REFRESH_TOKEN + "
+                   "EXHALE_GMAIL_CLIENT_ID + EXHALE_GMAIL_CLIENT_SECRET.",
         )
     ctx = ExtractionContext(known_children=req.known_children)
-    result = run_incremental_sync(
-        connector, store, family_id, ctx, extractor=pipeline_extractor
-    )
+    accounts_report: dict[str, dict] = {}
+    totals = {"scanned": 0, "extracted": 0, "committed": 0, "pending": 0, "rejected": 0}
+    snapshot = None
+    for user_key, connector in connectors:
+        result = run_incremental_sync(
+            connector, store, family_id, ctx, extractor=pipeline_extractor,
+            watermark_key=watermark_key("google", user_key),
+        )
+        accounts_report[user_key] = {
+            "scanned": result.scanned, "extracted": result.extracted,
+            "committed": result.committed, "pending": result.pending,
+            "rejected": result.rejected,
+        }
+        for key in totals:
+            totals[key] += accounts_report[user_key][key]
+        snapshot = result.snapshot  # snapshot reflects the whole graph; last wins
     return {
         "family_id": family_id,
-        "scanned": result.scanned,
-        "extracted": result.extracted,
-        "committed": result.committed,
-        "pending": result.pending,
-        "rejected": result.rejected,
-        "snapshot": result.snapshot,
+        **totals,
+        "accounts": accounts_report,
+        "snapshot": snapshot,
     }
 
 

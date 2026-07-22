@@ -99,6 +99,8 @@ export default function ConnectionsPanel({ familyId }) {
                 <p className="mt-0.5 text-sanctuary-navy/60">
                   {status.connected
                     ? `Connected${
+                        (status.accounts ?? 1) > 1 ? ` · ${status.accounts} accounts` : ""
+                      }${
                         status.connected_at
                           ? " · " + new Date(status.connected_at).toLocaleDateString()
                           : ""
