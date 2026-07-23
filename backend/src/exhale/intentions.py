@@ -41,8 +41,10 @@ FOLLOW_UP_OUTCOMES = ("happened", "didnt_happen", "no_response")
 # What kind of time an intention needs (routes it to the right window):
 #   alone    — this person free, kids covered (a solo lift, an appointment)
 #   together — every parent free at once (a class as a couple, a date)
-# A workout isn't inherently solitary — "together" is a first-class choice.
-CONTEXTS = ("alone", "together")
+#   on_duty  — you've got the kid but aren't slammed (email the teacher,
+#              clean the bathrooms) — the things that don't need you child-free
+# A workout isn't inherently solitary; a chore doesn't need the kids gone.
+CONTEXTS = ("alone", "together", "on_duty")
 
 # An open intention surfaced this many times (weekly-debounced) gets the
 # check-in instead of another quiet appearance.
@@ -247,36 +249,43 @@ def build_time_for_what_matters(
     items: list[dict],
     *,
     together_windows: list[dict] | None = None,
+    on_duty_windows: list[dict] | None = None,
     show_add_nudge: bool = True,
 ) -> dict:
     """The briefing block: real open windows next to what's genuinely current.
 
-    ``windows`` are the personal (alone) work-windows; ``together_windows`` are
-    the both-parents-free stretches. Both are already-computed engine output —
-    this layer never recalculates them. Active intentions are split by context
-    so each lists against the kind of time it actually needs.
+    Three kinds of time, each matched to the intentions that need it: personal
+    ``windows`` (alone), ``together_windows`` (both parents free), and
+    ``on_duty_windows`` (you've got the kid but aren't slammed). All are
+    already-computed engine output — this layer never recalculates them.
     """
 
     together_windows = together_windows or []
+    on_duty_windows = on_duty_windows or []
     active = groups["active"]
-    alone = [i for i in active if i.get("context", "alone") != "together"]
     together = [i for i in active if i.get("context") == "together"]
+    on_duty = [i for i in active if i.get("context") == "on_duty"]
+    alone = [i for i in active if i.get("context", "alone") not in ("together", "on_duty")]
     return {
         "view": "time_for_what_matters",
         "windows": windows,
         "together_windows": together_windows,
+        "on_duty_windows": on_duty_windows,
         "open_intentions": active,               # full list (back-compat)
         "alone_intentions": alone,
         "together_intentions": together,
+        "on_duty_intentions": on_duty,
         "check_ins": groups["check_ins"],
         "follow_ups": follow_up_payload(groups["follow_ups"]),
         "show_add_nudge": show_add_nudge,
         "counts": {
             "windows": len(windows),
             "together_windows": len(together_windows),
+            "on_duty_windows": len(on_duty_windows),
             "open": len(active),
             "alone": len(alone),
             "together": len(together),
+            "on_duty": len(on_duty),
             "check_ins": len(groups["check_ins"]),
             "follow_ups": len(groups["follow_ups"]),
             "matched": sum(1 for i in items if i.get("status") == "matched"),
