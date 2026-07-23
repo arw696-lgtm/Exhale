@@ -253,7 +253,7 @@ run hard enough to earn the right to be a product.
 ### C. Trust/scale/operations (before real users beyond the founding family)
 | Item | Notes |
 |---|---|
-| **Deployment** | Nothing hosted. Deploy pack (HTTPS via Caddy, backups, guide) designed but unbuilt — parked pending decision. |
+| ~~Deployment pack~~ **Built** | `docker-compose.prod.yml` (Caddy auto-HTTPS + nightly backups + invite-only posture), `Caddyfile`, `scripts/backup.sh`, and a personal go-live runbook (`DEPLOY.md`). Not yet *run* — the hosting/domain/registration steps are the founder's to do (§5D). |
 | **Google restricted-scope verification** | Gmail scope requires Google's security review (CASA) to exceed ~100 test users; Calendar is lighter. Company-level, one-time. |
 | **Security audit** | Well-tested, never audited. Fine for the founding family; required before strangers. |
 | **Client-side key custody** | KEKs derive from a server master secret; true device-held keys are a designed-for swap (§5.1) not yet done. |

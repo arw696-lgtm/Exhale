@@ -1,0 +1,28 @@
+# Exhale — automatic HTTPS reverse proxy.
+#
+# Caddy fetches and renews a real Let's Encrypt certificate for your domain on
+# its own — there is nothing to configure, buy, or remember. It serves the web
+# app at the root and routes the API (and OAuth callbacks, and the calendar
+# feed, all under /v1) to the backend, so the whole thing lives on one domain
+# with one certificate.
+#
+# EXHALE_DOMAIN and EXHALE_TLS_EMAIL come from your .env (see DEPLOY.md).
+
+{$EXHALE_DOMAIN} {
+	encode gzip
+
+	# API, OAuth callbacks (/v1/oauth/...), and the .ics feed (/v1/feeds/...)
+	# plus the health check — everything the backend owns lives under these.
+	@backend path /v1/* /health
+	handle @backend {
+		reverse_proxy api:8000
+	}
+
+	# Everything else is the React app.
+	handle {
+		reverse_proxy web:80
+	}
+
+	# Let's Encrypt renewal notices go here (optional but recommended).
+	tls {$EXHALE_TLS_EMAIL}
+}

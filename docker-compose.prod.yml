@@ -1,0 +1,117 @@
+# Exhale — production stack.
+#
+#   Caddy (public :80/:443, automatic HTTPS)
+#     ├── /v1/*, /health  → api  (FastAPI, internal only)
+#     └── everything else → web  (React app, internal only)
+#   Postgres (internal only, encrypted-at-rest household data)
+#   backup   (nightly pg_dump → a Docker volume)
+#
+# Go live (full walkthrough in DEPLOY.md):
+#   cp .env.example .env      # fill in the secrets + EXHALE_DOMAIN
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Only Caddy is exposed to the internet; api/web/db talk over the private
+# Compose network. Point your domain's DNS A record at this server first.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: exhale
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - exhale_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      EXHALE_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/exhale
+      EXHALE_MASTER_SECRET: ${EXHALE_MASTER_SECRET:?set EXHALE_MASTER_SECRET in .env}
+      # Production posture: require login, invite-only signups, auto-sync hourly.
+      EXHALE_REQUIRE_AUTH: ${EXHALE_REQUIRE_AUTH:-1}
+      EXHALE_INVITE_ONLY: ${EXHALE_INVITE_ONLY:-1}
+      EXHALE_BOOTSTRAP_INVITE: ${EXHALE_BOOTSTRAP_INVITE:-}
+      EXHALE_RATE_LIMIT_PER_MINUTE: ${EXHALE_RATE_LIMIT_PER_MINUTE:-60}
+      EXHALE_AUTO_SYNC_MINUTES: ${EXHALE_AUTO_SYNC_MINUTES:-60}
+      # Outbound critical-alert email (unset host = alerts off):
+      EXHALE_SMTP_HOST: ${EXHALE_SMTP_HOST:-}
+      EXHALE_SMTP_PORT: ${EXHALE_SMTP_PORT:-587}
+      EXHALE_SMTP_USER: ${EXHALE_SMTP_USER:-}
+      EXHALE_SMTP_PASSWORD: ${EXHALE_SMTP_PASSWORD:-}
+      EXHALE_SMTP_FROM: ${EXHALE_SMTP_FROM:-}
+      EXHALE_SMTP_TLS: ${EXHALE_SMTP_TLS:-1}
+      # "Connect Google" / "Connect Outlook" OAuth apps (one registration each).
+      # Redirect URIs are https://YOUR_DOMAIN/v1/oauth/{google,microsoft}/callback.
+      EXHALE_GOOGLE_CLIENT_ID: ${EXHALE_GOOGLE_CLIENT_ID:-}
+      EXHALE_GOOGLE_CLIENT_SECRET: ${EXHALE_GOOGLE_CLIENT_SECRET:-}
+      EXHALE_GOOGLE_REDIRECT_URI: ${EXHALE_GOOGLE_REDIRECT_URI:-}
+      EXHALE_MSFT_CLIENT_ID: ${EXHALE_MSFT_CLIENT_ID:-}
+      EXHALE_MSFT_CLIENT_SECRET: ${EXHALE_MSFT_CLIENT_SECRET:-}
+      EXHALE_MSFT_REDIRECT_URI: ${EXHALE_MSFT_REDIRECT_URI:-}
+      # LLM + vision extraction (reads the emails/photos heuristics can't):
+      EXHALE_LLM_EXTRACTOR: ${EXHALE_LLM_EXTRACTOR:-1}
+      EXHALE_LLM_MODEL: ${EXHALE_LLM_MODEL:-}
+      EXHALE_VISION_MODEL: ${EXHALE_VISION_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    expose:
+      - "8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Same-origin: the browser reaches the API at https://DOMAIN/v1/...,
+        # which Caddy routes to the api service. No separate API host needed.
+        VITE_EXHALE_API: https://${EXHALE_DOMAIN:?set EXHALE_DOMAIN in .env}
+    restart: unless-stopped
+    depends_on:
+      - api
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    environment:
+      EXHALE_DOMAIN: ${EXHALE_DOMAIN:?set EXHALE_DOMAIN in .env}
+      EXHALE_TLS_EMAIL: ${EXHALE_TLS_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # the certificate lives here — persist it
+      - caddy_config:/config
+
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      EXHALE_BACKUP_KEEP_DAYS: ${EXHALE_BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+      - exhale_backups:/backups
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+
+volumes:
+  exhale_pgdata:
+  exhale_backups:
+  caddy_data:
+  caddy_config:
