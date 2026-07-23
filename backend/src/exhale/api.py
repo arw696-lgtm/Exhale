@@ -783,6 +783,7 @@ def _time_for_what_matters(family_id: str, profile: dict) -> dict | None:
 
     windows: list[dict] = []
     together_windows: list[dict] = []
+    on_duty_windows: list[dict] = []
     if config:
         model = CoverageModelIn(**config)
         family = build_family(model)
@@ -805,9 +806,20 @@ def _time_for_what_matters(family_id: str, profile: dict) -> dict | None:
             shared = family.shared_windows(adults, start, end, min_hours=1.5)
             shared = sorted(shared, key=lambda w: -w.duration_hours)[:3]
             together_windows = [w.to_dict() for w in sorted(shared, key=lambda w: w.start)]
+
+        # On-duty time: you've got the kid, but you're not slammed.
+        for name in adults:
+            try:
+                od = family.on_duty_windows(name, start, end, min_hours=1.0)
+            except KeyError:
+                continue
+            for w in sorted(od, key=lambda w: -w.duration_hours)[:3]:
+                on_duty_windows.append(w.to_dict())
+        on_duty_windows.sort(key=lambda w: w["start"])
     return build_time_for_what_matters(
         windows, groups, updated,
-        together_windows=together_windows, show_add_nudge=show_add_nudge)
+        together_windows=together_windows, on_duty_windows=on_duty_windows,
+        show_add_nudge=show_add_nudge)
 
 
 @app.get("/v1/families/{family_id}/ledger")
@@ -1399,7 +1411,7 @@ class IntentionIn(BaseModel):
 
     description: str
     type: str = "standing"  # standing | one_off
-    context: str = "alone"  # alone | together (together = both parents free)
+    context: str = "alone"  # alone | together (both free) | on_duty (with the kid)
     target_deadline: str | None = None
     created_by: str | None = None  # defaults to the logged-in member's name
 

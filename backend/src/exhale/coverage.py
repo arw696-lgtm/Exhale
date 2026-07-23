@@ -612,6 +612,79 @@ class FamilyCoverage:
             ))
         return windows
 
+    # -- on-duty time (you've got the kid, but you're not slammed) ------------------
+    def on_duty_windows(
+        self, caregiver_name: str, start_day: date, end_day: date, *, min_hours: float = 1.0
+    ) -> list[WorkWindow]:
+        """When ``caregiver_name`` is uncommitted *and* is the one with the kid.
+
+        The third kind of time (alongside work windows and together windows):
+        not free-and-covered, not a gap — you're home with the child and nothing
+        else is claiming you. The stretch for the things that don't need you
+        child-free: emailing the teacher, tidying, paying a bill. Computed as the
+        exact complement of a work window — your free time minus the stretches
+        every child is held by someone else — so it never double-counts.
+        """
+
+        roster = {c.name for c in self.engines[0].caregivers}
+        if caregiver_name not in roster:
+            raise KeyError(f"No caregiver named {caregiver_name!r}")
+
+        out: list[WorkWindow] = []
+        day = start_day
+        while day <= end_day:
+            out.extend(self._on_duty_on(day, caregiver_name))
+            day += timedelta(days=1)
+        out = [w for w in out if w.duration_hours >= min_hours]
+        out.sort(key=lambda w: w.start)
+        return out
+
+    def _on_duty_on(self, day: date, name: str) -> list[WorkWindow]:
+        caregiver = {c.name: c for c in self.engines[0].caregivers}[name]
+        now = self.engines[0].now
+
+        spans = [
+            (datetime.combine(day, e.recipient.supervised_start),
+             datetime.combine(day, e.recipient.supervised_end))
+            for e in self.engines
+        ]
+        envelope = (min(s for s, _ in spans), max(e for _, e in spans))
+
+        free = caregiver.available_on(day, envelope)
+        if not free:
+            return []
+
+        # Time every child is held by someone else → that's a work window, not
+        # on-duty. On-duty is the rest of this caregiver's free time.
+        all_covered: list[_Interval] | None = None
+        per_child_cover: list[tuple[CoverageEngine, list[_Interval]]] = []
+        for e in self.engines:
+            span = (datetime.combine(day, e.recipient.supervised_start),
+                    datetime.combine(day, e.recipient.supervised_end))
+            others = _union([iv for iv, _ in e.coverage_by_others(day, span, {name})])
+            per_child_cover.append((e, others))
+            all_covered = others if all_covered is None else _intersect(all_covered, others)
+
+        on_duty = _subtract(free, all_covered or [])
+
+        windows: list[WorkWindow] = []
+        for ws, we in on_duty:
+            if we <= now:
+                continue
+            ws = max(ws, now)
+            # Which children this caregiver is personally holding across the window.
+            held = tuple(
+                f"you've got {e.recipient.name}"
+                for e, others in per_child_cover
+                if _subtract([(ws, we)], others)  # some of this stretch isn't covered by others
+            )
+            windows.append(WorkWindow(
+                caregiver_name=name, start=ws, end=we,
+                duration_hours=(we - ws).total_seconds() / 3600.0,
+                child_covered_by=held,
+            ))
+        return windows
+
 
 def build_family_care_watch(
     family: FamilyCoverage, start_day: date, end_day: date

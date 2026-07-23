@@ -1,6 +1,6 @@
 # Exhale — Full Project Scope & Status
 
-*As of 2026-07-22 · 26 PRs merged · 445 tests (436 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
+*As of 2026-07-23 · 27 PRs merged · 451 tests (443 always-on + 8 Postgres-gated) · repo `arw696-lgtm/Exhale`*
 
 This is the complete map of the project: what Exhale is, what has been built,
 the design laws it runs on, and — most importantly for gap analysis — an honest

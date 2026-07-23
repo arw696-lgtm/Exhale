@@ -39,16 +39,18 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
 
   const windows = block.windows ?? [];
   const togetherWindows = block.together_windows ?? [];
+  const onDutyWindows = block.on_duty_windows ?? [];
   const aloneIntentions = block.alone_intentions ?? block.open_intentions ?? [];
   const togetherIntentions = block.together_intentions ?? [];
+  const onDutyIntentions = block.on_duty_intentions ?? [];
   const intentions = block.open_intentions ?? [];
   const checkIns = block.check_ins ?? [];
   const followUps = block.follow_ups ?? [];
 
   // Nothing to show, nudge already spent, and no live add-form → no section.
   if (!live && windows.length === 0 && togetherWindows.length === 0 &&
-      intentions.length === 0 && checkIns.length === 0 && followUps.length === 0 &&
-      !block.show_add_nudge)
+      onDutyWindows.length === 0 && intentions.length === 0 &&
+      checkIns.length === 0 && followUps.length === 0 && !block.show_add_nudge)
     return null;
 
   const submit = async (e) => {
@@ -71,9 +73,11 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
     setError(null);
     try {
       // "Scheduled it" remembers which window it went to — that's what the
-      // one-week "did that happen?" follow-up refers back to. Together
-      // intentions point at a together window.
-      const pool = intention.context === "together" ? togetherWindows : windows;
+      // one-week "did that happen?" follow-up refers back to. Each context
+      // points at its own kind of window.
+      const pool = intention.context === "together" ? togetherWindows
+        : intention.context === "on_duty" ? onDutyWindows
+        : windows;
       const window = status === "matched" && pool.length > 0
         ? { start: pool[0].start, end: pool[0].end }
         : null;
@@ -193,6 +197,28 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
         </div>
       )}
 
+      {/* On duty — the lull while you've got the kids, for with-kid tasks */}
+      {onDutyIntentions.length > 0 && (
+        <div className="mb-4 border-t border-sanctuary-navy/10 pt-3">
+          <p className="mb-1 font-micro text-xs font-semibold uppercase text-sanctuary-navy/50">
+            🏠 While you've got the kids
+          </p>
+          {onDutyWindows.length > 0 ? (
+            <>
+              {windowLine(onDutyWindows, "You're on with them, but there's a lull —")}
+              <p className="mt-1 font-micro text-sm text-sanctuary-navy/70">
+                A stretch for the things that don't need them gone:
+              </p>
+            </>
+          ) : (
+            <p className="font-micro text-sm text-sanctuary-navy/50">
+              No easy lull this week — these can wait for one.
+            </p>
+          )}
+          <ul className="mt-2 space-y-2">{onDutyIntentions.map(renderIntention)}</ul>
+        </div>
+      )}
+
       {intentions.length === 0 &&
         checkIns.length === 0 && followUps.length === 0 && block.show_add_nudge && (
           <p className="font-micro text-sm text-sanctuary-navy/50">
@@ -267,17 +293,14 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
                   title="Standing = keeps coming back (gym, a friend). One-off = done once (an appointment).">
             {kind === "standing" ? "ongoing" : "one-time"}
           </button>
-          <button type="button" aria-pressed={context === "together"}
-                  onClick={() => setContext(context === "alone" ? "together" : "alone")}
-                  className={
-                    "rounded-full border px-3 py-1.5 font-micro text-xs font-medium transition " +
-                    (context === "together"
-                      ? "border-sage-release/60 bg-sage-release/20 text-sanctuary-navy"
-                      : "border-sanctuary-navy/15 text-sanctuary-navy/70 hover:bg-sanctuary-navy/5")
-                  }
-                  title="Just you (a solo lift, an appointment) or the two of you (a class together, a date).">
-            {context === "together" ? "🤝 together" : "just me"}
-          </button>
+          <select value={context} onChange={(e) => setContext(e.target.value)}
+                  aria-label="What kind of time does this need?"
+                  title="Just you (child-free), the two of you together, or while you've got the kids."
+                  className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-1.5 font-micro text-xs font-medium text-sanctuary-navy/70 outline-none focus:border-sage-release">
+            <option value="alone">just me</option>
+            <option value="together">🤝 together</option>
+            <option value="on_duty">🏠 with kids</option>
+          </select>
           <button type="submit" disabled={busy || !text.trim()}
                   className="rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-1.5 font-micro text-sm font-medium text-sanctuary-navy transition hover:bg-sage-release/20 disabled:opacity-50">
             {busy ? "Adding…" : "Add"}
