@@ -60,6 +60,18 @@ Postgres + encrypted persistence + auth enforcement come up together; the web
 bundle is built with `EXHALE_PUBLIC_API_URL` (set it to your machine's LAN
 address to open Exhale on a phone).
 
+### Going live (real domain + HTTPS)
+
+**[`DEPLOY.md`](DEPLOY.md)** is a step-by-step go-live runbook — server, DNS,
+the one-time Google registration, API key, launch, and inviting a second
+member. The production stack (`docker-compose.prod.yml`) adds Caddy for
+automatic HTTPS, nightly database backups, and an invite-only posture:
+
+```bash
+cp .env.example .env    # + EXHALE_DOMAIN, secrets (see DEPLOY.md)
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
 ### Backend
 
 ```bash
