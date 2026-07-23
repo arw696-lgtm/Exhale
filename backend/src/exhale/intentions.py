@@ -38,6 +38,11 @@ from datetime import datetime, timedelta
 TYPES = ("standing", "one_off")
 STATUSES = ("open", "matched", "dismissed", "stale")
 FOLLOW_UP_OUTCOMES = ("happened", "didnt_happen", "no_response")
+# What kind of time an intention needs (routes it to the right window):
+#   alone    — this person free, kids covered (a solo lift, an appointment)
+#   together — every parent free at once (a class as a couple, a date)
+# A workout isn't inherently solitary — "together" is a first-class choice.
+CONTEXTS = ("alone", "together")
 
 # An open intention surfaced this many times (weekly-debounced) gets the
 # check-in instead of another quiet appearance.
@@ -53,6 +58,7 @@ def new_intention(
     *,
     type_: str = "standing",
     target_deadline: str | None = None,
+    context: str = "alone",
 ) -> dict:
     """A new open intention. Raises ``ValueError`` on empty/invalid input."""
 
@@ -61,12 +67,16 @@ def new_intention(
         raise ValueError("An intention needs a description")
     if type_ not in TYPES:
         raise ValueError(f"type must be one of {TYPES}")
+    if context not in CONTEXTS:
+        raise ValueError(f"context must be one of {CONTEXTS}")
     return {
         "intention_id": f"int_{uuid.uuid4().hex[:10]}",
         "family_id": family_id,
         "created_by": created_by,
         "description": description,
         "type": type_,
+        # Whose time this belongs to matters for "together": it's a shared want.
+        "context": context,
         "target_deadline": target_deadline,
         "status": "open",
         "created_at": datetime.now().isoformat(),
@@ -236,27 +246,37 @@ def build_time_for_what_matters(
     groups: dict,
     items: list[dict],
     *,
+    together_windows: list[dict] | None = None,
     show_add_nudge: bool = True,
 ) -> dict:
     """The briefing block: real open windows next to what's genuinely current.
 
-    ``windows`` are already-computed work-window dicts (the engine's own
-    output — this layer never recalculates them). ``groups`` comes from
-    :func:`surface`. Every combination renders honestly; ``show_add_nudge``
-    lets the caller stop repeating the "add one anytime" line once it's been
-    shown and ignored.
+    ``windows`` are the personal (alone) work-windows; ``together_windows`` are
+    the both-parents-free stretches. Both are already-computed engine output —
+    this layer never recalculates them. Active intentions are split by context
+    so each lists against the kind of time it actually needs.
     """
 
+    together_windows = together_windows or []
+    active = groups["active"]
+    alone = [i for i in active if i.get("context", "alone") != "together"]
+    together = [i for i in active if i.get("context") == "together"]
     return {
         "view": "time_for_what_matters",
         "windows": windows,
-        "open_intentions": groups["active"],
+        "together_windows": together_windows,
+        "open_intentions": active,               # full list (back-compat)
+        "alone_intentions": alone,
+        "together_intentions": together,
         "check_ins": groups["check_ins"],
         "follow_ups": follow_up_payload(groups["follow_ups"]),
         "show_add_nudge": show_add_nudge,
         "counts": {
             "windows": len(windows),
-            "open": len(groups["active"]),
+            "together_windows": len(together_windows),
+            "open": len(active),
+            "alone": len(alone),
+            "together": len(together),
             "check_ins": len(groups["check_ins"]),
             "follow_ups": len(groups["follow_ups"]),
             "matched": sum(1 for i in items if i.get("status") == "matched"),

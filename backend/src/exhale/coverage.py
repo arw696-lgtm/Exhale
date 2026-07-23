@@ -338,8 +338,12 @@ class CoverageEngine:
                 return cg
         raise KeyError(f"No caregiver named {name!r}")
 
-    def _coverers_on(self, day: date, span: _Interval, exclude: str) -> list[tuple[_Interval, str]]:
-        """Who/what covers the recipient on ``day``, other than ``exclude``."""
+    def coverage_by_others(
+        self, day: date, span: _Interval, exclude_names: set[str]
+    ) -> list[tuple[_Interval, str]]:
+        """Who/what covers the recipient on ``day``, excluding a *set* of
+        caregivers. One name → the work-window case; the whole going-out set →
+        the together-time case (who's got the kids while both parents are out)."""
 
         out: list[tuple[_Interval, str]] = []
         if self.school is not None:
@@ -351,11 +355,16 @@ class CoverageEngine:
             if pc is not None:
                 out.append((pc, program.name))
         for cg in self.caregivers:
-            if cg.name == exclude:
+            if cg.name in exclude_names:
                 continue
             for iv in cg.available_on(day, span):
                 out.append((iv, f"{cg.name} has {self.recipient.name}"))
         return out
+
+    def _coverers_on(self, day: date, span: _Interval, exclude: str) -> list[tuple[_Interval, str]]:
+        """Who/what covers the recipient on ``day``, other than ``exclude``."""
+
+        return self.coverage_by_others(day, span, {exclude})
 
     def open_windows_on(self, day: date, caregiver_name: str) -> list["WorkWindow"]:
         """When ``caregiver_name`` is free *and* the child is covered by others.
@@ -523,6 +532,85 @@ class FamilyCoverage:
             ))
         out.sort(key=lambda w: w.start)
         return out
+
+    # -- together time (both parents free at once) ---------------------------------
+    def shared_windows(
+        self, caregiver_names, start_day: date, end_day: date, *, min_hours: float = 1.0
+    ) -> list[WorkWindow]:
+        """Windows where EVERY named caregiver is free at once *and* every child
+        is covered by someone/something else (school, a program, a grandparent
+        staying home) — 'together time': a class as a couple, a date, a shared
+        errand. The forward mirror of a care gap for a *pair*.
+
+        Only newly computable now that both parents' calendars can coexist: it
+        intersects each going-out caregiver's free time with the stretches every
+        child is held by a non-going-out source.
+        """
+
+        names = set(caregiver_names)
+        roster = {c.name for c in self.engines[0].caregivers}
+        for n in names:
+            if n not in roster:
+                raise KeyError(f"No caregiver named {n!r}")
+
+        out: list[WorkWindow] = []
+        day = start_day
+        while day <= end_day:
+            out.extend(self._shared_windows_on(day, names))
+            day += timedelta(days=1)
+        out = [w for w in out if w.duration_hours >= min_hours]
+        out.sort(key=lambda w: w.start)
+        return out
+
+    def _shared_windows_on(self, day: date, names: set[str]) -> list[WorkWindow]:
+        if not names:
+            return []
+        roster = {c.name: c for c in self.engines[0].caregivers}
+        now = self.engines[0].now
+
+        spans = [
+            (datetime.combine(day, e.recipient.supervised_start),
+             datetime.combine(day, e.recipient.supervised_end))
+            for e in self.engines
+        ]
+        envelope = (min(s for s, _ in spans), max(e for _, e in spans))
+
+        # Every going-out caregiver simultaneously free across the envelope.
+        free: list[_Interval] = [envelope]
+        for name in sorted(names):
+            free = _intersect(free, roster[name].available_on(day, envelope))
+        if not free:
+            return []
+
+        # Every child covered by a non-going-out source, at the same time.
+        covered: list[_Interval] | None = None
+        all_labels: list[tuple[_Interval, str]] = []
+        for e in self.engines:
+            span = (datetime.combine(day, e.recipient.supervised_start),
+                    datetime.combine(day, e.recipient.supervised_end))
+            cov = e.coverage_by_others(day, span, names)
+            all_labels.extend(cov)
+            child_cov = _union([iv for iv, _ in cov])
+            covered = child_cov if covered is None else _intersect(covered, child_cov)
+            if not covered:
+                return []
+
+        workable = _intersect(free, covered)
+        label_name = " & ".join(sorted(names))
+        windows: list[WorkWindow] = []
+        for ws, we in workable:
+            if we <= now:
+                continue
+            ws = max(ws, now)
+            labels = tuple(sorted({
+                label for iv, label in all_labels if _overlaps((ws, we), iv)
+            }))
+            windows.append(WorkWindow(
+                caregiver_name=label_name, start=ws, end=we,
+                duration_hours=(we - ws).total_seconds() / 3600.0,
+                child_covered_by=labels,
+            ))
+        return windows
 
 
 def build_family_care_watch(
