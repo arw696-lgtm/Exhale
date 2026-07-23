@@ -259,8 +259,8 @@ export function sendTestNotification(familyId = DEMO_FAMILY) {
 }
 
 // --- personal intentions (Time For What Matters) --------------------------------
-export function addIntention({ description, type }, familyId = DEMO_FAMILY) {
-  return postJson(`/v1/families/${familyId}/intentions`, { description, type });
+export function addIntention({ description, type, context }, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/intentions`, { description, type, context });
 }
 
 export function setIntentionStatus(intentionId, status, familyId = DEMO_FAMILY, window = null) {

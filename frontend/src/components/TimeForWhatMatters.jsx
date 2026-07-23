@@ -31,19 +31,24 @@ function fmtWindow(w) {
 export default function TimeForWhatMatters({ block, familyId, live = false, onRefresh }) {
   const [text, setText] = useState("");
   const [kind, setKind] = useState("standing");
+  const [context, setContext] = useState("alone");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   if (!block) return null;
 
   const windows = block.windows ?? [];
+  const togetherWindows = block.together_windows ?? [];
+  const aloneIntentions = block.alone_intentions ?? block.open_intentions ?? [];
+  const togetherIntentions = block.together_intentions ?? [];
   const intentions = block.open_intentions ?? [];
   const checkIns = block.check_ins ?? [];
   const followUps = block.follow_ups ?? [];
 
   // Nothing to show, nudge already spent, and no live add-form → no section.
-  if (!live && windows.length === 0 && intentions.length === 0 &&
-      checkIns.length === 0 && followUps.length === 0 && !block.show_add_nudge)
+  if (!live && windows.length === 0 && togetherWindows.length === 0 &&
+      intentions.length === 0 && checkIns.length === 0 && followUps.length === 0 &&
+      !block.show_add_nudge)
     return null;
 
   const submit = async (e) => {
@@ -52,7 +57,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
     setBusy(true);
     setError(null);
     try {
-      await addIntention({ description: text.trim(), type: kind }, familyId);
+      await addIntention({ description: text.trim(), type: kind, context }, familyId);
       setText("");
       onRefresh?.();
     } catch (err) {
@@ -66,9 +71,11 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
     setError(null);
     try {
       // "Scheduled it" remembers which window it went to — that's what the
-      // one-week "did that happen?" follow-up refers back to.
-      const window = status === "matched" && windows.length > 0
-        ? { start: windows[0].start, end: windows[0].end }
+      // one-week "did that happen?" follow-up refers back to. Together
+      // intentions point at a together window.
+      const pool = intention.context === "together" ? togetherWindows : windows;
+      const window = status === "matched" && pool.length > 0
+        ? { start: pool[0].start, end: pool[0].end }
         : null;
       await setIntentionStatus(intention.intention_id, status, familyId, window);
       onRefresh?.();
@@ -76,6 +83,45 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
       setError(err.message);
     }
   };
+
+  const renderIntention = (it) => (
+    <li key={it.intention_id}
+        className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-sage-release/50 pl-3 font-micro text-sm">
+      <span className="text-sanctuary-navy/80">
+        {it.description}
+        {it.type === "standing" && (
+          <span className="ml-2 rounded-full bg-sanctuary-navy/5 px-2 py-0.5 text-xs text-sanctuary-navy/50">
+            ongoing
+          </span>
+        )}
+      </span>
+      {live && (
+        <span className="flex gap-2">
+          <button onClick={() => mark(it, "matched")}
+                  className="rounded-full border border-sage-release/40 bg-sage-release/10 px-3 py-1 text-xs font-medium text-sanctuary-navy transition hover:bg-sage-release/20">
+            ✓ Scheduled it
+          </button>
+          <button onClick={() => mark(it, "dismissed")}
+                  className="rounded-full border border-sanctuary-navy/15 px-3 py-1 text-xs font-medium text-sanctuary-navy/60 transition hover:bg-sanctuary-navy/5">
+            Not anymore
+          </button>
+        </span>
+      )}
+    </li>
+  );
+
+  const windowLine = (list, label) => (
+    <p className="font-micro text-sm text-sanctuary-navy/70">
+      {label}{" "}
+      {list.map((w, i) => (
+        <span key={w.start} className="font-semibold text-sanctuary-navy">
+          {i > 0 && ", "}
+          {fmtWindow(w)}
+        </span>
+      ))}
+      .
+    </p>
+  );
 
   const keep = async (intention) => {
     setError(null);
@@ -103,68 +149,56 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
         💛 Time For What Matters
       </h2>
 
-      {windows.length > 0 && (
+      {/* For you — personal windows next to your solo intentions */}
+      {aloneIntentions.length > 0 && (
         <div className="mb-4">
-          <p className="font-micro text-sm text-sanctuary-navy/70">
-            {windows.length === 1 ? "There's an open window" : "Open windows"} this
-            week —{" "}
-            {windows.map((w, i) => (
-              <span key={w.start} className="font-semibold text-sanctuary-navy">
-                {i > 0 && ", "}
-                {fmtWindow(w)}
-              </span>
-            ))}
-            .
+          {windows.length > 0 &&
+            windowLine(windows, windows.length === 1
+              ? "You've got an open window this week —"
+              : "Open windows this week —")}
+          <p className="mt-1 font-micro text-sm text-sanctuary-navy/70">
+            {windows.length > 0 ? "This could be time for:" : "On your list:"}
           </p>
-          {intentions.length > 0 && (
-            <p className="mt-1 font-micro text-sm text-sanctuary-navy/70">
-              This could be time for:
+          <ul className="mt-2 space-y-2">{aloneIntentions.map(renderIntention)}</ul>
+          {windows.length === 0 && (
+            <p className="mt-2 font-micro text-xs text-sanctuary-navy/50">
+              No clear windows this week — Exhale keeps looking.
             </p>
           )}
         </div>
       )}
 
-      {intentions.length > 0 ? (
-        <ul className="space-y-2">
-          {intentions.map((it) => (
-            <li key={it.intention_id}
-                className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-sage-release/50 pl-3 font-micro text-sm">
-              <span className="text-sanctuary-navy/80">
-                {it.description}
-                {it.type === "standing" && (
-                  <span className="ml-2 rounded-full bg-sanctuary-navy/5 px-2 py-0.5 text-xs text-sanctuary-navy/50">
-                    ongoing
-                  </span>
-                )}
-              </span>
-              {live && (
-                <span className="flex gap-2">
-                  <button onClick={() => mark(it, "matched")}
-                          className="rounded-full border border-sage-release/40 bg-sage-release/10 px-3 py-1 text-xs font-medium text-sanctuary-navy transition hover:bg-sage-release/20">
-                    ✓ Scheduled it
-                  </button>
-                  <button onClick={() => mark(it, "dismissed")}
-                          className="rounded-full border border-sanctuary-navy/15 px-3 py-1 text-xs font-medium text-sanctuary-navy/60 transition hover:bg-sanctuary-navy/5">
-                    Not anymore
-                  </button>
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
+      {/* Together — the both-of-you windows next to shared intentions */}
+      {togetherIntentions.length > 0 && (
+        <div className="mb-4 border-t border-sanctuary-navy/10 pt-3">
+          <p className="mb-1 font-micro text-xs font-semibold uppercase text-sanctuary-navy/50">
+            🤝 Together
+          </p>
+          {togetherWindows.length > 0 ? (
+            <>
+              {windowLine(togetherWindows, togetherWindows.length === 1
+                ? "You're both free —"
+                : "You're both free —")}
+              <p className="mt-1 font-micro text-sm text-sanctuary-navy/70">
+                A window for the two of you:
+              </p>
+            </>
+          ) : (
+            <p className="font-micro text-sm text-sanctuary-navy/50">
+              No window with both of you free this week — connect both calendars
+              so Exhale can find one.
+            </p>
+          )}
+          <ul className="mt-2 space-y-2">{togetherIntentions.map(renderIntention)}</ul>
+        </div>
+      )}
+
+      {intentions.length === 0 &&
         checkIns.length === 0 && followUps.length === 0 && block.show_add_nudge && (
           <p className="font-micro text-sm text-sanctuary-navy/50">
             No personal intentions logged — add one anytime.
           </p>
-        )
-      )}
-
-      {windows.length === 0 && intentions.length > 0 && (
-        <p className="mt-3 font-micro text-xs text-sanctuary-navy/50">
-          No clear windows this week — Exhale keeps looking.
-        </p>
-      )}
+        )}
 
       {/* One "did that happen?" per matched intention — then done, whatever the answer */}
       {followUps.length > 0 && (
@@ -232,6 +266,17 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
                   className="rounded-full border border-sanctuary-navy/15 px-3 py-1.5 font-micro text-xs font-medium text-sanctuary-navy/70 transition hover:bg-sanctuary-navy/5"
                   title="Standing = keeps coming back (gym, a friend). One-off = done once (an appointment).">
             {kind === "standing" ? "ongoing" : "one-time"}
+          </button>
+          <button type="button" aria-pressed={context === "together"}
+                  onClick={() => setContext(context === "alone" ? "together" : "alone")}
+                  className={
+                    "rounded-full border px-3 py-1.5 font-micro text-xs font-medium transition " +
+                    (context === "together"
+                      ? "border-sage-release/60 bg-sage-release/20 text-sanctuary-navy"
+                      : "border-sanctuary-navy/15 text-sanctuary-navy/70 hover:bg-sanctuary-navy/5")
+                  }
+                  title="Just you (a solo lift, an appointment) or the two of you (a class together, a date).">
+            {context === "together" ? "🤝 together" : "just me"}
           </button>
           <button type="submit" disabled={busy || !text.trim()}
                   className="rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-1.5 font-micro text-sm font-medium text-sanctuary-navy transition hover:bg-sage-release/20 disabled:opacity-50">

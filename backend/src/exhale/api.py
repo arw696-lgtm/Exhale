@@ -782,6 +782,7 @@ def _time_for_what_matters(family_id: str, profile: dict) -> dict | None:
             store.set_profile(family_id, intentions_nudge_shown=True)
 
     windows: list[dict] = []
+    together_windows: list[dict] = []
     if config:
         model = CoverageModelIn(**config)
         family = build_family(model)
@@ -796,8 +797,17 @@ def _time_for_what_matters(family_id: str, profile: dict) -> dict | None:
         # The household's best few, longest first, presented chronologically.
         windows.sort(key=lambda w: -w["duration_hours"])
         windows = sorted(windows[:3], key=lambda w: w["start"])
-    return build_time_for_what_matters(windows, groups, updated,
-                                       show_add_nudge=show_add_nudge)
+
+        # Together time: the adults who'd go out as a pair (parents/guardians).
+        adults = [c.name for c in model.caregivers
+                  if c.role in ("PARENT", "GUARDIAN")]
+        if len(adults) >= 2:
+            shared = family.shared_windows(adults, start, end, min_hours=1.5)
+            shared = sorted(shared, key=lambda w: -w.duration_hours)[:3]
+            together_windows = [w.to_dict() for w in sorted(shared, key=lambda w: w.start)]
+    return build_time_for_what_matters(
+        windows, groups, updated,
+        together_windows=together_windows, show_add_nudge=show_add_nudge)
 
 
 @app.get("/v1/families/{family_id}/ledger")
@@ -1389,6 +1399,7 @@ class IntentionIn(BaseModel):
 
     description: str
     type: str = "standing"  # standing | one_off
+    context: str = "alone"  # alone | together (together = both parents free)
     target_deadline: str | None = None
     created_by: str | None = None  # defaults to the logged-in member's name
 
@@ -1425,7 +1436,8 @@ def add_intention(
     created_by = req.created_by or (user.display_name if user else "household")
     try:
         item = new_intention(family_id, created_by, req.description,
-                             type_=req.type, target_deadline=req.target_deadline)
+                             type_=req.type, target_deadline=req.target_deadline,
+                             context=req.context)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     items = list(store.profile(family_id).get("intentions") or [])
