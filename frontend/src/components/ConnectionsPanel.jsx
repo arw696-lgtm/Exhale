@@ -82,7 +82,7 @@ export default function ConnectionsPanel({ familyId }) {
   };
 
   return (
-    <section className="mb-8 rounded-card bg-white p-5 shadow-card">
+    <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
       <header className="mb-4">
         <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
           🔗 Connections

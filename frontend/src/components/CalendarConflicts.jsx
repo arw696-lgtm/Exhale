@@ -5,7 +5,7 @@ export default function CalendarConflicts({ conflicts = [] }) {
   if (conflicts.length === 0) return null;
 
   return (
-    <section className="rounded-card bg-white p-5 shadow-card">
+    <section className="rounded-card bg-surface p-5 shadow-card">
       <header className="mb-4">
         <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
           ⇌ Calendar Conflict Resolutions

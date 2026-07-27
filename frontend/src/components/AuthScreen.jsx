@@ -30,7 +30,7 @@ export default function AuthScreen({ onAuthed }) {
   };
 
   const field =
-    "w-full rounded-xl border border-sanctuary-navy/15 bg-white px-4 py-2.5 " +
+    "w-full rounded-xl border border-sanctuary-navy/15 bg-surface px-4 py-2.5 " +
     "font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/35 " +
     "focus:border-sage-release focus:outline-none";
 
@@ -46,7 +46,7 @@ export default function AuthScreen({ onAuthed }) {
           </p>
         </header>
 
-        <div className="rounded-card bg-white p-6 shadow-card">
+        <div className="rounded-card bg-surface p-6 shadow-card">
           {/* Mode toggle */}
           <div className="mb-5 grid grid-cols-2 rounded-full bg-pure-breath p-1">
             {["login", "signup"].map((m) => (
@@ -57,7 +57,7 @@ export default function AuthScreen({ onAuthed }) {
                 className={
                   "rounded-full py-1.5 font-micro text-sm font-semibold transition " +
                   (mode === m
-                    ? "bg-sanctuary-navy text-white"
+                    ? "bg-ink-solid text-white"
                     : "text-sanctuary-navy/60 hover:text-sanctuary-navy")
                 }
               >
@@ -111,7 +111,7 @@ export default function AuthScreen({ onAuthed }) {
             <button
               type="submit"
               disabled={busy}
-              className="w-full rounded-full bg-sanctuary-navy py-2.5 font-micro text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="w-full rounded-full bg-ink-solid py-2.5 font-micro text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {busy ? "One moment…" : mode === "login" ? "Log in →" : "Start breathing easier →"}
             </button>

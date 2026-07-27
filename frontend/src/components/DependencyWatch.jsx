@@ -11,7 +11,7 @@ import WhyTrace from "./WhyTrace.jsx";
 export default function DependencyWatch({ watchItems = [], completed = [] }) {
   if (completed.length === 0 && watchItems.length === 0) {
     return (
-      <section className="rounded-[22px] border border-sanctuary-navy/10 bg-white p-5 shadow-card">
+      <section className="rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
         <h2 className="mb-3 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
           Dependency watch
         </h2>
@@ -23,7 +23,7 @@ export default function DependencyWatch({ watchItems = [], completed = [] }) {
   }
 
   return (
-    <section className="rounded-[22px] border border-sanctuary-navy/10 bg-white p-5 shadow-card">
+    <section className="rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
       <h2 className="mb-4 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
         Dependency watch
       </h2>

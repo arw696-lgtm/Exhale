@@ -2,20 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Brand palette as RGB channels so every token flips in one place. The whole
+   app is styled through these (via the Tailwind names in tailwind.config.js);
+   nothing hard-codes a hex, so light ↔ dark is a token swap, not a rewrite. */
 :root {
+  --ink: 26 43 76;        /* Sanctuary Navy — text, borders */
+  --canvas: 244 246 249;  /* Pure Breath — page ground */
+  --surface: 255 255 255; /* card / panel */
+  --sage: 124 157 150;    /* Sage Release — safe / shared / success */
+  --amber: 226 149 120;   /* Looming Amber — attention, not alarm */
+  --ink-solid: 26 43 76;  /* filled primary button (white text on it) */
   color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: 226 232 240;
+    --canvas: 12 20 32;
+    --surface: 22 35 59;
+    --sage: 166 195 188;
+    --amber: 237 171 144;
+    --ink-solid: 42 62 100;
+    color-scheme: dark;
+  }
+}
+/* The viewer's explicit toggle wins over the OS preference, both directions. */
+:root[data-theme="light"] {
+  --ink: 26 43 76; --canvas: 244 246 249; --surface: 255 255 255;
+  --sage: 124 157 150; --amber: 226 149 120; --ink-solid: 26 43 76;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --ink: 226 232 240; --canvas: 12 20 32; --surface: 22 35 59;
+  --sage: 166 195 188; --amber: 237 171 144; --ink-solid: 42 62 100;
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
-  /* Pure Breath ground with the faintest sage/amber dawn — calm, not flat (§8). */
-  background-color: #f8f9fa;
+  /* Pure Breath ground with the faintest sage/amber dawn — calm on both themes. */
+  background-color: rgb(var(--canvas));
   background-image:
-    radial-gradient(120% 70% at 12% -5%, rgba(124, 157, 150, 0.10), transparent 55%),
-    radial-gradient(110% 70% at 100% 4%, rgba(226, 149, 120, 0.09), transparent 50%);
+    radial-gradient(120% 70% at 12% -5%, rgb(var(--sage) / 0.12), transparent 55%),
+    radial-gradient(110% 70% at 100% 4%, rgb(var(--amber) / 0.10), transparent 50%);
   background-attachment: fixed;
-  color: #1a2b4c; /* Sanctuary Navy */
+  color: rgb(var(--ink));
   -webkit-font-smoothing: antialiased;
 }
 
@@ -32,13 +63,14 @@ body {
   .breath-orb { animation: none; }
 }
 
-/* Severity as a quiet dot with a soft halo — attention without red-alert anxiety. */
+/* Severity as a quiet dot with a soft halo — attention without red-alert
+   anxiety. Token-backed so the navy dot stays visible on a dark ground. */
 .severity-dot {
   width: 7px;
   height: 7px;
   border-radius: 9999px;
   flex: none;
 }
-.severity-dot--amber { background: #e29578; box-shadow: 0 0 0 4px rgba(226, 149, 120, 0.16); }
-.severity-dot--sage { background: #7c9d96; box-shadow: 0 0 0 4px rgba(124, 157, 150, 0.16); }
-.severity-dot--navy { background: #1a2b4c; box-shadow: 0 0 0 4px rgba(26, 43, 76, 0.12); }
+.severity-dot--amber { background: rgb(var(--amber)); box-shadow: 0 0 0 4px rgb(var(--amber) / 0.16); }
+.severity-dot--sage { background: rgb(var(--sage)); box-shadow: 0 0 0 4px rgb(var(--sage) / 0.16); }
+.severity-dot--navy { background: rgb(var(--ink)); box-shadow: 0 0 0 4px rgb(var(--ink) / 0.12); }

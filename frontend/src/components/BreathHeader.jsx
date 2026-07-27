@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 /**
  * Breath Header — the app opens with a breath, not a dashboard.
@@ -6,13 +6,59 @@ import React from "react";
  * Reads the week's emotional temperature from the briefing and says it plainly:
  * a clear week gets relief, a full one gets steadiness — never alarm. The glow
  * behind it literally inhales and exhales (stilled under reduced-motion). This
- * is the thesis made into the first thing you see.
+ * is the thesis made into the first thing you see. Also home to the light/dark
+ * toggle (the whole app flips through CSS tokens).
  */
 function timeGreeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
+}
+
+function currentTheme() {
+  if (typeof document !== "undefined") {
+    const attr = document.documentElement.getAttribute("data-theme");
+    if (attr === "light" || attr === "dark") return attr;
+  }
+  return typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState(currentTheme);
+  const flip = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem("exhale-theme", next);
+    } catch (e) {
+      /* storage unavailable — theme still applies for the page life */
+    }
+  };
+  const dark = theme === "dark";
+  return (
+    <button
+      onClick={flip}
+      aria-label={dark ? "Switch to light" : "Switch to dark"}
+      title={dark ? "Switch to light" : "Switch to dark"}
+      className="grid h-7 w-7 place-items-center rounded-full text-sanctuary-navy/55 transition hover:bg-sanctuary-navy/5 hover:text-sanctuary-navy"
+    >
+      {dark ? (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19" />
+        </svg>
+      ) : (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+        </svg>
+      )}
+    </button>
+  );
 }
 
 export default function BreathHeader({ user, briefing, inviteCode, onLogout }) {
@@ -56,24 +102,31 @@ export default function BreathHeader({ user, briefing, inviteCode, onLogout }) {
       />
 
       <div className="relative">
-        {/* account row */}
-        {user && (
-          <div className="mb-6 flex items-center justify-between font-micro text-xs text-sanctuary-navy/50">
-            <span>
-              {user.display_name}'s household
-              {inviteCode && (
-                <span className="ml-2 rounded-full bg-sage-release/15 px-2 py-0.5 font-semibold text-sanctuary-navy/60">
-                  invite code: {inviteCode}
-                </span>
-              )}
-            </span>
-            {onLogout && (
-              <button onClick={onLogout} className="underline-offset-2 hover:underline">
+        {/* top bar — household on the left, theme + logout on the right */}
+        <div className="mb-6 flex items-center justify-between font-micro text-xs text-sanctuary-navy/50">
+          <span>
+            {user ? (
+              <>
+                {user.display_name}'s household
+                {inviteCode && (
+                  <span className="ml-2 rounded-full bg-sage-release/15 px-2 py-0.5 font-semibold text-sanctuary-navy/60">
+                    invite code: {inviteCode}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span aria-hidden="true">&nbsp;</span>
+            )}
+          </span>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            {user && onLogout && (
+              <button onClick={onLogout} className="ml-1 underline-offset-2 hover:underline">
                 Log out
               </button>
             )}
           </div>
-        )}
+        </div>
 
         <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-release">
           {briefing.week_of

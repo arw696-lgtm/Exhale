@@ -5,10 +5,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        "sanctuary-navy": "#1A2B4C",
-        "sage-release": "#7C9D96",
-        "looming-amber": "#E29578",
-        "pure-breath": "#F8F9FA",
+        // Backed by CSS variables (RGB channels) so the whole brand palette
+        // flips between light and dark from one place — see index.css. Alpha
+        // modifiers (text-sanctuary-navy/70, border-…/10) keep working via
+        // the <alpha-value> slot.
+        "sanctuary-navy": "rgb(var(--ink) / <alpha-value>)",
+        "sage-release": "rgb(var(--sage) / <alpha-value>)",
+        "looming-amber": "rgb(var(--amber) / <alpha-value>)",
+        "pure-breath": "rgb(var(--canvas) / <alpha-value>)",
+        // Card/panel surface (was literal white).
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        // Filled primary buttons — a solid navy that stays legible under white
+        // text in BOTH themes (doesn't invert with the ink token).
+        "ink-solid": "rgb(var(--ink-solid) / <alpha-value>)",
       },
       fontFamily: {
         display: ["'Instrument Serif'", "ui-serif", "Georgia", "serif"],

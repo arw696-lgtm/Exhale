@@ -62,7 +62,7 @@ export default function HelperInvitePanel({ familyId }) {
   const helpers = roster.helpers ?? [];
 
   return (
-    <section className="mb-8 rounded-card bg-white p-5 shadow-card">
+    <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
       <header className="mb-3">
         <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
           🧑‍🍼 Helpers

@@ -20,7 +20,7 @@ export default function ThreatCard({ item, draft, onOpenDraft }) {
   const obligationId = item.obligation_id ?? item.obligation_node_id;
 
   return (
-    <article className="rounded-[22px] border border-sanctuary-navy/10 bg-white p-5 shadow-card">
+    <article className="rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
       <div className="flex items-center gap-2">
         <span className={`severity-dot ${DOT[tier] ?? DOT.CRITICAL}`} aria-hidden="true" />
         <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
@@ -64,7 +64,7 @@ export default function ThreatCard({ item, draft, onOpenDraft }) {
         <button
           onClick={() => onOpenDraft?.(obligationId)}
           disabled={!draft && !onOpenDraft}
-          className="rounded-full bg-sanctuary-navy px-4 py-1.5 font-micro text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+          className="rounded-full bg-ink-solid px-4 py-1.5 font-micro text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
         >
           {primaryLabel} →
         </button>

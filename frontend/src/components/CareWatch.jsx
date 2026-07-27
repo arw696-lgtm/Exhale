@@ -73,7 +73,7 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
   const DOT = { CRITICAL: "severity-dot--amber", IMPORTANT: "severity-dot--sage", ADVISORY: "severity-dot--navy" };
 
   return (
-    <section className="mb-8 rounded-[22px] border border-sanctuary-navy/10 bg-white p-5 shadow-card">
+    <section className="mb-8 rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
       <header className="mb-4 flex items-baseline justify-between">
         <h2 className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
           Care watch · {recipient}

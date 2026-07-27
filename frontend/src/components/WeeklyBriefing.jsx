@@ -89,7 +89,7 @@ export default function WeeklyBriefing({
 
       {/* Learned rules — the household's recurring rhythms, with evidence */}
       {(briefing.learned_rules?.length ?? 0) > 0 && (
-        <section className="mb-8 rounded-card bg-white p-5 shadow-card">
+        <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
           <h2 className="mb-3 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
             🧠 Patterns Exhale Has Learned
           </h2>
