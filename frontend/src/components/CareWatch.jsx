@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { threatPresentation } from "../brand/tokens.js";
 import { scheduleEvent } from "../data/api.js";
 import WhyTrace from "./WhyTrace.jsx";
 
@@ -71,11 +70,13 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
     }
   };
 
+  const DOT = { CRITICAL: "severity-dot--amber", IMPORTANT: "severity-dot--sage", ADVISORY: "severity-dot--navy" };
+
   return (
-    <section className="mb-8 rounded-card bg-white p-5 shadow-card">
+    <section className="mb-8 rounded-[22px] border border-sanctuary-navy/10 bg-white p-5 shadow-card">
       <header className="mb-4 flex items-baseline justify-between">
-        <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-          🧑‍🍼 Care Watch · {recipient}
+        <h2 className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+          Care watch · {recipient}
         </h2>
         <span className="font-micro text-xs text-sanctuary-navy/50">
           {summary.total_gaps} gap{summary.total_gaps === 1 ? "" : "s"} to cover
@@ -84,25 +85,25 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
 
       <ul className="space-y-4">
         {gaps.map((gap) => {
-          const band = threatPresentation[gap.threat_level] ?? threatPresentation.ADVISORY;
+          const dot = DOT[gap.threat_level] ?? DOT.ADVISORY;
           return (
             <li
               key={`${gap.recipient ?? ""}-${gap.start}-${gap.end}`}
-              className="border-l-2 pl-3 font-micro text-sm"
-              style={{ borderColor: band.accent }}
+              className="font-micro text-sm"
             >
               <div className="flex items-baseline justify-between gap-2">
-                <p className="font-semibold text-sanctuary-navy">
-                  {band.indicator} {multiChild && gap.recipient ? `${gap.recipient} · ` : ""}
+                <p className="flex items-center gap-2 font-semibold text-sanctuary-navy">
+                  <span className={`severity-dot ${dot}`} aria-hidden="true" />
+                  {multiChild && gap.recipient ? `${gap.recipient} · ` : ""}
                   {formatWindow(gap)}
                 </p>
                 <span className="whitespace-nowrap text-xs text-sanctuary-navy/50">
                   {gap.duration_hours}h
                 </span>
               </div>
-              <p className="mt-1 text-sanctuary-navy/70">{gap.reason}</p>
-              <WhyTrace basis={gap.basis} />
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <p className="mt-1 pl-4 text-sanctuary-navy/70">{gap.reason}</p>
+              <div className="pl-4"><WhyTrace basis={gap.basis} /></div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 pl-4">
                 <button className="rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-1.5 font-medium text-sanctuary-navy transition hover:bg-sage-release/20">
                   → {gap.suggested_action}
                 </button>
