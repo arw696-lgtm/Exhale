@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import WeeklyBriefing from "./components/WeeklyBriefing.jsx";
+import CalendarScreen from "./components/CalendarScreen.jsx";
+import HouseholdScreen from "./components/HouseholdScreen.jsx";
+import YouScreen from "./components/YouScreen.jsx";
+import TabBar from "./components/TabBar.jsx";
 import HelperHome from "./components/HelperHome.jsx";
 import DraftModal from "./components/DraftModal.jsx";
 import AuthScreen from "./components/AuthScreen.jsx";
@@ -21,6 +25,7 @@ export default function App() {
   const [source, setSource] = useState(null);
   const [openObligationId, setOpenObligationId] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState("today");
 
   const familyId = me?.family_id ?? DEMO_FAMILY;
 
@@ -115,30 +120,61 @@ export default function App() {
     );
   }
 
+  const live = source === "api";
+  const refresh = () => loadData(familyId);
+  const needsCount = briefing.summary?.critical_count ?? briefing.critical_threats?.length ?? 0;
+
   return (
     <>
-      <WeeklyBriefing
-        briefing={briefing}
-        drafts={drafts}
-        onOpenDraft={setOpenObligationId}
-        user={me}
-        inviteCode={me?.invite_code}
-        onLogout={me ? handleLogout : undefined}
-        familyId={familyId}
-        live={source === "api"}
-        onRefresh={() => loadData(familyId)}
-      />
+      {/* pb clears the fixed tab bar */}
+      <div className="pb-28">
+        {tab === "today" && (
+          <WeeklyBriefing
+            briefing={briefing}
+            drafts={drafts}
+            onOpenDraft={setOpenObligationId}
+            user={me}
+            inviteCode={me?.invite_code}
+            onLogout={me ? handleLogout : undefined}
+            familyId={familyId}
+            live={live}
+            onRefresh={refresh}
+          />
+        )}
+        {tab === "calendar" && <CalendarScreen briefing={briefing} />}
+        {tab === "household" && (
+          <HouseholdScreen
+            briefing={briefing}
+            familyId={familyId}
+            live={live}
+            onRefresh={refresh}
+          />
+        )}
+        {tab === "you" && (
+          <YouScreen
+            user={me}
+            inviteCode={me?.invite_code}
+            familyId={familyId}
+            live={live}
+            onLogout={me ? handleLogout : undefined}
+          />
+        )}
+
+        {source === "fixture" && (
+          <p className="pb-2 text-center font-micro text-xs text-sanctuary-navy/30">
+            offline preview · backend not connected
+          </p>
+        )}
+      </div>
+
+      <TabBar active={tab} onChange={setTab} todayCount={needsCount} />
+
       <DraftModal
         draft={openObligationId ? drafts[openObligationId] : null}
         busy={busy}
         onApprove={handleApprove}
         onClose={() => setOpenObligationId(null)}
       />
-      {source === "fixture" && (
-        <p className="pb-6 text-center font-micro text-xs text-sanctuary-navy/30">
-          offline preview · backend not connected
-        </p>
-      )}
     </>
   );
 }
