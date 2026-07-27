@@ -47,7 +47,7 @@ export default function ReviewQueue({ familyId, onChanged }) {
   };
 
   return (
-    <section className="mb-8 rounded-card bg-white p-5 shadow-card">
+    <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
       <header className="mb-4 flex items-baseline justify-between">
         <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
           ？ Needs Your Confirmation

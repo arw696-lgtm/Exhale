@@ -13,11 +13,12 @@ export default function DraftModal({ draft, busy, onApprove, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-sanctuary-navy/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(8, 14, 24, 0.55)" }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg overflow-hidden rounded-card bg-white shadow-card"
+        className="w-full max-w-lg overflow-hidden rounded-card bg-surface shadow-card"
         onClick={(e) => e.stopPropagation()}
         style={{ borderTop: `4px solid ${preset.accent}` }}
       >
@@ -53,7 +54,7 @@ export default function DraftModal({ draft, busy, onApprove, onClose }) {
           <button
             onClick={onApprove}
             disabled={busy}
-            className="rounded-full bg-sanctuary-navy px-5 py-2 font-micro text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            className="rounded-full bg-ink-solid px-5 py-2 font-micro text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
           >
             {busy ? "Sending…" : `${draft.primary_action_label} →`}
           </button>
