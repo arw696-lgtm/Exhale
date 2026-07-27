@@ -1,4 +1,5 @@
 import React from "react";
+import BreathHeader from "./BreathHeader.jsx";
 import ThreatCard from "./ThreatCard.jsx";
 import DependencyWatch from "./DependencyWatch.jsx";
 import CalendarConflicts from "./CalendarConflicts.jsx";
@@ -29,71 +30,23 @@ export default function WeeklyBriefing({
   onRefresh,
 }) {
   const criticalCount = briefing.summary?.critical_count ?? briefing.critical_threats.length;
-  const careGapCount = briefing.care_watch?.summary?.total_gaps ?? 0;
-  const isAllClear =
-    criticalCount === 0 &&
-    careGapCount === 0 &&
-    (briefing.dependency_watch?.length ?? 0) === 0 &&
-    (briefing.completed?.length ?? 0) === 0 &&
-    (briefing.calendar_conflicts?.length ?? 0) === 0;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
-      {/* Account row */}
-      {user && (
-        <div className="mb-4 flex items-center justify-between font-micro text-xs text-sanctuary-navy/60">
-          <span>
-            {user.display_name}'s household
-            {inviteCode && (
-              <span className="ml-2 rounded-full bg-sage-release/15 px-2 py-0.5 font-semibold text-sanctuary-navy/70">
-                invite code: {inviteCode}
-              </span>
-            )}
-          </span>
-          <button onClick={onLogout} className="underline-offset-2 hover:underline">
-            Log out
-          </button>
-        </div>
-      )}
+      {/* Open with a breath — the week's temperature, said plainly. */}
+      <BreathHeader
+        user={user}
+        briefing={briefing}
+        inviteCode={inviteCode}
+        onLogout={onLogout}
+      />
 
-      {/* Masthead */}
-      <header className="mb-8 flex flex-col gap-1 border-b border-sanctuary-navy/10 pb-6 sm:flex-row sm:items-baseline sm:justify-between">
-        <h1 className="font-display text-4xl italic text-sanctuary-navy">Exhale Briefing</h1>
-        <p className="font-micro text-sm text-sanctuary-navy/60">{briefing.week_of}</p>
-      </header>
-
-      {/* All-clear hero. Two very different quiets: an established household
-          with nothing urgent gets relief (the whole point of the product);
-          a brand-new one gets onboarding. */}
-      {isAllClear &&
-        (briefing.care_watch || (briefing.learned_rules?.length ?? 0) > 0 ? (
-          <section className="mb-8 rounded-card bg-white p-8 text-center shadow-card">
-            <p className="font-display text-2xl italic text-sanctuary-navy">
-              Nothing urgent this week. Breathe out.
-            </p>
-            <p className="mx-auto mt-3 max-w-md font-micro text-sm text-sanctuary-navy/60">
-              Exhale is watching the calendars and the inbox — nothing needs you
-              right now. A good week to take something back: the workout, the
-              call you owe someone. "Find Your Time" below can tell you when.
-            </p>
-          </section>
-        ) : (
-          <section className="mb-8 rounded-card bg-white p-8 text-center shadow-card">
-            <p className="font-display text-2xl italic text-sanctuary-navy">
-              All clear. Breathe out.
-            </p>
-            <p className="mx-auto mt-3 max-w-md font-micro text-sm text-sanctuary-navy/60">
-              Your household graph is empty so far. Connect Gmail or forward a school
-              email, and Exhale will start catching obligations before they catch you.
-            </p>
-          </section>
-        ))}
-
-      {/* Critical threats */}
+      {/* Needs you — the short list of what actually wants attention. */}
       {criticalCount > 0 && (
         <section className="mb-8">
-          <h2 className="mb-4 font-interface text-sm font-semibold uppercase tracking-interface text-looming-amber">
-            ⚠ {criticalCount} Critical Threat{criticalCount === 1 ? "" : "s"} Detected
+          <h2 className="mb-4 flex items-center gap-2 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+            <span className="severity-dot severity-dot--amber" aria-hidden="true" />
+            Needs you · {criticalCount}
           </h2>
           <div className="space-y-4">
             {briefing.critical_threats.map((item) => {
@@ -111,6 +64,15 @@ export default function WeeklyBriefing({
         </section>
       )}
 
+      {/* Time For What Matters — the emotional heart, right after what needs you:
+          your time (alone / together / on-duty) next to what it's for. */}
+      <TimeForWhatMatters
+        block={briefing.time_for_what_matters}
+        familyId={familyId}
+        live={live}
+        onRefresh={onRefresh}
+      />
+
       {/* Household setup — shown until a coverage model exists */}
       {live && briefing.care_watch == null && (
         <SetupPanel familyId={familyId} onSaved={onRefresh} />
@@ -124,14 +86,6 @@ export default function WeeklyBriefing({
 
       {/* Waiting On — threads where the ball is in someone else's court */}
       {live && <WaitingOn familyId={familyId} />}
-
-      {/* Time For What Matters — open windows next to open intentions */}
-      <TimeForWhatMatters
-        block={briefing.time_for_what_matters}
-        familyId={familyId}
-        live={live}
-        onRefresh={onRefresh}
-      />
 
       {/* Learned rules — the household's recurring rhythms, with evidence */}
       {(briefing.learned_rules?.length ?? 0) > 0 && (
