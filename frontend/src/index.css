@@ -9,7 +9,36 @@
 body {
   margin: 0;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
-  background-color: #f8f9fa; /* Pure Breath — clutter isolation (§8) */
+  /* Pure Breath ground with the faintest sage/amber dawn — calm, not flat (§8). */
+  background-color: #f8f9fa;
+  background-image:
+    radial-gradient(120% 70% at 12% -5%, rgba(124, 157, 150, 0.10), transparent 55%),
+    radial-gradient(110% 70% at 100% 4%, rgba(226, 149, 120, 0.09), transparent 50%);
+  background-attachment: fixed;
   color: #1a2b4c; /* Sanctuary Navy */
   -webkit-font-smoothing: antialiased;
 }
+
+/* The breath — the header glow inhales and exhales. The thesis, made literal. */
+@keyframes exhale-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.75; }
+  50% { transform: scale(1.14); opacity: 1; }
+}
+.breath-orb {
+  animation: exhale-breathe 7s ease-in-out infinite;
+  transform-origin: 40% 40%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .breath-orb { animation: none; }
+}
+
+/* Severity as a quiet dot with a soft halo — attention without red-alert anxiety. */
+.severity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  flex: none;
+}
+.severity-dot--amber { background: #e29578; box-shadow: 0 0 0 4px rgba(226, 149, 120, 0.16); }
+.severity-dot--sage { background: #7c9d96; box-shadow: 0 0 0 4px rgba(124, 157, 150, 0.16); }
+.severity-dot--navy { background: #1a2b4c; box-shadow: 0 0 0 4px rgba(26, 43, 76, 0.12); }
