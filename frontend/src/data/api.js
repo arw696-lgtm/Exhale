@@ -215,6 +215,39 @@ export function resolveWaiting(itemId, familyId = DEMO_FAMILY) {
   return postJson(`/v1/families/${familyId}/waiting/${itemId}/resolve`);
 }
 
+// --- household task list --------------------------------------------------------
+/** Open household tasks (oldest first), or null when unavailable. */
+export async function fetchTasks(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/tasks`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export function addTask(description, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/tasks`, { description });
+}
+
+export function claimTask(taskId, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/tasks/${taskId}/claim`);
+}
+
+export function completeTask(taskId, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/tasks/${taskId}/complete`);
+}
+
+export async function dropTask(taskId, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(`/v1/families/${familyId}/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
 // --- calendar write (controlled autonomy) --------------------------------------
 export function scheduleEvent({ title, start, end, description }, familyId = DEMO_FAMILY) {
   return postJson(`/v1/families/${familyId}/schedule`, { title, start, end, description });

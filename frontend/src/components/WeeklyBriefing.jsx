@@ -6,6 +6,7 @@ import CalendarConflicts from "./CalendarConflicts.jsx";
 import CareWatch from "./CareWatch.jsx";
 import HandledRecap from "./HandledRecap.jsx";
 import ReviewQueue from "./ReviewQueue.jsx";
+import TasksPanel from "./TasksPanel.jsx";
 import TimeForWhatMatters from "./TimeForWhatMatters.jsx";
 import WaitingOn from "./WaitingOn.jsx";
 
@@ -83,6 +84,15 @@ export default function WeeklyBriefing({
         live={live}
         onRefresh={onRefresh}
       />
+
+      {/* Around the house — the family's own task pile, laid next to found time */}
+      {live && (
+        <TasksPanel
+          familyId={familyId}
+          window={briefing.time_for_what_matters?.windows?.[0]}
+          onChanged={onRefresh}
+        />
+      )}
 
       {/* Review Queue — items held for a human yes/no (live backend only) */}
       {live && <ReviewQueue familyId={familyId} onChanged={onRefresh} />}

@@ -1494,6 +1494,121 @@ def resolve_waiting(
     return {"family_id": family_id, "item_id": item_id, "status": "resolved"}
 
 
+# --- Household task list: the "someone needs to do this" pile ----------------------
+class TaskIn(BaseModel):
+    """A chore or errand the family gives itself ("mow the lawn")."""
+
+    description: str
+
+
+def _member_name(user, fallback: str = "Someone") -> str:
+    """First name of the acting member (anonymous dev mode → a neutral name)."""
+
+    if user is not None and (user.display_name or "").strip():
+        return user.display_name.strip().split()[0]
+    return fallback
+
+
+@app.get("/v1/families/{family_id}/tasks")
+def get_tasks(family_id: str = Depends(require_family_access)) -> dict:
+    """Open household tasks, oldest first."""
+
+    from exhale.tasks import open_tasks
+
+    items = store.profile(family_id).get("tasks") or []
+    return {"family_id": family_id, "view": "task_list",
+            "open": open_tasks(items)}
+
+
+@app.post("/v1/families/{family_id}/tasks")
+def add_household_task(
+    req: TaskIn,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
+    """Add a task to the household pile — on the household's plate, no one's."""
+
+    from exhale.tasks import add_task
+
+    items = list(store.profile(family_id).get("tasks") or [])
+    try:
+        items, task = add_task(items, req.description,
+                               created_by=_member_name(user))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    store.set_profile(family_id, tasks=items)
+    return {"family_id": family_id, **task}
+
+
+@app.post("/v1/families/{family_id}/tasks/{task_id}/claim")
+def claim_household_task(
+    task_id: str,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
+    """"I've got this" — a volunteer signal, never a lock or an assignment."""
+
+    from exhale.tasks import claim_task
+
+    items = list(store.profile(family_id).get("tasks") or [])
+    who = _member_name(user)
+    try:
+        items = claim_task(items, task_id, who=who)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    store.set_profile(family_id, tasks=items)
+    return {"family_id": family_id, "task_id": task_id, "claimed_by": who}
+
+
+@app.post("/v1/families/{family_id}/tasks/{task_id}/complete")
+def complete_household_task(
+    task_id: str,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
+    """Done — logged once into the resolved record, so it shows up in the
+    Handled recap and the Sunday reflection's "what you carried"."""
+
+    from exhale.handled import log_resolved
+    from exhale.tasks import complete_task
+
+    items = list(store.profile(family_id).get("tasks") or [])
+    who = _member_name(user)
+    try:
+        items, done = complete_task(items, task_id, who=who)
+    except ValueError as exc:  # double-tap must not double-credit
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    store.set_profile(family_id, tasks=items)
+    log_resolved(
+        store, family_id,
+        item_id=task_id, resolved_type="task",
+        brief_description=f"{done['description']} — done by {who}",
+    )
+    return {"family_id": family_id, "task_id": task_id, "status": "done",
+            "completed_by": who}
+
+
+@app.delete("/v1/families/{family_id}/tasks/{task_id}")
+def drop_household_task(
+    task_id: str, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Let it go — removed without ceremony, never logged as a win."""
+
+    from exhale.tasks import drop_task
+
+    items = list(store.profile(family_id).get("tasks") or [])
+    try:
+        items = drop_task(items, task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    store.set_profile(family_id, tasks=items)
+    return {"family_id": family_id, "task_id": task_id, "status": "dropped"}
+
+
 # --- Personal intentions: what the found time is FOR --------------------------------
 class IntentionIn(BaseModel):
     """One thing someone is trying to find time for. A sentence, not a task."""

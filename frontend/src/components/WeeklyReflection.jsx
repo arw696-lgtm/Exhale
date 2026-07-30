@@ -16,6 +16,7 @@ const KIND_LABEL = {
   waiting_on: "Closed a loop",
   pattern_catch: "Caught",
   intention: "Made time",
+  task: "Checked off",
 };
 
 const CONTEXT_LABEL = { alone: "your time", together: "together", on_duty: "on-duty" };

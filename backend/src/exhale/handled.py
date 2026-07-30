@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 MAX_LOG_ENTRIES = 200
 RECAP_DAYS = 7
 
-RESOLVED_TYPES = ("dependency_gap", "waiting_on", "pattern_catch")
+RESOLVED_TYPES = ("dependency_gap", "waiting_on", "pattern_catch", "task")
 
 
 def log_resolved(
