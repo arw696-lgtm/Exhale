@@ -28,9 +28,14 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+from exhale.graph import KnowledgeGraph, NodeType
 from exhale.waiting import CRITICAL_AFTER_DAYS, NUDGE_AFTER_DAYS
 
 REFLECT_DAYS = 7
+
+# The lived week is worth seeing, but not endlessly — cap the calendar moments
+# so the reflection stays a glance, not a log.
+MAX_EVENTS = 6
 
 # An intention that has surfaced this many times and still isn't matched is a
 # genuine long-running want, not a passing whim — worth putting time on.
@@ -40,14 +45,25 @@ HARD_WON_SURFACE_COUNT = 2
 
 
 def build_weekly_reflection(
-    profile: dict, care_watch: dict | None = None, *, now: datetime | None = None
+    profile: dict,
+    care_watch: dict | None = None,
+    *,
+    graph: KnowledgeGraph | None = None,
+    now: datetime | None = None,
 ) -> dict:
-    """Assemble the Sunday reflection from the family's own resolved signals."""
+    """Assemble the Sunday reflection from the family's own resolved signals.
+
+    ``graph`` (when supplied) adds the *lived* week: calendar events that
+    already happened — the good non-task moments that would otherwise go unseen.
+    They colour "what you carried" but don't drive the tenor, so a busy-but-
+    behind week is never mistaken for a triumphant one.
+    """
 
     now = now or datetime.now()
     cutoff = now - timedelta(days=REFLECT_DAYS)
 
     carried, hard_won = _carried(profile, cutoff)
+    events = _week_events(graph, carried, now=now) if graph is not None else []
     lingering = _lingering(profile, now=now)
 
     return {
@@ -56,10 +72,47 @@ def build_weekly_reflection(
             "from": (now - timedelta(days=REFLECT_DAYS)).date().isoformat(),
             "to": now.date().isoformat(),
         },
+        # Tenor reads accomplishments + pressure only — lived moments never
+        # inflate a hard week into a full one.
         "tenor": _tenor(len(carried), len(lingering), care_watch),
-        "carried": {"count": len(carried), "items": carried, "hard_won": hard_won},
+        "carried": {
+            "count": len(carried),
+            "items": carried,
+            "hard_won": hard_won,
+            "events": events,
+        },
         "lingering": {"count": len(lingering), "items": lingering},
     }
+
+
+def _week_events(graph: KnowledgeGraph, carried: list[dict], *, now: datetime) -> list[dict]:
+    """Calendar events that already happened this week — the lived part.
+
+    Only past events inside the window (a future date is a plan, not a memory),
+    deduped against accomplishments already listed so a cleared task and its
+    event don't say the same thing twice.
+    """
+
+    today = now.date()
+    floor = today - timedelta(days=REFLECT_DAYS)
+    carried_text = " ".join(c.get("text", "").lower() for c in carried)
+
+    moments: dict[str, date] = {}
+    for node in graph.nodes.values():
+        if node.type is not NodeType.EVENT:
+            continue
+        when = _parse_date(node.properties.get("event_date"))
+        name = (node.properties.get("name") or "").strip()
+        if when is None or not name or not (floor <= when <= today):
+            continue
+        if name.lower() in carried_text:  # already surfaced as a cleared task
+            continue
+        # Keep the most recent occurrence if a name repeats.
+        if name not in moments or when > moments[name]:
+            moments[name] = when
+
+    ordered = sorted(moments.items(), key=lambda kv: kv[1], reverse=True)[:MAX_EVENTS]
+    return [{"name": name, "date": when.isoformat()} for name, when in ordered]
 
 
 def _carried(profile: dict, cutoff: datetime) -> tuple[list[dict], list[dict]]:

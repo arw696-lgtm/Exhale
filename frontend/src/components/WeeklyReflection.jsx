@@ -20,6 +20,11 @@ const KIND_LABEL = {
 
 const CONTEXT_LABEL = { alone: "your time", together: "together", on_duty: "on-duty" };
 
+function shortDay(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  return d.toLocaleDateString(undefined, { weekday: "short" });
+}
+
 export default function WeeklyReflection({ familyId, live = true, onClose }) {
   const [r, setR] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -86,12 +91,13 @@ export default function WeeklyReflection({ familyId, live = true, onClose }) {
         </p>
       </header>
 
-      {/* What you carried — the invisible labor, made visible. */}
-      {carried.count > 0 && (
+      {/* What you carried — the invisible labor and the lived week, made visible. */}
+      {(carried.count > 0 || carried.events?.length > 0) && (
         <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
           <h2 className="mb-4 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
             What you carried
           </h2>
+          {carried.count > 0 && (
           <ul className="space-y-3">
             {carried.items.map((it, i) => (
               <li key={i} className="flex items-start gap-3 border-l-2 border-sage-release/60 pl-3">
@@ -104,6 +110,7 @@ export default function WeeklyReflection({ familyId, live = true, onClose }) {
               </li>
             ))}
           </ul>
+          )}
 
           {carried.hard_won.length > 0 && (
             <div className="mt-4 rounded-2xl bg-sage-release/8 p-3">
@@ -112,6 +119,25 @@ export default function WeeklyReflection({ familyId, live = true, onClose }) {
                 {carried.hard_won.map((h) => h.text).join(" · ")} — things you kept
                 meaning to do, and finally did.
               </p>
+            </div>
+          )}
+
+          {carried.events?.length > 0 && (
+            <div className="mt-4 border-t border-sanctuary-navy/10 pt-4">
+              <p className="mb-2 font-micro text-xs text-sanctuary-navy/45">
+                And the week you lived — not tasks, just the days:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {carried.events.map((e) => (
+                  <span
+                    key={e.name + e.date}
+                    className="rounded-full bg-sanctuary-navy/5 px-3 py-1 font-micro text-xs text-sanctuary-navy/75"
+                  >
+                    {e.name}
+                    <span className="ml-1.5 text-sanctuary-navy/40">{shortDay(e.date)}</span>
+                  </span>
+                ))}
+              </div>
             </div>
           )}
         </section>

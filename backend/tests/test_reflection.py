@@ -11,9 +11,22 @@ from datetime import date, datetime, timedelta
 from fastapi.testclient import TestClient
 
 from exhale.api import app
+from exhale.graph import KnowledgeGraph, Node, NodeType
 from exhale.reflection import build_weekly_reflection
 
 client = TestClient(app)
+
+
+def _graph_with_events(*events):
+    """A graph carrying EVENT nodes: each arg is (name, date)."""
+
+    g = KnowledgeGraph()
+    for i, (name, when) in enumerate(events):
+        g.add_node(Node(
+            node_id=f"event_{i}", type=NodeType.EVENT,
+            properties={"name": name, "event_date": when.isoformat()},
+        ))
+    return g
 
 NOW = datetime(2026, 7, 26, 18, 0)  # a Sunday evening
 
@@ -49,7 +62,7 @@ def test_empty_week_is_honestly_quiet():
     r = build_weekly_reflection({}, None, now=NOW)
     assert r["view"] == "weekly_reflection"
     assert r["tenor"]["key"] == "quiet"
-    assert r["carried"] == {"count": 0, "items": [], "hard_won": []}
+    assert r["carried"] == {"count": 0, "items": [], "hard_won": [], "events": []}
     assert r["lingering"] == {"count": 0, "items": []}
 
 
@@ -121,6 +134,42 @@ def test_dying_threads_sort_ahead_of_schedulable_wants():
     }
     ling = build_weekly_reflection(profile, None, now=NOW)["lingering"]
     assert [i["kind"] for i in ling["items"]] == ["waiting", "intention"]
+
+
+# --- the lived week (calendar events) ---------------------------------------------
+def test_carried_pulls_past_calendar_events():
+    graph = _graph_with_events(
+        ("Bachman's garden center", NOW.date() - timedelta(days=1)),   # this week, past
+        ("Soccer game", NOW.date() - timedelta(days=3)),               # this week, past
+        ("Dentist next month", NOW.date() + timedelta(days=20)),       # future — a plan
+        ("Old thing", NOW.date() - timedelta(days=15)),                # before the window
+    )
+    events = build_weekly_reflection({}, None, graph=graph, now=NOW)["carried"]["events"]
+    names = [e["name"] for e in events]
+    assert names == ["Bachman's garden center", "Soccer game"]  # newest first, past-only
+
+
+def test_events_do_not_inflate_the_tenor():
+    # A week where nothing was accomplished but the calendar was full stays honest.
+    graph = _graph_with_events(*[(f"Outing {i}", NOW.date() - timedelta(days=i + 1))
+                                 for i in range(5)])
+    r = build_weekly_reflection({}, None, graph=graph, now=NOW)
+    assert r["carried"]["count"] == 0        # events aren't accomplishments
+    assert len(r["carried"]["events"]) == 5
+    assert r["tenor"]["key"] == "quiet"      # not falsely "full"
+
+
+def test_event_is_not_duplicated_when_its_task_was_cleared():
+    profile = {"resolved_log": [
+        _resolved("g1", "Field trip permission slip — signed & sent", days_ago=2)]}
+    graph = _graph_with_events(("Field trip", NOW.date() - timedelta(days=1)))
+    events = build_weekly_reflection(profile, None, graph=graph, now=NOW)["carried"]["events"]
+    assert events == []  # "Field trip" already lives in the cleared-task text
+
+
+def test_no_graph_means_no_events_key_payload():
+    carried = build_weekly_reflection({}, None, now=NOW)["carried"]
+    assert carried["events"] == []
 
 
 # --- tenor: the honest read over the top ------------------------------------------

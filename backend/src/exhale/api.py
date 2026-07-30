@@ -859,7 +859,9 @@ def get_reflection(family_id: str = Depends(require_family_access)) -> dict:
     from exhale.reflection import build_weekly_reflection
 
     profile = store.profile(family_id)
-    return build_weekly_reflection(profile, _care_watch_for(profile))
+    return build_weekly_reflection(
+        profile, _care_watch_for(profile), graph=store.graph(family_id)
+    )
 
 
 class LearningAckIn(BaseModel):
