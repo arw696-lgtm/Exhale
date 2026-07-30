@@ -26,7 +26,35 @@ function shortDay(iso) {
   return d.toLocaleDateString(undefined, { weekday: "short" });
 }
 
-export default function WeeklyReflection({ familyId, live = true, onClose }) {
+/** One carried item — the row shape shared by the flat and grouped views. */
+function CarriedItem({ it }) {
+  return (
+    <li className="flex items-start gap-3 border-l-2 border-sage-release/60 pl-3">
+      <span className="font-micro text-sm text-sanctuary-navy/85">{it.text}</span>
+      <span className="ml-auto shrink-0 rounded-full bg-sage-release/12 px-2 py-0.5 font-micro text-[10px] font-medium uppercase tracking-wide text-sage-release">
+        {it.kind === "intention" && it.context
+          ? CONTEXT_LABEL[it.context] ?? KIND_LABEL.intention
+          : KIND_LABEL[it.kind] ?? "Done"}
+      </span>
+    </li>
+  );
+}
+
+/**
+ * Order the person groups for this viewer: Together first, then everyone
+ * else's names, then YOU — each person reads their partner's effort before
+ * their own. The household's unattributed wins close the section.
+ */
+function orderForViewer(groups, viewerFirst) {
+  const together = groups.filter((g) => g.name === "Together");
+  const named = groups.filter((g) => g.name && g.name !== "Together");
+  const others = named.filter((g) => g.name !== viewerFirst);
+  const mine = named.filter((g) => g.name === viewerFirst);
+  const household = groups.filter((g) => g.name === null);
+  return [...together, ...others, ...mine, ...household];
+}
+
+export default function WeeklyReflection({ familyId, live = true, user, onClose }) {
   const [r, setR] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [scheduled, setScheduled] = useState({}); // intention id → true
@@ -70,6 +98,15 @@ export default function WeeklyReflection({ familyId, live = true, onClose }) {
   const { tenor, carried, lingering } = r;
   const hard = tenor.key === "hard" || tenor.key === "mixed";
 
+  // Grouped "seen by name" view only when real names exist — otherwise the
+  // flat list (a one-login household doesn't need columns).
+  const viewerFirst = user?.display_name?.trim().split(/\s+/)[0];
+  const namedGroups = (carried.by_person ?? []).filter(
+    (g) => g.name && g.name !== "Together"
+  );
+  const grouped = namedGroups.length > 0;
+  const groups = grouped ? orderForViewer(carried.by_person, viewerFirst) : [];
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
       {/* The breath — the honest temperature of the week. */}
@@ -95,22 +132,46 @@ export default function WeeklyReflection({ familyId, live = true, onClose }) {
       {/* What you carried — the invisible labor and the lived week, made visible. */}
       {(carried.count > 0 || carried.events?.length > 0) && (
         <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
-          <h2 className="mb-4 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-            What you carried
+          <h2 className="mb-1 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+            {grouped ? "What the family carried" : "What you carried"}
           </h2>
-          {carried.count > 0 && (
-          <ul className="space-y-3">
-            {carried.items.map((it, i) => (
-              <li key={i} className="flex items-start gap-3 border-l-2 border-sage-release/60 pl-3">
-                <span className="font-micro text-sm text-sanctuary-navy/85">{it.text}</span>
-                <span className="ml-auto shrink-0 rounded-full bg-sage-release/12 px-2 py-0.5 font-micro text-[10px] font-medium uppercase tracking-wide text-sage-release">
-                  {it.kind === "intention" && it.context
-                    ? CONTEXT_LABEL[it.context] ?? KIND_LABEL.intention
-                    : KIND_LABEL[it.kind] ?? "Done"}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {grouped && (
+            <p className="mb-4 font-micro text-xs text-sanctuary-navy/45">
+              Different hands, same direction — everything here kept the family
+              on track. Not a competition; a chance to notice.
+            </p>
+          )}
+          {!grouped && <div className="mb-3" />}
+
+          {carried.count > 0 && !grouped && (
+            <ul className="space-y-3">
+              {carried.items.map((it, i) => (
+                <CarriedItem key={i} it={it} />
+              ))}
+            </ul>
+          )}
+
+          {carried.count > 0 && grouped && (
+            <div className="space-y-5">
+              {groups.map((g) => (
+                <div key={g.name ?? "household"}>
+                  <p className="mb-2 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sage-release">
+                    {g.name === "Together"
+                      ? "Together"
+                      : g.name === null
+                        ? "And quietly handled"
+                        : g.name === viewerFirst
+                          ? "What you carried"
+                          : `What ${g.name} carried`}
+                  </p>
+                  <ul className="space-y-3">
+                    {g.items.map((it, i) => (
+                      <CarriedItem key={i} it={it} />
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
 
           {carried.hard_won.length > 0 && (

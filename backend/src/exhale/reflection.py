@@ -78,11 +78,43 @@ def build_weekly_reflection(
         "carried": {
             "count": len(carried),
             "items": carried,
+            "by_person": _by_person(carried),
             "hard_won": hard_won,
             "events": events,
         },
         "lingering": {"count": len(lingering), "items": lingering},
     }
+
+
+def _by_person(carried: list[dict]) -> list[dict]:
+    """The "seen by name" grouping — who carried what, framed as one team.
+
+    The anti-shaming rails are structural, not stylistic:
+
+    * **Names, never numbers.** Groups carry a name and the items themselves —
+      no counts, no totals, nothing a UI could turn into a leaderboard.
+    * **No zero sections.** A member with nothing this week simply has no
+      group — absence, never an empty column to be shamed by.
+    * **Shared things stay shared.** Together-intentions group under
+      ``"Together"``; unattributed wins under ``None`` (the household's).
+    * **Neutral order.** Together first, then people alphabetically (never by
+      volume), the household's last. The UI may put the viewer last so each
+      person reads their partner's effort before their own.
+    """
+
+    groups: dict = {}
+    for item in carried:
+        key = "Together" if item.get("together") else item.get("by")
+        groups.setdefault(key, []).append(item)
+
+    ordered: list[dict] = []
+    if "Together" in groups:
+        ordered.append({"name": "Together", "items": groups.pop("Together")})
+    for name in sorted(k for k in groups if k is not None):
+        ordered.append({"name": name, "items": groups[name]})
+    if None in groups:
+        ordered.append({"name": None, "items": groups[None]})
+    return ordered
 
 
 def _week_events(graph: KnowledgeGraph, carried: list[dict], *, now: datetime) -> list[dict]:
@@ -129,6 +161,7 @@ def _carried(profile: dict, cutoff: datetime) -> tuple[list[dict], list[dict]]:
             "kind": e.get("resolved_type", "resolved"),
             "text": e.get("brief_description", ""),
             "when": e["resolved_at"],
+            "by": e.get("by"),
         })
 
     # Time you set aside for something that matters, and actually took.
@@ -146,6 +179,9 @@ def _carried(profile: dict, cutoff: datetime) -> tuple[list[dict], list[dict]]:
             "context": it.get("context"),
             "confirmed": outcome == "happened",
             "when": it["matched_at"],
+            # A together-intention belongs to the shared column, not one name.
+            "by": None if it.get("context") == "together" else it.get("created_by"),
+            "together": it.get("context") == "together",
         })
         # Hard-won: it had been surfacing before you finally made the time.
         if (it.get("surfaced_count") or 0) >= HARD_WON_SURFACE_COUNT:

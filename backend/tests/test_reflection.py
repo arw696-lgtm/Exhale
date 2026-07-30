@@ -62,7 +62,8 @@ def test_empty_week_is_honestly_quiet():
     r = build_weekly_reflection({}, None, now=NOW)
     assert r["view"] == "weekly_reflection"
     assert r["tenor"]["key"] == "quiet"
-    assert r["carried"] == {"count": 0, "items": [], "hard_won": [], "events": []}
+    assert r["carried"] == {"count": 0, "items": [], "by_person": [],
+                            "hard_won": [], "events": []}
     assert r["lingering"] == {"count": 0, "items": []}
 
 
@@ -134,6 +135,69 @@ def test_dying_threads_sort_ahead_of_schedulable_wants():
     }
     ling = build_weekly_reflection(profile, None, now=NOW)["lingering"]
     assert [i["kind"] for i in ling["items"]] == ["waiting", "intention"]
+
+
+# --- seen by name: who carried what -----------------------------------------------
+def _resolved_by(item_id, text, by, *, days_ago=1, kind="task"):
+    return {**_resolved(item_id, text, days_ago=days_ago, kind=kind), "by": by}
+
+
+def test_carried_groups_by_person_names_never_numbers():
+    profile = {"resolved_log": [
+        _resolved_by("t1", "Mowed the lawn — done by Andy", "Andy"),
+        _resolved_by("t2", "Called the plumber — done by Ali", "Ali"),
+        _resolved_by("t3", "Camp form — handled", None, kind="dependency_gap"),
+    ]}
+    groups = build_weekly_reflection(profile, None, now=NOW)["carried"]["by_person"]
+    names = [g["name"] for g in groups]
+    assert names == ["Ali", "Andy", None]  # alphabetical, household last
+    for g in groups:
+        assert set(g) == {"name", "items"}  # no counts/totals — nothing to score with
+
+
+def test_no_zero_sections_for_a_quiet_member():
+    # Only Ali did logged things this week — Andy gets no group, not an empty one.
+    profile = {"resolved_log": [
+        _resolved_by("t1", "Called the plumber — done by Ali", "Ali"),
+    ]}
+    groups = build_weekly_reflection(profile, None, now=NOW)["carried"]["by_person"]
+    assert [g["name"] for g in groups] == ["Ali"]
+
+
+def test_together_intention_groups_as_together_not_a_person():
+    profile = {"intentions": [{
+        "intention_id": "int_t", "description": "Date night", "context": "together",
+        "type": "one_off", "status": "matched", "surfaced_count": 0,
+        "created_by": "Andy",
+        "matched_at": (NOW - timedelta(days=2)).isoformat(),
+        "follow_up_outcome": "happened",
+    }]}
+    groups = build_weekly_reflection(profile, None, now=NOW)["carried"]["by_person"]
+    assert groups[0]["name"] == "Together"  # shared wins lead; no one owns them
+
+
+def test_personal_intention_credits_its_creator():
+    profile = {"intentions": [{
+        "intention_id": "int_p", "description": "Long run", "context": "alone",
+        "type": "one_off", "status": "matched", "surfaced_count": 0,
+        "created_by": "Ali",
+        "matched_at": (NOW - timedelta(days=2)).isoformat(),
+        "follow_up_outcome": "happened",
+    }]}
+    groups = build_weekly_reflection(profile, None, now=NOW)["carried"]["by_person"]
+    assert [g["name"] for g in groups] == ["Ali"]
+
+
+def test_ordering_is_never_by_volume():
+    # Andy did 3 things, Ali 1 — Ali still comes first (alphabetical, not ranked).
+    profile = {"resolved_log": [
+        _resolved_by("a1", "thing 1 — done by Andy", "Andy"),
+        _resolved_by("a2", "thing 2 — done by Andy", "Andy"),
+        _resolved_by("a3", "thing 3 — done by Andy", "Andy"),
+        _resolved_by("b1", "thing 4 — done by Ali", "Ali"),
+    ]}
+    groups = build_weekly_reflection(profile, None, now=NOW)["carried"]["by_person"]
+    assert [g["name"] for g in groups] == ["Ali", "Andy"]
 
 
 # --- the lived week (calendar events) ---------------------------------------------

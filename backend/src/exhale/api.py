@@ -983,7 +983,9 @@ def get_review_queue(family_id: str = Depends(require_family_access)) -> dict:
 
 @app.post("/v1/families/{family_id}/extractions/{extraction_id}/confirm")
 def confirm_extraction(
-    extraction_id: str, family_id: str = Depends(require_family_access)
+    extraction_id: str,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
 ) -> dict:
     """Confirm a pending item as-is — 'yes, that's real.'
 
@@ -1007,6 +1009,7 @@ def confirm_extraction(
         store, family_id,
         item_id=extraction_id, resolved_type="dependency_gap",
         brief_description=f"{entry.payload.extracted_event}{who} — confirmed by you",
+        by=_member_name(user, fallback=None),
     )
     return {"family_id": family_id, **entry.to_dict()}
 
@@ -1470,7 +1473,9 @@ def add_waiting(
 
 @app.post("/v1/families/{family_id}/waiting/{item_id}/resolve")
 def resolve_waiting(
-    item_id: str, family_id: str = Depends(require_family_access)
+    item_id: str,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
 ) -> dict:
     """They responded — mark the wait resolved (kept in the record)."""
 
@@ -1490,6 +1495,7 @@ def resolve_waiting(
             store, family_id,
             item_id=item_id, resolved_type="waiting_on",
             brief_description=f"{resolved['who']} — {resolved['about']} (loop closed)",
+            by=_member_name(user, fallback=None),
         )
     return {"family_id": family_id, "item_id": item_id, "status": "resolved"}
 
@@ -1501,8 +1507,12 @@ class TaskIn(BaseModel):
     description: str
 
 
-def _member_name(user, fallback: str = "Someone") -> str:
-    """First name of the acting member (anonymous dev mode → a neutral name)."""
+def _member_name(user, fallback: str | None = "Someone") -> str | None:
+    """First name of the acting member (anonymous dev mode → the fallback).
+
+    Pass ``fallback=None`` for attribution fields: an anonymous action belongs
+    to the household, never to a fake person named "Someone".
+    """
 
     if user is not None and (user.display_name or "").strip():
         return user.display_name.strip().split()[0]
@@ -1587,6 +1597,7 @@ def complete_household_task(
         store, family_id,
         item_id=task_id, resolved_type="task",
         brief_description=f"{done['description']} — done by {who}",
+        by=_member_name(user, fallback=None),
     )
     return {"family_id": family_id, "task_id": task_id, "status": "done",
             "completed_by": who}
@@ -2175,7 +2186,11 @@ class ApproveActionRequest(BaseModel):
 
 
 @app.post("/v1/families/{family_id}/actions/approve")
-def approve_action(req: ApproveActionRequest, family_id: str = Depends(require_family_access)) -> dict:
+def approve_action(
+    req: ApproveActionRequest,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
     """Execute an approved draft: resolve its obligation in the graph (§6)."""
 
     try:
@@ -2197,6 +2212,7 @@ def approve_action(req: ApproveActionRequest, family_id: str = Depends(require_f
             store, family_id,
             item_id=req.obligation_node_id, resolved_type="dependency_gap",
             brief_description=f"{props.get('name', req.obligation_node_id)}{who} — handled",
+            by=_member_name(user, fallback=None),
         )
     return {
         "family_id": family_id,

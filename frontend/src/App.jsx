@@ -140,7 +140,12 @@ export default function App() {
       {/* pb clears the fixed tab bar */}
       <div className="pb-28">
         {tab === "today" && showReview && (
-          <WeeklyReflection familyId={familyId} live={live} onClose={closeReview} />
+          <WeeklyReflection
+            familyId={familyId}
+            live={live}
+            user={me}
+            onClose={closeReview}
+          />
         )}
         {tab === "today" && !showReview && (
           <WeeklyBriefing

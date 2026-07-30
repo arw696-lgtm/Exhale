@@ -38,9 +38,14 @@ def log_resolved(
     item_id: str,
     resolved_type: str,
     brief_description: str,
+    by: str | None = None,
     resolved_at: datetime | None = None,
 ) -> dict | None:
     """Append one resolution to the family's log (idempotent per item+type).
+
+    ``by`` names the member whose action resolved it (the tap, the call, the
+    chore) — the seed of the reflection's "seen by name" grouping. ``None`` is
+    a valid, honest state: an unattributed win belongs to the household.
 
     Returns the entry written, or ``None`` when this item+type was already
     logged — re-approving or double-tapping never inflates the recap.
@@ -58,6 +63,7 @@ def log_resolved(
         "resolved_type": resolved_type,
         "resolved_at": (resolved_at or datetime.now()).isoformat(),
         "brief_description": brief_description,
+        "by": by,
     }
     entries.append(entry)
     store.set_profile(family_id, resolved_log=entries[-MAX_LOG_ENTRIES:])
