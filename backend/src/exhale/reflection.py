@@ -162,6 +162,9 @@ def _carried(profile: dict, cutoff: datetime) -> tuple[list[dict], list[dict]]:
             "text": e.get("brief_description", ""),
             "when": e["resolved_at"],
             "by": e.get("by"),
+            # Identity + gratitude: the thanks tap needs to name the item.
+            "item_id": e.get("item_id"),
+            "thanks": list(e.get("thanks") or []),
         })
 
     # Time you set aside for something that matters, and actually took.

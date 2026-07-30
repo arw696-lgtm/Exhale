@@ -215,6 +215,24 @@ def default_range(days: int = 14) -> tuple[date, date]:
 _SYNCED_PREFIXES = ("gcal_", "msgraph_", "ics_")
 
 
+def sync_scope(provider: str, key: str) -> str:
+    """A per-calendar source prefix (``gcal_<slug><hash>_``).
+
+    Scoping replacement to one calendar — not one provider — is what lets a
+    person share several calendars that cobble their day together: re-syncing
+    the work calendar never disturbs the shared-family one. The slug keeps the
+    prefix readable; the short hash guards truncation collisions (two long
+    ICS URLs with the same first characters).
+    """
+
+    import hashlib
+    import re
+
+    slug = re.sub(r"[^A-Za-z0-9]+", "", key or "")[:24] or "default"
+    digest = hashlib.sha1((key or "").encode()).hexdigest()[:6]
+    return f"{provider}_{slug}{digest}_"
+
+
 def merge_events(
     model: CoverageModelIn,
     caregiver_name: str,
@@ -226,10 +244,14 @@ def merge_events(
 
     Idempotent: previously-synced events on that caregiver are dropped before the
     fresh set is added, so re-syncing replaces rather than duplicates.
-    ``source_prefix`` scopes *which* synced events are replaced — pass ``"gcal_"``
-    or ``"ics_"`` so a Google re-sync doesn't disturb ICS-synced events and vice
-    versa; ``None`` replaces any machine-synced event. Manual events (any other
-    source_reference) are always preserved. ``events`` are engine
+    ``source_prefix`` scopes *which* synced events are replaced — and it can be
+    **per calendar**, not just per provider: pass ``"gcal_work@x_"`` and a
+    re-sync of that one calendar leaves a second Google calendar's events
+    untouched, so several calendars can cobble one person's day together.
+    Fresh events whose references don't already carry the prefix get it
+    prepended, guaranteeing the scope holds on the next sync. ``None`` replaces
+    any machine-synced event. Manual events (any other source_reference) are
+    always preserved. ``events`` are engine
     :class:`~exhale.coverage.CalendarEvent` instances.
 
     Raises ``KeyError`` if the named caregiver isn't in the model.
@@ -241,6 +263,11 @@ def merge_events(
         ref = str(e.get("source_reference", ""))
         return any(ref.startswith(p) for p in prefixes)
 
+    def _scoped_ref(ref: str | None) -> str | None:
+        if source_prefix and not (ref or "").startswith(source_prefix):
+            return f"{source_prefix}{ref or ''}"
+        return ref
+
     data = model.model_dump()
     for caregiver in data["caregivers"]:
         if caregiver["name"] != caregiver_name:
@@ -249,7 +276,8 @@ def merge_events(
         synced = [
             CalendarEventIn(
                 title=ev.title, start=ev.start, end=ev.end,
-                attendees=list(ev.attendees), source_reference=ev.source_reference,
+                attendees=list(ev.attendees),
+                source_reference=_scoped_ref(ev.source_reference),
                 origin=ev.origin,
             ).model_dump()
             for ev in events

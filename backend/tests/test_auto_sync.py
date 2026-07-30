@@ -61,7 +61,11 @@ def test_cycle_replays_remembered_ics_sync(monkeypatch):
     # The event landed in the stored coverage model.
     model = store.profile("fam_a")["coverage_model"]
     ali = next(c for c in model["caregivers"] if c["name"] == "Ali")
-    assert any(e["source_reference"] == "ics_auto1" for e in ali["events"])
+    # Refs are scoped per calendar (ics_<slug><hash>_...) so a second feed for
+    # the same person can never clobber this one on re-sync.
+    assert any(e["source_reference"].startswith("ics_")
+               and e["source_reference"].endswith("ics_auto1")
+               for e in ali["events"])
 
 
 def test_one_familys_failure_does_not_stall_the_next(monkeypatch):
@@ -101,7 +105,8 @@ def test_calendar_replay_skipped_without_connection():
     _family(store, "fam_c", coverage_model=_model(), sync_configs={
         "gcal": {"caregiver_name": "Andy", "calendar_id": "primary", "days": 30}})
     report = run_cycle(store, extract_payload)
-    assert "skipped" in report["families"]["fam_c"]["gcal"]
+    # Legacy single-dict config is tolerated and replays as the first entry.
+    assert "skipped" in report["families"]["fam_c"]["gcal_0"]
 
 
 # --- scheduler --------------------------------------------------------------------
@@ -142,3 +147,40 @@ def test_scheduler_from_env_starts_when_set(monkeypatch):
     assert sched is not None
     assert sched.interval_minutes == 30
     sched.stop()
+
+
+# --- several calendars, one person (the "cobble my day together" case) -------------
+def test_two_ics_feeds_for_one_person_coexist(monkeypatch):
+    """Re-syncing one feed must never clobber the other's events."""
+
+    class _TwoFeeds:
+        def __init__(self, url, *, attendees, tz="America/Chicago"):
+            self.url, self.attendees = url, attendees
+
+        def fetch_busy(self):
+            from datetime import datetime
+            from exhale.coverage import CalendarEvent
+            tag = "work" if "work" in self.url else "family"
+            return [CalendarEvent(
+                title=f"{tag} block", start=datetime(2026, 8, 3, 9, 0),
+                end=datetime(2026, 8, 3, 10, 0), attendees=tuple(self.attendees),
+                source_reference=f"ics_{tag}_ev1",
+            )]
+
+    monkeypatch.setattr(auto_sync, "ICSCalendarConnector", _TwoFeeds)
+    store = HouseholdStore()
+    _family(store, "fam_two", coverage_model=_model(), sync_configs={
+        "ics": [
+            {"url": "https://x/work.ics", "attendees": ["Ali"], "holder": "Ali"},
+            {"url": "https://x/family.ics", "attendees": ["Ali"], "holder": "Ali"},
+        ]})
+
+    # Two cycles — the second replays both feeds again (re-sync).
+    run_cycle(store, extract_payload)
+    run_cycle(store, extract_payload)
+
+    model = store.profile("fam_two")["coverage_model"]
+    ali = next(c for c in model["caregivers"] if c["name"] == "Ali")
+    titles = sorted(e["title"] for e in ali["events"] if "block" in e["title"])
+    # Both calendars' events present, exactly once each — no clobber, no dupes.
+    assert titles == ["family block", "work block"]

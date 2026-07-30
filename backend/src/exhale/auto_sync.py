@@ -27,7 +27,7 @@ from exhale.connectors.gcal import GoogleCalendarConnector
 from exhale.connectors.gmail import GmailConnector
 from exhale.connectors.ics import ICSCalendarConnector
 from exhale.connectors.msgraph import GraphCalendarConnector
-from exhale.coverage_config import CoverageModelIn, merge_events
+from exhale.coverage_config import CoverageModelIn, merge_events, sync_scope
 from exhale.extraction import ExtractionContext
 from exhale.oauth import config_from_env
 from exhale.retro_scan import run_incremental_sync
@@ -97,6 +97,10 @@ def _sync_gmail(store, family_id: str, profile: dict, extractor) -> dict:
 
 
 def _replay_calendar(store, family_id: str, profile: dict, config: dict) -> dict:
+    # Re-read the live profile: an earlier replay this cycle may have merged
+    # events already, and composing calendars requires building on that, not
+    # on the cycle-start snapshot (two feeds would otherwise clobber).
+    profile = store.profile(family_id)
     tokens = _tokens(profile, "google", account=config.get("account"))
     model_cfg = profile.get("coverage_model")
     if tokens is None or not model_cfg:
@@ -113,12 +117,17 @@ def _replay_calendar(store, family_id: str, profile: dict, config: dict) -> dict
     now = datetime.now()
     events = connector.fetch_busy(now, now + timedelta(days=config.get("days", 120)))
     model = merge_events(CoverageModelIn(**model_cfg), config["caregiver_name"],
-                         events, source_prefix="gcal_")
+                         events,
+                         source_prefix=sync_scope("gcal", config.get("calendar_id", "primary")))
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
     return {"synced_busy_events": len(events)}
 
 
 def _replay_outlook(store, family_id: str, profile: dict, config: dict) -> dict:
+    # Re-read the live profile: an earlier replay this cycle may have merged
+    # events already, and composing calendars requires building on that, not
+    # on the cycle-start snapshot (two feeds would otherwise clobber).
+    profile = store.profile(family_id)
     tokens = _tokens(profile, "microsoft", account=config.get("account"))
     model_cfg = profile.get("coverage_model")
     if tokens is None or not model_cfg:
@@ -134,12 +143,17 @@ def _replay_outlook(store, family_id: str, profile: dict, config: dict) -> dict:
     now = datetime.now()
     events = connector.fetch_busy(now, now + timedelta(days=config.get("days", 120)))
     model = merge_events(CoverageModelIn(**model_cfg), config["caregiver_name"],
-                         events, source_prefix="msgraph_")
+                         events,
+                         source_prefix=sync_scope("msgraph", config.get("account") or "primary"))
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
     return {"synced_busy_events": len(events)}
 
 
 def _replay_ics(store, family_id: str, profile: dict, config: dict) -> dict:
+    # Re-read the live profile: an earlier replay this cycle may have merged
+    # events already, and composing calendars requires building on that, not
+    # on the cycle-start snapshot (two feeds would otherwise clobber).
+    profile = store.profile(family_id)
     model_cfg = profile.get("coverage_model")
     if not model_cfg:
         return {"skipped": "no coverage model"}
@@ -149,7 +163,8 @@ def _replay_ics(store, family_id: str, profile: dict, config: dict) -> dict:
     )
     events = connector.fetch_busy()
     holder = config.get("holder") or config["attendees"][0]
-    model = merge_events(CoverageModelIn(**model_cfg), holder, events, source_prefix="ics_")
+    model = merge_events(CoverageModelIn(**model_cfg), holder, events,
+                         source_prefix=sync_scope("ics", config["url"]))
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
     return {"synced_busy_events": len(events)}
 
@@ -171,13 +186,16 @@ def run_cycle(store, extractor, notifier=None) -> dict:
             ("gmail", lambda p=profile: _sync_gmail(store, family_id, p, extractor)),
         ]
         configs = profile.get("sync_configs") or {}
-        if configs.get("gcal"):
-            units.append(("gcal", lambda p=profile, c=configs["gcal"]:
+        def _as_list(v):
+            return [v] if isinstance(v, dict) else list(v or [])
+
+        for i, gcal_cfg in enumerate(_as_list(configs.get("gcal"))):
+            units.append((f"gcal_{i}", lambda p=profile, c=gcal_cfg:
                           _replay_calendar(store, family_id, p, c)))
-        if configs.get("outlook"):
-            units.append(("outlook", lambda p=profile, c=configs["outlook"]:
+        for i, ol_cfg in enumerate(_as_list(configs.get("outlook"))):
+            units.append((f"outlook_{i}", lambda p=profile, c=ol_cfg:
                           _replay_outlook(store, family_id, p, c)))
-        for i, ics_cfg in enumerate(configs.get("ics") or []):
+        for i, ics_cfg in enumerate(_as_list(configs.get("ics"))):
             units.append((f"ics_{i}", lambda p=profile, c=ics_cfg:
                           _replay_ics(store, family_id, p, c)))
 

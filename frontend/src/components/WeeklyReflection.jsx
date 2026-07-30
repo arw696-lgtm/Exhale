@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { fetchReflection, reconfirmIntention } from "../data/api.js";
+import {
+  fetchReflection,
+  reconfirmIntention,
+  thankResolved,
+} from "../data/api.js";
 
 /**
  * The Weekly Reflection — Exhale's exhale. The Sunday face of the home screen:
@@ -26,16 +30,41 @@ function shortDay(iso) {
   return d.toLocaleDateString(undefined, { weekday: "short" });
 }
 
-/** One carried item — the row shape shared by the flat and grouped views. */
-function CarriedItem({ it }) {
+/** One carried item — the row shape shared by the flat and grouped views.
+
+    ``canThank`` puts the one-tap ❤️ on a *partner's* item (never your own —
+    gratitude points outward). Existing thanks show as a quiet "♥ Andy" note,
+    so the person who did the thing sees they were seen. */
+function CarriedItem({ it, canThank, viewerFirst, onThank }) {
+  const thanks = it.thanks ?? [];
+  const alreadyThanked = viewerFirst && thanks.includes(viewerFirst);
   return (
-    <li className="flex items-start gap-3 border-l-2 border-sage-release/60 pl-3">
-      <span className="font-micro text-sm text-sanctuary-navy/85">{it.text}</span>
-      <span className="ml-auto shrink-0 rounded-full bg-sage-release/12 px-2 py-0.5 font-micro text-[10px] font-medium uppercase tracking-wide text-sage-release">
-        {it.kind === "intention" && it.context
-          ? CONTEXT_LABEL[it.context] ?? KIND_LABEL.intention
-          : KIND_LABEL[it.kind] ?? "Done"}
-      </span>
+    <li className="border-l-2 border-sage-release/60 pl-3">
+      <div className="flex items-start gap-3">
+        <span className="font-micro text-sm text-sanctuary-navy/85">{it.text}</span>
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {canThank && it.item_id && !alreadyThanked && (
+            <button
+              onClick={() => onThank(it.item_id)}
+              className="rounded-full border border-sanctuary-navy/10 px-2 py-0.5 font-micro text-xs text-sanctuary-navy/45 transition hover:border-looming-amber/40 hover:text-looming-amber"
+              title="Say thanks"
+              aria-label={`Say thanks for "${it.text}"`}
+            >
+              ♡
+            </button>
+          )}
+          <span className="rounded-full bg-sage-release/12 px-2 py-0.5 font-micro text-[10px] font-medium uppercase tracking-wide text-sage-release">
+            {it.kind === "intention" && it.context
+              ? CONTEXT_LABEL[it.context] ?? KIND_LABEL.intention
+              : KIND_LABEL[it.kind] ?? "Done"}
+          </span>
+        </span>
+      </div>
+      {thanks.length > 0 && (
+        <p className="mt-0.5 font-micro text-[11px] text-looming-amber/80">
+          ♥ {thanks.join(", ")} said thanks
+        </p>
+      )}
     </li>
   );
 }
@@ -78,6 +107,16 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
       await reconfirmIntention(id, familyId); // resets staleness → resurfaces with a window
     } catch {
       /* it's already on the list; a failed reconfirm just won't reset the clock */
+    }
+  };
+
+  const thank = async (itemId) => {
+    try {
+      await thankResolved(itemId, familyId);
+      const data = await fetchReflection(familyId); // the ♥ note comes from the record
+      setR(data);
+    } catch {
+      /* item aged out of the log — nothing to thank anymore */
     }
   };
 
@@ -146,7 +185,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
           {carried.count > 0 && !grouped && (
             <ul className="space-y-3">
               {carried.items.map((it, i) => (
-                <CarriedItem key={i} it={it} />
+                <CarriedItem key={i} it={it} viewerFirst={viewerFirst} onThank={thank} />
               ))}
             </ul>
           )}
@@ -166,7 +205,15 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
                   </p>
                   <ul className="space-y-3">
                     {g.items.map((it, i) => (
-                      <CarriedItem key={i} it={it} />
+                      <CarriedItem
+                        key={i}
+                        it={it}
+                        // Gratitude points outward: thank a partner's work,
+                        // never your own.
+                        canThank={g.name !== null && g.name !== viewerFirst}
+                        viewerFirst={viewerFirst}
+                        onThank={thank}
+                      />
                     ))}
                   </ul>
                 </div>

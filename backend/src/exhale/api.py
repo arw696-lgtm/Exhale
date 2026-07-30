@@ -109,21 +109,32 @@ def _family_google_tokens(family_id: str) -> dict | None:
     return _family_tokens(family_id, "google")
 
 
+# Which fields identify "the same calendar" per sync kind — a repeat sync of
+# that calendar updates its config in place; a different one accumulates. This
+# is what lets one person's day be cobbled together from several calendars.
+_SYNC_IDENTITY = {
+    "ics": ("url", "holder"),
+    "gcal": ("caregiver_name", "calendar_id", "account"),
+    "outlook": ("caregiver_name", "account"),
+}
+
+
 def _remember_sync(family_id: str, kind: str, config: dict) -> None:
     """Persist a successful sync's parameters so auto-sync can replay them.
 
-    ``ics`` configs accumulate as a list (deduped by url+holder); ``gcal`` and
-    ``outlook`` keep the latest single config.
+    Every kind accumulates as a list, deduped by that kind's identity fields —
+    two Google calendars for the same person are two entries, each replayed on
+    every auto-sync cycle.
     """
 
+    identity = _SYNC_IDENTITY.get(kind, ())
     configs = dict(store.profile(family_id).get("sync_configs") or {})
-    if kind == "ics":
-        existing = [c for c in (configs.get("ics") or [])
-                    if not (c.get("url") == config.get("url")
-                            and c.get("holder") == config.get("holder"))]
-        configs["ics"] = existing + [config]
-    else:
-        configs[kind] = config
+    stored = configs.get(kind) or []
+    if isinstance(stored, dict):  # legacy single-config shape
+        stored = [stored]
+    kept = [c for c in stored
+            if any(c.get(f) != config.get(f) for f in identity)]
+    configs[kind] = kept + [config]
     store.set_profile(family_id, sync_configs=configs)
 
 
@@ -1500,6 +1511,30 @@ def resolve_waiting(
     return {"family_id": family_id, "item_id": item_id, "status": "resolved"}
 
 
+@app.post("/v1/families/{family_id}/resolved/{item_id}/thanks")
+def thank_resolved(
+    item_id: str,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
+    """One tap of appreciation on a partner's carried item.
+
+    Zero-friction gratitude: noticing becomes acknowledgment. Idempotent per
+    person — a double-tap never inflates warmth into noise.
+    """
+
+    from exhale.handled import record_thanks
+
+    who = _member_name(user)
+    try:
+        entry = record_thanks(store, family_id, item_id=item_id, from_person=who)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"family_id": family_id, "item_id": item_id, "from": who,
+            "thanked": entry is not None,
+            "thanks": (entry or {}).get("thanks")}
+
+
 # --- Household task list: the "someone needs to do this" pile ----------------------
 class TaskIn(BaseModel):
     """A contribution the family gives itself ("mow the lawn").
@@ -1951,8 +1986,11 @@ def sync_calendar(
     now = datetime.now()
     events = connector.fetch_busy(now, now + timedelta(days=req.days))
     try:
+        from exhale.coverage_config import sync_scope
+
         model = merge_events(
-            CoverageModelIn(**config), req.caregiver_name, events, source_prefix="gcal_"
+            CoverageModelIn(**config), req.caregiver_name, events,
+            source_prefix=sync_scope("gcal", req.calendar_id),
         )
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -2009,8 +2047,11 @@ def sync_ics(
         events = ICSCalendarConnector(
             req.url, attendees=tuple(req.attendees), tz=req.tz
         ).fetch_busy()
+        from exhale.coverage_config import sync_scope
+
         model = merge_events(
-            CoverageModelIn(**config), holder, events, source_prefix="ics_"
+            CoverageModelIn(**config), holder, events,
+            source_prefix=sync_scope("ics", req.url),
         )
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -2062,7 +2103,10 @@ def upload_ics(
     holder = req.holder or req.attendees[0]
     events = parse_ics(req.content, tuple(req.attendees), tz=req.tz)
     try:
-        model = merge_events(CoverageModelIn(**config), holder, events, source_prefix="ics_")
+        from exhale.coverage_config import sync_scope
+
+        model = merge_events(CoverageModelIn(**config), holder, events,
+                             source_prefix=sync_scope("icsupload", holder))
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
@@ -2158,9 +2202,12 @@ def sync_outlook(
         )
     now = datetime.now()
     events = connector.fetch_busy(now, now + timedelta(days=req.days))
+    from exhale.coverage_config import sync_scope
+
     try:
         model = merge_events(
-            CoverageModelIn(**config), req.caregiver_name, events, source_prefix="msgraph_"
+            CoverageModelIn(**config), req.caregiver_name, events,
+            source_prefix=sync_scope("msgraph", account_key or "primary"),
         )
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

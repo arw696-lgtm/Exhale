@@ -195,3 +195,57 @@ def test_resolving_everything_restores_the_quiet_week():
     after = client.get(f"/v1/families/{fam}/briefing").json()["handled"]
     assert after["count"] == 1       # the catch is remembered...
     assert after["open_urgent"] == 0  # ...and nothing urgent remains open
+
+
+# --- the thanks tap: zero-friction gratitude ---------------------------------------
+def test_thanks_recorded_once_per_person():
+    from exhale.handled import record_thanks
+
+    store = HouseholdStore()
+    fam = "fam_thanks"
+    log_resolved(store, fam, item_id="t1", resolved_type="task",
+                 brief_description="Mowed the lawn — done by Andy", by="Andy")
+    entry = record_thanks(store, fam, item_id="t1", from_person="Ali")
+    assert entry["thanks"] == ["Ali"]
+    # Same person again → no-op; warmth never inflates into noise.
+    assert record_thanks(store, fam, item_id="t1", from_person="Ali") is None
+    # A different person's thanks still lands.
+    entry = record_thanks(store, fam, item_id="t1", from_person="Grandma")
+    assert entry["thanks"] == ["Ali", "Grandma"]
+
+
+def test_thanks_unknown_item_raises():
+    from exhale.handled import record_thanks
+
+    with pytest.raises(KeyError):
+        record_thanks(HouseholdStore(), "fam", item_id="ghost", from_person="Ali")
+
+
+def test_thanks_flows_through_the_reflection():
+    from datetime import datetime as _dt
+
+    from exhale.handled import record_thanks
+    from exhale.reflection import build_weekly_reflection
+
+    store = HouseholdStore()
+    fam = "fam_thanks_reflect"
+    log_resolved(store, fam, item_id="t2", resolved_type="task",
+                 brief_description="Cleared the gutters — done by Ali", by="Ali")
+    record_thanks(store, fam, item_id="t2", from_person="Andy")
+
+    carried = build_weekly_reflection(store.profile(fam), None)["carried"]
+    (item,) = carried["items"]
+    assert item["item_id"] == "t2"
+    assert item["thanks"] == ["Andy"]
+
+
+def test_thanks_endpoint_round_trip():
+    fam = "fam_thanks_api"
+    task = client.post(f"/v1/families/{fam}/tasks",
+                       json={"description": "Fix the gate"}).json()
+    client.post(f"/v1/families/{fam}/tasks/{task['id']}/complete")
+    r = client.post(f"/v1/families/{fam}/resolved/{task['id']}/thanks")
+    assert r.status_code == 200 and r.json()["thanked"] is True
+    # Idempotent per person.
+    assert client.post(f"/v1/families/{fam}/resolved/{task['id']}/thanks").json()["thanked"] is False
+    assert client.post(f"/v1/families/{fam}/resolved/ghost/thanks").status_code == 404

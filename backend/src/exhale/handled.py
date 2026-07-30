@@ -70,6 +70,27 @@ def log_resolved(
     return entry
 
 
+def record_thanks(store, family_id: str, *, item_id: str, from_person: str) -> dict | None:
+    """One tap of appreciation on a resolved item — the smallest gratitude.
+
+    Appends ``from_person`` to the entry's ``thanks`` list (idempotent per
+    person — tapping twice never inflates warmth into noise). Returns the
+    updated entry, ``None`` when this person already thanked it. Raises
+    ``KeyError`` for an unknown item.
+    """
+
+    entries = list(store.profile(family_id).get("resolved_log") or [])
+    target = next((e for e in entries if e["item_id"] == item_id), None)
+    if target is None:
+        raise KeyError(f"No resolved item {item_id!r}")
+    thanks = list(target.get("thanks") or [])
+    if from_person in thanks:
+        return None
+    target["thanks"] = thanks + [from_person]
+    store.set_profile(family_id, resolved_log=entries)
+    return target
+
+
 def handled_this_week(profile: dict, *, now: datetime | None = None) -> dict:
     """The briefing's closing-note payload: what resolved in the last 7 days.
 

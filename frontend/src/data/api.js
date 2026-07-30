@@ -374,6 +374,11 @@ export async function fetchReflection(familyId = DEMO_FAMILY) {
   }
 }
 
+/** One tap of appreciation on a partner's carried item (idempotent). */
+export function thankResolved(itemId, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/resolved/${itemId}/thanks`);
+}
+
 // --- learning scoreboard ("is Exhale learning how we work?") ------------------
 /** The learning scoreboard, or null when unavailable (offline demo / anon). */
 export async function fetchLearning(familyId = DEMO_FAMILY) {
