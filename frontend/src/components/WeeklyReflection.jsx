@@ -91,14 +91,20 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
   useEffect(() => {
     let alive = true;
     fetchReflection(familyId).then((data) => {
-      if (alive) {
+      if (!alive) return;
+      setLoaded(true);
+      if (data) {
         setR(data);
-        setLoaded(true);
+      } else {
+        // Reflection unreachable — fall back to the task briefing rather than
+        // leaving Sunday's home screen blank.
+        onClose?.();
       }
     });
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [familyId]);
 
   const makeTime = async (id) => {
@@ -114,7 +120,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
     try {
       await thankResolved(itemId, familyId);
       const data = await fetchReflection(familyId); // the ♥ note comes from the record
-      setR(data);
+      if (data) setR(data); // a failed refetch must never blank the screen
     } catch {
       /* item aged out of the log — nothing to thank anymore */
     }

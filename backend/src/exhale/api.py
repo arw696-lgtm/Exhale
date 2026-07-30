@@ -872,10 +872,9 @@ def get_learning(family_id: str = Depends(require_family_access)) -> dict:
 
     from exhale.learning import build_learning_scoreboard
 
+    profile = store.profile(family_id)  # one fetch — Postgres decrypts per call
     return build_learning_scoreboard(
-        store.ledger(family_id),
-        store.profile(family_id),
-        _care_watch_for(store.profile(family_id)),
+        store.ledger(family_id), profile, _care_watch_for(profile),
     )
 
 
