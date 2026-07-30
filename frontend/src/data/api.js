@@ -227,8 +227,8 @@ export async function fetchTasks(familyId = DEMO_FAMILY) {
   }
 }
 
-export function addTask(description, familyId = DEMO_FAMILY) {
-  return postJson(`/v1/families/${familyId}/tasks`, { description });
+export function addTask(description, familyId = DEMO_FAMILY, cadence = "once") {
+  return postJson(`/v1/families/${familyId}/tasks`, { description, cadence });
 }
 
 export function claimTask(taskId, familyId = DEMO_FAMILY) {

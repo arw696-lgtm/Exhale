@@ -17,8 +17,10 @@ from exhale.tasks import (
     add_task,
     claim_task,
     complete_task,
+    done_this_week,
     drop_task,
     open_tasks,
+    week_key,
 )
 
 client = TestClient(app)
@@ -78,6 +80,71 @@ def test_open_tasks_oldest_first():
     items[0]["created_at"] = (datetime.now() - timedelta(days=2)).isoformat()
     items, second = add_task(items, "Second chore", created_by="Ali")
     assert [t["id"] for t in open_tasks(items)] == [first["id"], second["id"]]
+
+
+# --- weekly contributions ---------------------------------------------------------
+def test_weekly_contribution_returns_next_week():
+    items, task = add_task([], "Clean the house", created_by="Andy", cadence="weekly")
+    this_week = datetime(2026, 7, 22, 10, 0)   # a Wednesday
+    next_week = this_week + timedelta(days=7)
+
+    items, done = complete_task(items, task["id"], who="Ali", now=this_week)
+    assert done["last_completed_by"] == "Ali"
+    # Covered: out of the pile this week, quietly credited...
+    assert open_tasks(items, now=this_week) == []
+    assert [t["id"] for t in done_this_week(items, now=this_week)] == [task["id"]]
+    # ...and back on the pile when the week turns — no re-adding.
+    assert [t["id"] for t in open_tasks(items, now=next_week)] == [task["id"]]
+
+
+def test_weekly_double_complete_same_week_refused():
+    items, task = add_task([], "Vacuum", created_by="Andy", cadence="weekly")
+    now = datetime(2026, 7, 22, 10, 0)
+    items, _ = complete_task(items, task["id"], who="Andy", now=now)
+    with pytest.raises(ValueError):
+        complete_task(items, task["id"], who="Ali", now=now + timedelta(days=2))
+
+
+def test_weekly_next_week_completion_is_a_fresh_win():
+    items, task = add_task([], "Vacuum", created_by="Andy", cadence="weekly")
+    w1 = datetime(2026, 7, 22, 10, 0)
+    w2 = w1 + timedelta(days=7)
+    items, _ = complete_task(items, task["id"], who="Andy", now=w1)
+    items, done = complete_task(items, task["id"], who="Ali", now=w2)  # no error
+    assert done["last_completed_by"] == "Ali"
+    assert done["last_completed_week"] == week_key(w2)
+
+
+def test_weekly_completion_clears_the_claim():
+    # Next week starts fresh: last week's volunteer isn't silently on the hook.
+    items, task = add_task([], "Clean the house", created_by="Andy", cadence="weekly")
+    items = claim_task(items, task["id"], who="Ali")
+    items, done = complete_task(items, task["id"], who="Ali")
+    assert done["claimed_by"] is None
+
+
+def test_bad_cadence_refused():
+    with pytest.raises(ValueError):
+        add_task([], "Daily thing", created_by="Andy", cadence="daily")
+
+
+def test_weekly_credit_is_per_week_via_api():
+    fam = "fam_weekly_credit"
+    task = client.post(f"/v1/families/{fam}/tasks",
+                       json={"description": "Clean the house",
+                             "cadence": "weekly"}).json()
+    r = client.post(f"/v1/families/{fam}/tasks/{task['id']}/complete")
+    assert r.json()["status"] == "covered_this_week"
+    # Same week, second tap → refused, credit stays single.
+    assert client.post(f"/v1/families/{fam}/tasks/{task['id']}/complete").status_code == 409
+
+    handled = client.get(f"/v1/families/{fam}/briefing").json()["handled"]
+    assert handled["count"] == 1
+    assert "contribution this week" in handled["items"][0]["brief_description"]
+
+    pile = client.get(f"/v1/families/{fam}/tasks").json()
+    assert pile["open"] == []                       # covered — out of the pile
+    assert len(pile["covered_this_week"]) == 1      # shown as quiet credit
 
 
 # --- API + the celebration path ---------------------------------------------------

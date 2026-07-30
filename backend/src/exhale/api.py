@@ -1502,9 +1502,14 @@ def resolve_waiting(
 
 # --- Household task list: the "someone needs to do this" pile ----------------------
 class TaskIn(BaseModel):
-    """A chore or errand the family gives itself ("mow the lawn")."""
+    """A contribution the family gives itself ("mow the lawn").
+
+    ``cadence="weekly"`` makes it a standing weekly contribution (clean the
+    house, vacuum) — credited each week it's done, back on the pile the next.
+    """
 
     description: str
+    cadence: str = "once"  # once | weekly
 
 
 def _member_name(user, fallback: str | None = "Someone") -> str | None:
@@ -1521,13 +1526,14 @@ def _member_name(user, fallback: str | None = "Someone") -> str | None:
 
 @app.get("/v1/families/{family_id}/tasks")
 def get_tasks(family_id: str = Depends(require_family_access)) -> dict:
-    """Open household tasks, oldest first."""
+    """The contributions pile: open items, plus weeklies already covered."""
 
-    from exhale.tasks import open_tasks
+    from exhale.tasks import done_this_week, open_tasks
 
     items = store.profile(family_id).get("tasks") or []
     return {"family_id": family_id, "view": "task_list",
-            "open": open_tasks(items)}
+            "open": open_tasks(items),
+            "covered_this_week": done_this_week(items)}
 
 
 @app.post("/v1/families/{family_id}/tasks")
@@ -1543,7 +1549,8 @@ def add_household_task(
     items = list(store.profile(family_id).get("tasks") or [])
     try:
         items, task = add_task(items, req.description,
-                               created_by=_member_name(user))
+                               created_by=_member_name(user),
+                               cadence=req.cadence)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     store.set_profile(family_id, tasks=items)
@@ -1582,7 +1589,7 @@ def complete_household_task(
     Handled recap and the Sunday reflection's "what you carried"."""
 
     from exhale.handled import log_resolved
-    from exhale.tasks import complete_task
+    from exhale.tasks import complete_task, week_key
 
     items = list(store.profile(family_id).get("tasks") or [])
     who = _member_name(user)
@@ -1593,13 +1600,21 @@ def complete_household_task(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     store.set_profile(family_id, tasks=items)
+    weekly = done.get("cadence") == "weekly"
     log_resolved(
         store, family_id,
-        item_id=task_id, resolved_type="task",
-        brief_description=f"{done['description']} — done by {who}",
+        # A weekly contribution earns credit once per week — the week is part
+        # of the idempotency key, so next week's completion is a fresh win.
+        item_id=f"{task_id}:{week_key()}" if weekly else task_id,
+        resolved_type="task",
+        brief_description=(
+            f"{done['description']} — {who}'s contribution this week"
+            if weekly else f"{done['description']} — done by {who}"
+        ),
         by=_member_name(user, fallback=None),
     )
-    return {"family_id": family_id, "task_id": task_id, "status": "done",
+    return {"family_id": family_id, "task_id": task_id,
+            "status": "covered_this_week" if weekly else "done",
             "completed_by": who}
 
 
