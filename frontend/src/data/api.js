@@ -329,6 +329,27 @@ export async function revokeHelper(helperUserId, familyId = DEMO_FAMILY) {
   return body;
 }
 
+// --- learning scoreboard ("is Exhale learning how we work?") ------------------
+/** The learning scoreboard, or null when unavailable (offline demo / anon). */
+export async function fetchLearning(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/learning`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Mark a surfaced observation as "new to us" — the only input to surprises. */
+export function acknowledgeLearning(observationId, observationType, note = "", familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/learning/ack`, {
+    observation_id: observationId,
+    observation_type: observationType,
+    note,
+  });
+}
+
 // --- connections (OAuth) -----------------------------------------------------
 /** What providers this family has connected, or null when unavailable. */
 export async function fetchConnections(familyId = DEMO_FAMILY) {

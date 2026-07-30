@@ -829,6 +829,57 @@ def get_ledger(family_id: str = Depends(require_family_access)) -> dict:
     return {"family_id": family_id, "entries": [e.to_dict() for e in store.ledger(family_id)]}
 
 
+@app.get("/v1/families/{family_id}/learning")
+def get_learning(family_id: str = Depends(require_family_access)) -> dict:
+    """The Learning Scoreboard — is Exhale learning how this family works?
+
+    Derived entirely from existing signals (the extraction ledger, the care
+    watch, the resolved log), so it can never claim a pattern the memory engine
+    wouldn't also show. A cold start returns a valid "still listening" board.
+    """
+
+    from exhale.learning import build_learning_scoreboard
+
+    return build_learning_scoreboard(
+        store.ledger(family_id),
+        store.profile(family_id),
+        _care_watch_for(store.profile(family_id)),
+    )
+
+
+class LearningAckIn(BaseModel):
+    """A member marking a surfaced observation as *new to them* — a surprise."""
+
+    observation_id: str
+    observation_type: str  # learned_rule | coverage_gap
+    note: str = ""
+
+
+@app.post("/v1/families/{family_id}/learning/ack")
+def acknowledge_learning(
+    req: LearningAckIn, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Confirm that Exhale told the family something they didn't already know.
+
+    The only input to the surprise metric — logged once per observation, so a
+    double-tap never inflates it. This is the magic metric; it moves only on a
+    real acknowledgement.
+    """
+
+    from exhale.learning import record_learning_ack
+
+    try:
+        entry = record_learning_ack(
+            store, family_id,
+            observation_id=req.observation_id,
+            observation_type=req.observation_type,
+            note=req.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"family_id": family_id, "acknowledged": entry is not None, "entry": entry}
+
+
 class CorrectionRequest(BaseModel):
     """User-supplied fixes for a previous extraction — ground truth.
 
