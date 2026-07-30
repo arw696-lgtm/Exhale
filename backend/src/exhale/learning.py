@@ -61,18 +61,19 @@ def record_learning_ack(
 
     if observation_type not in ACK_TYPES:
         raise ValueError(f"unknown observation_type {observation_type!r}")
-    entries = list(store.profile(family_id).get("learning_acks") or [])
-    if any(e["observation_id"] == observation_id for e in entries):
-        return None
-    entry = {
-        "observation_id": observation_id,
-        "observation_type": observation_type,
-        "note": note,
-        "acknowledged_at": (acknowledged_at or _now()).isoformat(),
-    }
-    entries.append(entry)
-    store.set_profile(family_id, learning_acks=entries[-MAX_ACK_ENTRIES:])
-    return entry
+    with store.family_lock(family_id):  # RMW must not race a concurrent writer
+        entries = list(store.profile(family_id).get("learning_acks") or [])
+        if any(e["observation_id"] == observation_id for e in entries):
+            return None
+        entry = {
+            "observation_id": observation_id,
+            "observation_type": observation_type,
+            "note": note,
+            "acknowledged_at": (acknowledged_at or _now()).isoformat(),
+        }
+        entries.append(entry)
+        store.set_profile(family_id, learning_acks=entries[-MAX_ACK_ENTRIES:])
+        return entry
 
 
 # -- the scoreboard ---------------------------------------------------------------
@@ -189,7 +190,7 @@ def _coverage_foresight(care_watch: dict | None, profile: dict, *, now: datetime
 
     # Caught gaps the family then resolved this week — the foresight that
     # converted into action, read straight from the already-logged handled slice.
-    cutoff = now.replace(tzinfo=None) - timedelta(days=RECENT_DAYS)
+    cutoff = _as_utc(now) - timedelta(days=RECENT_DAYS)
     acted_on = 0
     for e in profile.get("resolved_log") or []:
         if e.get("resolved_type") != "dependency_gap":
@@ -198,9 +199,7 @@ def _coverage_foresight(care_watch: dict | None, profile: dict, *, now: datetime
             when = datetime.fromisoformat(e["resolved_at"])
         except (KeyError, ValueError):
             continue
-        if when.tzinfo is not None:
-            when = when.replace(tzinfo=None)
-        if when >= cutoff:
+        if _as_utc(when) >= cutoff:
             acted_on += 1
 
     return {
@@ -263,7 +262,7 @@ def _trust(ordered, profile: dict) -> dict:
 def _surprises(profile: dict, *, now: datetime) -> dict:
     """Confirmed 'I didn't know that' observations — 0 until one is real."""
 
-    cutoff = now - timedelta(days=RECENT_DAYS)
+    cutoff = _as_utc(now) - timedelta(days=RECENT_DAYS)
     acks = profile.get("learning_acks") or []
     recent = 0
     latest = None
@@ -272,8 +271,7 @@ def _surprises(profile: dict, *, now: datetime) -> dict:
             when = datetime.fromisoformat(e["acknowledged_at"])
         except (KeyError, ValueError):
             continue
-        when_cmp = when if when.tzinfo else when.replace(tzinfo=timezone.utc)
-        if when_cmp >= cutoff:
+        if _as_utc(when) >= cutoff:
             recent += 1
         if latest is None or e["acknowledged_at"] > latest.get("acknowledged_at", ""):
             latest = e
@@ -286,3 +284,16 @@ def _surprises(profile: dict, *, now: datetime) -> dict:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# Timestamp convention: the ledger stamps aware-UTC; household-domain profile
+# entries (resolved log, tasks, waits) stamp naive LOCAL time — the right frame
+# for family semantics like "this week". When the two meet in a comparison,
+# normalize through here: naive means local, and everything compares in UTC.
+_LOCAL_TZ = datetime.now().astimezone().tzinfo
+
+
+def _as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_LOCAL_TZ)
+    return dt.astimezone(timezone.utc)

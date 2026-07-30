@@ -200,3 +200,32 @@ def test_tasks_endpoint_lists_open_pile():
     client.post(f"/v1/families/{fam}/tasks", json={"description": "Mow the lawn"})
     pile = client.get(f"/v1/families/{fam}/tasks").json()["open"]
     assert [t["description"] for t in pile] == ["Call the plumber", "Mow the lawn"]
+
+
+# --- concurrency: simultaneous writers must never lose an edit --------------------
+def test_concurrent_adds_lose_nothing():
+    """Two members adding tasks in the same instant — every add survives.
+
+    Exercises the per-family lock around the read-modify-write pattern; without
+    it, racing threads clobber each other's list and adds vanish.
+    """
+
+    import threading
+
+    fam = "fam_tasks_race"
+    N = 25
+
+    def hammer(prefix):
+        for i in range(N):
+            client.post(f"/v1/families/{fam}/tasks",
+                        json={"description": f"{prefix} {i}"})
+
+    threads = [threading.Thread(target=hammer, args=(who,))
+               for who in ("andy", "ali")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    pile = client.get(f"/v1/families/{fam}/tasks").json()["open"]
+    assert len(pile) == 2 * N  # nothing lost to the race

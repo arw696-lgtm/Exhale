@@ -82,6 +82,28 @@ class HouseholdStore:
         self._ledger: dict[str, list[LedgerEntry]] = {}
         self._profiles: dict[str, dict] = {}
         self._lock = threading.RLock()
+        self._family_locks: dict[str, threading.RLock] = {}
+
+    def family_lock(self, family_id: str) -> threading.RLock:
+        """A per-family lock for read-modify-write profile updates.
+
+        Individual ``profile()``/``set_profile()`` calls are atomic, but the
+        get → mutate → set pattern around them is not: two members editing the
+        same list in the same instant (or a user tap racing the auto-sync
+        thread) could lose a write. Wrap the whole sequence::
+
+            with store.family_lock(family_id):
+                items = list(store.profile(family_id).get("tasks") or [])
+                ...
+                store.set_profile(family_id, tasks=items)
+
+        Reentrant, so nested writers (an endpoint that also logs a resolution)
+        are safe. In-process only — a multi-worker deployment needs one worker
+        (as the deploy pack configures) or a database-level guard.
+        """
+
+        with self._lock:
+            return self._family_locks.setdefault(family_id, threading.RLock())
 
     # -- graph access ---------------------------------------------------------
     def graph(self, family_id: str) -> KnowledgeGraph:

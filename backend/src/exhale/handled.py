@@ -53,21 +53,22 @@ def log_resolved(
 
     if resolved_type not in RESOLVED_TYPES:
         raise ValueError(f"unknown resolved_type {resolved_type!r}")
-    entries = list(store.profile(family_id).get("resolved_log") or [])
-    if any(e["item_id"] == item_id and e["resolved_type"] == resolved_type
-           for e in entries):
-        return None
-    entry = {
-        "item_id": item_id,
-        "family_id": family_id,
-        "resolved_type": resolved_type,
-        "resolved_at": (resolved_at or datetime.now()).isoformat(),
-        "brief_description": brief_description,
-        "by": by,
-    }
-    entries.append(entry)
-    store.set_profile(family_id, resolved_log=entries[-MAX_LOG_ENTRIES:])
-    return entry
+    with store.family_lock(family_id):  # RMW must not race a concurrent writer
+        entries = list(store.profile(family_id).get("resolved_log") or [])
+        if any(e["item_id"] == item_id and e["resolved_type"] == resolved_type
+               for e in entries):
+            return None
+        entry = {
+            "item_id": item_id,
+            "family_id": family_id,
+            "resolved_type": resolved_type,
+            "resolved_at": (resolved_at or datetime.now()).isoformat(),
+            "brief_description": brief_description,
+            "by": by,
+        }
+        entries.append(entry)
+        store.set_profile(family_id, resolved_log=entries[-MAX_LOG_ENTRIES:])
+        return entry
 
 
 def record_thanks(store, family_id: str, *, item_id: str, from_person: str) -> dict | None:
@@ -79,16 +80,17 @@ def record_thanks(store, family_id: str, *, item_id: str, from_person: str) -> d
     ``KeyError`` for an unknown item.
     """
 
-    entries = list(store.profile(family_id).get("resolved_log") or [])
-    target = next((e for e in entries if e["item_id"] == item_id), None)
-    if target is None:
-        raise KeyError(f"No resolved item {item_id!r}")
-    thanks = list(target.get("thanks") or [])
-    if from_person in thanks:
-        return None
-    target["thanks"] = thanks + [from_person]
-    store.set_profile(family_id, resolved_log=entries)
-    return target
+    with store.family_lock(family_id):
+        entries = list(store.profile(family_id).get("resolved_log") or [])
+        target = next((e for e in entries if e["item_id"] == item_id), None)
+        if target is None:
+            raise KeyError(f"No resolved item {item_id!r}")
+        thanks = list(target.get("thanks") or [])
+        if from_person in thanks:
+            return None
+        target["thanks"] = thanks + [from_person]
+        store.set_profile(family_id, resolved_log=entries)
+        return target
 
 
 def handled_this_week(profile: dict, *, now: datetime | None = None) -> dict:

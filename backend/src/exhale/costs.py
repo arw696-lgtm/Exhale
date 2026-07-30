@@ -147,9 +147,10 @@ def record_llm_use(
             cache_write_tokens=cache_write_tokens,
         ),
     }
-    entries = list(store.profile(family_id).get("llm_usage") or [])
-    entries.append(entry)
-    store.set_profile(family_id, llm_usage=entries[-MAX_USAGE_ENTRIES:])
+    with store.family_lock(family_id):  # RMW must not race a concurrent writer
+        entries = list(store.profile(family_id).get("llm_usage") or [])
+        entries.append(entry)
+        store.set_profile(family_id, llm_usage=entries[-MAX_USAGE_ENTRIES:])
     return entry
 
 

@@ -786,17 +786,19 @@ def _time_for_what_matters(family_id: str, profile: dict) -> dict | None:
     if not config and not intentions:
         return None
 
-    updated, groups = surface(intentions)
-    if updated != intentions:
-        store.set_profile(family_id, intentions=updated)
+    with store.family_lock(family_id):  # surfacing stamps counters — RMW guarded
+        intentions = list(store.profile(family_id).get("intentions") or [])
+        updated, groups = surface(intentions)
+        if updated != intentions:
+            store.set_profile(family_id, intentions=updated)
 
-    # The low-key "add one anytime" line: shown until it has been on screen
-    # once with nothing logged; after that, silence (the form itself stays).
-    show_add_nudge = True
-    if not intentions:
-        show_add_nudge = not profile.get("intentions_nudge_shown")
-        if show_add_nudge:
-            store.set_profile(family_id, intentions_nudge_shown=True)
+        # The low-key "add one anytime" line: shown until it has been on screen
+        # once with nothing logged; after that, silence (the form itself stays).
+        show_add_nudge = True
+        if not intentions:
+            show_add_nudge = not profile.get("intentions_nudge_shown")
+            if show_add_nudge:
+                store.set_profile(family_id, intentions_nudge_shown=True)
 
     windows: list[dict] = []
     together_windows: list[dict] = []
@@ -1036,9 +1038,10 @@ def dismiss_extraction(
 
     if not any(e.extraction_id == extraction_id for e in store.ledger(family_id)):
         raise HTTPException(status_code=404, detail=f"No extraction {extraction_id!r}")
-    dismissed = _dismissed_ids(family_id)
-    dismissed.add(extraction_id)
-    store.set_profile(family_id, dismissed_extractions=sorted(dismissed))
+    with store.family_lock(family_id):  # RMW guarded
+        dismissed = _dismissed_ids(family_id)
+        dismissed.add(extraction_id)
+        store.set_profile(family_id, dismissed_extractions=sorted(dismissed))
     return {"family_id": family_id, "extraction_id": extraction_id, "status": "dismissed"}
 
 
@@ -1474,10 +1477,11 @@ def add_waiting(
 
     from exhale.waiting import new_item
 
-    items = list(store.profile(family_id).get("waiting_on") or [])
-    item = new_item(req.who, req.about, since=req.since, channel=req.channel)
-    items.append(item)
-    store.set_profile(family_id, waiting_on=items)
+    with store.family_lock(family_id):  # RMW guarded
+        items = list(store.profile(family_id).get("waiting_on") or [])
+        item = new_item(req.who, req.about, since=req.since, channel=req.channel)
+        items.append(item)
+        store.set_profile(family_id, waiting_on=items)
     return {"family_id": family_id, **item}
 
 
@@ -1492,14 +1496,15 @@ def resolve_waiting(
     from exhale.handled import log_resolved
     from exhale.waiting import resolve_item
 
-    resolved = next((i for i in store.profile(family_id).get("waiting_on") or []
-                     if i.get("id") == item_id), None)
-    items = list(store.profile(family_id).get("waiting_on") or [])
-    try:
-        items = resolve_item(items, item_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    store.set_profile(family_id, waiting_on=items)
+    with store.family_lock(family_id):  # RMW guarded
+        resolved = next((i for i in store.profile(family_id).get("waiting_on") or []
+                         if i.get("id") == item_id), None)
+        items = list(store.profile(family_id).get("waiting_on") or [])
+        try:
+            items = resolve_item(items, item_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        store.set_profile(family_id, waiting_on=items)
     if resolved is not None:  # loop closed — remember the catch (reuses item text)
         log_resolved(
             store, family_id,
@@ -1580,14 +1585,15 @@ def add_household_task(
 
     from exhale.tasks import add_task
 
-    items = list(store.profile(family_id).get("tasks") or [])
-    try:
-        items, task = add_task(items, req.description,
-                               created_by=_member_name(user),
-                               cadence=req.cadence)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    store.set_profile(family_id, tasks=items)
+    with store.family_lock(family_id):  # RMW guarded
+        items = list(store.profile(family_id).get("tasks") or [])
+        try:
+            items, task = add_task(items, req.description,
+                                   created_by=_member_name(user),
+                                   cadence=req.cadence)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        store.set_profile(family_id, tasks=items)
     return {"family_id": family_id, **task}
 
 
@@ -1601,15 +1607,16 @@ def claim_household_task(
 
     from exhale.tasks import claim_task
 
-    items = list(store.profile(family_id).get("tasks") or [])
-    who = _member_name(user)
-    try:
-        items = claim_task(items, task_id, who=who)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    store.set_profile(family_id, tasks=items)
+    with store.family_lock(family_id):  # RMW guarded
+        items = list(store.profile(family_id).get("tasks") or [])
+        who = _member_name(user)
+        try:
+            items = claim_task(items, task_id, who=who)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        store.set_profile(family_id, tasks=items)
     return {"family_id": family_id, "task_id": task_id, "claimed_by": who}
 
 
@@ -1625,15 +1632,16 @@ def complete_household_task(
     from exhale.handled import log_resolved
     from exhale.tasks import complete_task, week_key
 
-    items = list(store.profile(family_id).get("tasks") or [])
-    who = _member_name(user)
-    try:
-        items, done = complete_task(items, task_id, who=who)
-    except ValueError as exc:  # double-tap must not double-credit
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    store.set_profile(family_id, tasks=items)
+    with store.family_lock(family_id):  # RMW guarded
+        items = list(store.profile(family_id).get("tasks") or [])
+        who = _member_name(user)
+        try:
+            items, done = complete_task(items, task_id, who=who)
+        except ValueError as exc:  # double-tap must not double-credit
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        store.set_profile(family_id, tasks=items)
     weekly = done.get("cadence") == "weekly"
     log_resolved(
         store, family_id,
@@ -1660,12 +1668,13 @@ def drop_household_task(
 
     from exhale.tasks import drop_task
 
-    items = list(store.profile(family_id).get("tasks") or [])
-    try:
-        items = drop_task(items, task_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    store.set_profile(family_id, tasks=items)
+    with store.family_lock(family_id):  # RMW guarded
+        items = list(store.profile(family_id).get("tasks") or [])
+        try:
+            items = drop_task(items, task_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        store.set_profile(family_id, tasks=items)
     return {"family_id": family_id, "task_id": task_id, "status": "dropped"}
 
 
@@ -1716,9 +1725,10 @@ def add_intention(
                              context=req.context)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    items = list(store.profile(family_id).get("intentions") or [])
-    items.append(item)
-    store.set_profile(family_id, intentions=items)
+    with store.family_lock(family_id):  # RMW guarded
+        items = list(store.profile(family_id).get("intentions") or [])
+        items.append(item)
+        store.set_profile(family_id, intentions=items)
     return {"family_id": family_id, **item}
 
 
@@ -1736,15 +1746,16 @@ def set_intention_status(
         {"start": req.window_start, "end": req.window_end}
         if req.status == "matched" and req.window_start else None
     )
-    items = list(store.profile(family_id).get("intentions") or [])
-    try:
-        items = set_status(items, intention_id, req.status,
-                           matched_window=matched_window)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    store.set_profile(family_id, intentions=items)
+    with store.family_lock(family_id):  # RMW guarded
+        items = list(store.profile(family_id).get("intentions") or [])
+        try:
+            items = set_status(items, intention_id, req.status,
+                               matched_window=matched_window)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        store.set_profile(family_id, intentions=items)
     return {"family_id": family_id, "intention_id": intention_id, "status": req.status}
 
 
@@ -1756,12 +1767,13 @@ def reconfirm_intention(
 
     from exhale.intentions import reconfirm
 
-    items = list(store.profile(family_id).get("intentions") or [])
-    try:
-        items = reconfirm(items, intention_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    store.set_profile(family_id, intentions=items)
+    with store.family_lock(family_id):  # RMW guarded
+        items = list(store.profile(family_id).get("intentions") or [])
+        try:
+            items = reconfirm(items, intention_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        store.set_profile(family_id, intentions=items)
     return {"family_id": family_id, "intention_id": intention_id, "status": "open"}
 
 
@@ -1774,14 +1786,15 @@ def answer_follow_up(
 
     from exhale.intentions import record_follow_up
 
-    items = list(store.profile(family_id).get("intentions") or [])
-    try:
-        items = record_follow_up(items, intention_id, req.outcome)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    store.set_profile(family_id, intentions=items)
+    with store.family_lock(family_id):  # RMW guarded
+        items = list(store.profile(family_id).get("intentions") or [])
+        try:
+            items = record_follow_up(items, intention_id, req.outcome)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        store.set_profile(family_id, intentions=items)
     return {"family_id": family_id, "intention_id": intention_id,
             "follow_up_outcome": req.outcome}
 
