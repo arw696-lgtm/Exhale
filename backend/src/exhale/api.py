@@ -847,6 +847,21 @@ def get_learning(family_id: str = Depends(require_family_access)) -> dict:
     )
 
 
+@app.get("/v1/families/{family_id}/reflection")
+def get_reflection(family_id: str = Depends(require_family_access)) -> dict:
+    """The Weekly Reflection — Exhale's exhale (the Sunday look back).
+
+    Built only from resolved signals the family already generated, so it
+    reflects what actually happened — a full week gets a lift, a hard week is
+    named as hard, and a quiet week stays quiet. Never fabricates a win.
+    """
+
+    from exhale.reflection import build_weekly_reflection
+
+    profile = store.profile(family_id)
+    return build_weekly_reflection(profile, _care_watch_for(profile))
+
+
 class LearningAckIn(BaseModel):
     """A member marking a surfaced observation as *new to them* — a surprise."""
 

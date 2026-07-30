@@ -26,6 +26,7 @@ export default function WeeklyBriefing({
   familyId,
   live = false,
   onRefresh,
+  onOpenReview,
 }) {
   const criticalCount = briefing.summary?.critical_count ?? briefing.critical_threats.length;
 
@@ -38,6 +39,18 @@ export default function WeeklyBriefing({
         inviteCode={inviteCode}
         onLogout={onLogout}
       />
+
+      {/* Quiet doorway to the look-back — leads on Sunday, one tap any day. */}
+      {onOpenReview && (
+        <div className="-mt-2 mb-6 text-center">
+          <button
+            onClick={onOpenReview}
+            className="font-micro text-xs font-medium text-sage-release transition hover:text-sanctuary-navy"
+          >
+            Your week, in review →
+          </button>
+        </div>
+      )}
 
       {/* Needs you — the short list of what actually wants attention. */}
       {criticalCount > 0 && (

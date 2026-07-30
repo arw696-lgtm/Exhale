@@ -329,6 +329,18 @@ export async function revokeHelper(helperUserId, familyId = DEMO_FAMILY) {
   return body;
 }
 
+// --- weekly reflection (the Sunday exhale) ------------------------------------
+/** The week-in-review reflection, or null when unavailable (offline / anon). */
+export async function fetchReflection(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/reflection`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 // --- learning scoreboard ("is Exhale learning how we work?") ------------------
 /** The learning scoreboard, or null when unavailable (offline demo / anon). */
 export async function fetchLearning(familyId = DEMO_FAMILY) {

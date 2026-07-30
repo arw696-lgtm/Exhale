@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import WeeklyBriefing from "./components/WeeklyBriefing.jsx";
+import WeeklyReflection from "./components/WeeklyReflection.jsx";
 import CalendarScreen from "./components/CalendarScreen.jsx";
 import HouseholdScreen from "./components/HouseholdScreen.jsx";
 import YouScreen from "./components/YouScreen.jsx";
@@ -26,6 +27,10 @@ export default function App() {
   const [openObligationId, setOpenObligationId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("today");
+  // Sunday, the home tab leads with the week-in-review reflection; any other
+  // day it's one tap away. reviewClosed lets "see this week's tasks" stick.
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewClosed, setReviewClosed] = useState(false);
 
   const familyId = me?.family_id ?? DEMO_FAMILY;
 
@@ -123,12 +128,21 @@ export default function App() {
   const live = source === "api";
   const refresh = () => loadData(familyId);
   const needsCount = briefing.summary?.critical_count ?? briefing.critical_threats?.length ?? 0;
+  const isSunday = new Date().getDay() === 0;
+  const showReview = live && (reviewOpen || (isSunday && !reviewClosed));
+  const closeReview = () => {
+    setReviewOpen(false);
+    setReviewClosed(true);
+  };
 
   return (
     <>
       {/* pb clears the fixed tab bar */}
       <div className="pb-28">
-        {tab === "today" && (
+        {tab === "today" && showReview && (
+          <WeeklyReflection familyId={familyId} live={live} onClose={closeReview} />
+        )}
+        {tab === "today" && !showReview && (
           <WeeklyBriefing
             briefing={briefing}
             drafts={drafts}
@@ -139,6 +153,7 @@ export default function App() {
             familyId={familyId}
             live={live}
             onRefresh={refresh}
+            onOpenReview={live ? () => setReviewOpen(true) : undefined}
           />
         )}
         {tab === "calendar" && <CalendarScreen briefing={briefing} />}
