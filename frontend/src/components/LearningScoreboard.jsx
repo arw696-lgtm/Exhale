@@ -140,6 +140,30 @@ export default function LearningScoreboard({ familyId }) {
         </p>
       )}
 
+      {/* Trust — is it right, not just learning? The number Milo died on. */}
+      {board.trust && (
+        <div className="mb-4 border-t border-sanctuary-navy/10 pt-4">
+          <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+            Trust
+          </p>
+          {board.trust.confident_accuracy != null ? (
+            <StatLine>
+              Of {board.trust.asserted} thing{board.trust.asserted === 1 ? "" : "s"} Exhale
+              committed without asking,{" "}
+              <span className="font-semibold text-sanctuary-navy">
+                {Math.round(board.trust.confident_accuracy * 100)}%
+              </span>{" "}
+              stood without a correction
+              {board.trust.corrected > 0 && ` (${board.trust.corrected} needed a fix)`}.
+            </StatLine>
+          ) : (
+            <p className="font-micro text-sm text-sanctuary-navy/45">
+              Nothing asserted yet — no score is more honest than a perfect one.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Coverage foresight + surprises — the two outcome measures. */}
       <div className="grid grid-cols-2 gap-3 border-t border-sanctuary-navy/10 pt-4">
         <div>

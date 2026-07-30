@@ -185,6 +185,52 @@ def test_ack_log_is_capped():
     assert len(store.profile(fam)["learning_acks"]) == MAX_ACK_ENTRIES
 
 
+# --- the trust ledger: is Exhale right, not just learning? ------------------------
+def test_trust_cold_start_has_no_score():
+    trust = build_learning_scoreboard([], {})["trust"]
+    assert trust["asserted"] == 0
+    assert trust["confident_accuracy"] is None  # nothing scored ≠ perfect score
+
+
+def test_uncorrected_assertions_score_full_trust():
+    store = HouseholdStore()
+    _isla_weeks(store, "fam")  # three HIGH-band auto-commits, untouched
+    trust = build_learning_scoreboard(store.ledger("fam"), store.profile("fam"))["trust"]
+    assert trust["asserted"] == 3
+    assert trust["corrected"] == 0
+    assert trust["confident_accuracy"] == 1.0
+
+
+def test_a_real_correction_lowers_confident_accuracy():
+    store = HouseholdStore()
+    _isla_weeks(store, "fam")
+    first = store.ledger("fam")[0]
+    # The user fixes the date — Exhale was confidently wrong about this one.
+    store.correct("fam", first.extraction_id, event_date=date(2026, 6, 23))
+    trust = build_learning_scoreboard(store.ledger("fam"), store.profile("fam"))["trust"]
+    assert trust["corrected"] == 1
+    # The correcting entry is USER_CONFIRMED ground truth, not a new assertion.
+    assert trust["asserted"] == 3
+    assert trust["confident_accuracy"] == round(1 - 1 / 3, 3)
+
+
+def test_confirmation_without_changes_is_agreement_not_failure():
+    store = HouseholdStore()
+    _isla_weeks(store, "fam")
+    first = store.ledger("fam")[0]
+    store.correct("fam", first.extraction_id)  # confirm as-is — no fixes
+    trust = build_learning_scoreboard(store.ledger("fam"), store.profile("fam"))["trust"]
+    assert trust["corrected"] == 0
+    assert trust["confident_accuracy"] == 1.0
+
+
+def test_trust_carries_the_review_side_record():
+    store = HouseholdStore()
+    profile = {"dismissed_extractions": ["ext_a", "ext_b"]}
+    trust = build_learning_scoreboard(store.ledger("fam"), profile)["trust"]
+    assert trust["review"]["overruled"] == 2  # exhale.autonomy's scored record
+
+
 # --- API --------------------------------------------------------------------------
 def test_learning_endpoint_cold_family_is_valid():
     board = client.get("/v1/families/fam_learn_cold/learning").json()

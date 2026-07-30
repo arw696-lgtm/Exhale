@@ -28,6 +28,7 @@ from datetime import date, time
 
 from pydantic import BaseModel, Field
 
+from exhale.costs import note_usage
 from exhale.extraction import ExtractionContext
 from exhale.schemas import ArtifactTier, ExtractionPayload, FactOrigin
 
@@ -171,6 +172,8 @@ class VisionExtractor:
         except Exception as exc:  # SDK / transport errors
             raise VisionUnavailable(str(exc)) from exc
 
+        note_usage(self.model, getattr(response, "usage", None) or {}, purpose="photo")
+
         result = response.parsed_output
         if result is None:
             raise VisionUnavailable(
@@ -240,6 +243,9 @@ class VisionExtractor:
             )
         except Exception as exc:
             raise VisionUnavailable(str(exc)) from exc
+
+        note_usage(self.model, getattr(response, "usage", None) or {},
+                   purpose="school_calendar")
 
         result = response.parsed_output
         if result is None:

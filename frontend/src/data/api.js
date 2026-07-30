@@ -353,6 +353,17 @@ export async function fetchLearning(familyId = DEMO_FAMILY) {
   }
 }
 
+/** The per-family LLM cost meter, or null when unavailable. */
+export async function fetchCosts(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/costs`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Mark a surfaced observation as "new to us" — the only input to surprises. */
 export function acknowledgeLearning(observationId, observationType, note = "", familyId = DEMO_FAMILY) {
   return postJson(`/v1/families/${familyId}/learning/ack`, {

@@ -81,10 +81,13 @@ def _sync_gmail(store, family_id: str, profile: dict, extractor) -> dict:
                 client_id=cfg.client_id if cfg else None,
                 client_secret=cfg.client_secret if cfg else None,
             )
-            result = run_incremental_sync(
-                connector, store, family_id, ctx, extractor=extractor,
-                watermark_key=watermark_key("google", user_key),
-            )
+            from exhale.costs import metering
+
+            with metering(store, family_id):
+                result = run_incremental_sync(
+                    connector, store, family_id, ctx, extractor=extractor,
+                    watermark_key=watermark_key("google", user_key),
+                )
             report[user_key] = {"scanned": result.scanned,
                                 "committed": result.committed}
         except Exception as exc:  # noqa: BLE001 — one inbox never blocks the other

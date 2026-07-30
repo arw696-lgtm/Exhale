@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 
 from exhale.connectors.base import RawMessage
 from exhale.connectors.preprocess import clean
+from exhale.costs import note_usage
 from exhale.credibility import classify_artifact
 from exhale.extraction import ExtractionContext, extract_payload
 from exhale.routing import ConfidenceBand, classify_confidence
@@ -160,6 +161,10 @@ class LLMExtractor:
             )
         except Exception as exc:  # SDK errors → let the caller degrade gracefully
             raise LLMUnavailable(str(exc)) from exc
+
+        # Cost meter: report real spend (no-op unless the API layer is metering).
+        note_usage(self.model, getattr(response, "usage", None) or {},
+                   purpose="email_extraction")
 
         result = response.parsed_output
         if result is None:  # refusal or schema-parse failure

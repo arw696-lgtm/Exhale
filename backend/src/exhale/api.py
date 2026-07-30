@@ -568,13 +568,16 @@ def ingest_photo(
             status_code=503,
             detail="Vision extraction is not configured. Set ANTHROPIC_API_KEY.",
         )
+    from exhale.costs import metering
+
     digest = hashlib.sha256(req.image_base64.encode()).hexdigest()[:12]
     ctx = ExtractionContext(known_children=req.known_children)
     try:
-        payloads = extractor.extract(
-            req.image_base64, req.media_type,
-            source_name=req.source_name, source_reference=f"photo_{digest}", ctx=ctx,
-        )
+        with metering(store, family_id):
+            payloads = extractor.extract(
+                req.image_base64, req.media_type,
+                source_name=req.source_name, source_reference=f"photo_{digest}", ctx=ctx,
+            )
     except VisionUnavailable as exc:
         raise HTTPException(status_code=422, detail=f"Could not read the image: {exc}") from exc
 
@@ -658,10 +661,13 @@ def ingest_school_calendar_photo(
                 grade = grade_for(c.recipient.birthdate)
                 break
 
+    from exhale.costs import metering
+
     try:
-        extraction = extractor.extract_school_calendar(
-            req.image_base64, req.media_type, grade=grade
-        )
+        with metering(store, family_id):
+            extraction = extractor.extract_school_calendar(
+                req.image_base64, req.media_type, grade=grade
+            )
     except VisionUnavailable as exc:
         raise HTTPException(status_code=422, detail=f"Could not read the calendar: {exc}") from exc
 
@@ -827,6 +833,21 @@ def get_ledger(family_id: str = Depends(require_family_access)) -> dict:
     """Return the extraction ledger (routing outcomes + provenance)."""
 
     return {"family_id": family_id, "entries": [e.to_dict() for e in store.ledger(family_id)]}
+
+
+@app.get("/v1/families/{family_id}/costs")
+def get_costs(family_id: str = Depends(require_family_access)) -> dict:
+    """The Cost Meter — what running Exhale for this family actually costs.
+
+    The Milo lesson instrumented: per-family LLM spend (planning estimates),
+    this week and all time, with a monthly projection once a full week has
+    been observed. Zero calls honestly reads as zero — the deterministic
+    pipeline is free, and the meter never pads.
+    """
+
+    from exhale.costs import build_cost_meter
+
+    return build_cost_meter(store.profile(family_id))
 
 
 @app.get("/v1/families/{family_id}/learning")
@@ -2115,11 +2136,14 @@ def scan_household(req: ScanRequest, family_id: str = Depends(require_family_acc
     """Run raw connector messages through extract → route → graph, return a
     Household Assessment Snapshot (Blueprint §3, §6)."""
 
+    from exhale.costs import metering
+
     connector = FixtureConnector(_to_raw(m) for m in req.messages)
     ctx = ExtractionContext(known_children=req.known_children)
-    result = run_retro_scan(
-        connector, store, family_id, ctx, days=req.days, extractor=pipeline_extractor
-    )
+    with metering(store, family_id):
+        result = run_retro_scan(
+            connector, store, family_id, ctx, days=req.days, extractor=pipeline_extractor
+        )
     return {
         "family_id": family_id,
         "scanned": result.scanned,
@@ -2198,11 +2222,14 @@ def sync_gmail(req: GmailSyncRequest, family_id: str = Depends(require_family_ac
     accounts_report: dict[str, dict] = {}
     totals = {"scanned": 0, "extracted": 0, "committed": 0, "pending": 0, "rejected": 0}
     snapshot = None
+    from exhale.costs import metering
+
     for user_key, connector in connectors:
-        result = run_incremental_sync(
-            connector, store, family_id, ctx, extractor=pipeline_extractor,
-            watermark_key=watermark_key("google", user_key),
-        )
+        with metering(store, family_id):
+            result = run_incremental_sync(
+                connector, store, family_id, ctx, extractor=pipeline_extractor,
+                watermark_key=watermark_key("google", user_key),
+            )
         accounts_report[user_key] = {
             "scanned": result.scanned, "extracted": result.extracted,
             "committed": result.committed, "pending": result.pending,

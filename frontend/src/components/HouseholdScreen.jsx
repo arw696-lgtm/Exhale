@@ -1,5 +1,6 @@
 import React from "react";
 import ConnectionsPanel from "./ConnectionsPanel.jsx";
+import CostMeterPanel from "./CostMeterPanel.jsx";
 import HelperInvitePanel from "./HelperInvitePanel.jsx";
 import LearningScoreboard from "./LearningScoreboard.jsx";
 import PhotoDrop from "./PhotoDrop.jsx";
@@ -34,6 +35,9 @@ export default function HouseholdScreen({ briefing, familyId, live, onRefresh })
 
       {/* Is Exhale learning? — the instrument for the product's core promise. */}
       {live && <LearningScoreboard familyId={familyId} />}
+
+      {/* Running costs — the unit-economics instrument (the Milo lesson). */}
+      {live && <CostMeterPanel familyId={familyId} />}
 
       {/* Coverage model — the setup form shows until a household is configured. */}
       {live && briefing?.care_watch == null && (

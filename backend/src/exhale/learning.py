@@ -102,6 +102,7 @@ def build_learning_scoreboard(
         "patterns_held": _patterns_held(ordered, min_samples),
         "coverage_foresight": _coverage_foresight(care_watch, profile, now=now),
         "surprises": _surprises(profile, now=now),
+        "trust": _trust(ordered, profile),
     }
 
 
@@ -206,6 +207,56 @@ def _coverage_foresight(care_watch: dict | None, profile: dict, *, now: datetime
         "gaps_ahead": len(gaps),
         "earliest_lead_hours": round(earliest_lead_hours, 1) if earliest_lead_hours is not None else None,
         "acted_on_this_week": acted_on,
+    }
+
+
+def _trust(ordered, profile: dict) -> dict:
+    """The Trust Ledger — is Exhale *right*, not just learning?
+
+    The Milo lesson made a number: one confidently wrong assertion costs more
+    trust than ten right ones earn. Two sides, measured separately because
+    they answer different questions:
+
+    * **Confident side** — of everything Exhale auto-committed without asking
+      (HIGH band, not user-originated), what fraction did a human later have to
+      *correct with actual changes*? A confirmation-without-changes is
+      agreement, not a failure. ``confident_accuracy`` is the reliability score
+      for the founding-family run; ``None`` until there's something to score.
+    * **Ask side** — reuses :func:`exhale.autonomy.trust_record`: of the items
+      held for review, how often was surfacing them the right call?
+    """
+
+    from exhale.autonomy import trust_record
+    from exhale.schemas import FactOrigin
+
+    by_id = {e.extraction_id: e for e in ordered}
+    asserted = corrected = 0
+    for e in ordered:
+        if e.decision.status.value != "COMMITTED":
+            continue
+        if e.payload.event_date_origin is FactOrigin.USER_CONFIRMED:
+            continue  # user-originated ground truth isn't Exhale asserting
+        asserted += 1
+        successor_id = e.superseded_by
+        successor = by_id.get(successor_id) if successor_id else None
+        if successor is None:
+            continue
+        changed = successor.payload.model_dump(
+            exclude={"corrects", "confidence_score", "event_date_origin"}
+        ) != e.payload.model_dump(
+            exclude={"corrects", "confidence_score", "event_date_origin"}
+        )
+        if changed:
+            corrected += 1
+
+    dismissed = set(profile.get("dismissed_extractions") or [])
+    return {
+        "asserted": asserted,
+        "corrected": corrected,
+        "confident_accuracy": (
+            round(1 - corrected / asserted, 3) if asserted else None
+        ),
+        "review": trust_record(ordered, dismissed),
     }
 
 
