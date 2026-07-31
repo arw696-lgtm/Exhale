@@ -44,6 +44,8 @@ def test_full_signal_school_email_is_high_confidence():
     assert classify_confidence(payload.confidence_score) is ConfidenceBand.HIGH
     assert payload.source_document_name == "West High Field Trip Permission Slip"
     assert payload.source_reference == "msg_1"
+    # The sender rides along as the reply-to for the human send handoff.
+    assert payload.source_sender == "noreply@powerschool.com"
 
 
 def test_medium_confidence_when_untrusted_and_no_deadline():

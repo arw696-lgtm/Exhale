@@ -9,6 +9,7 @@ from exhale.actions import (
     ActionStage,
     ActionType,
     DeliveryVector,
+    HandoffKind,
     infer_action_type,
     mark_obligation_resolved,
 )
@@ -58,11 +59,46 @@ def test_critical_gap_drafts_push_deadline_alarm():
     assert d.threat_level is ThreatLevel.CRITICAL
     assert d.delivery_vector is DeliveryVector.PUSH
     assert d.action_type is ActionType.SIGN_FORM
-    assert d.primary_action_label == "Review & Sign Draft"
+    # No source email → no handoff, and the button may only claim what
+    # approval actually does: mark the obligation handled.
+    assert d.handoff is HandoffKind.NONE
+    assert d.primary_action_label == "Mark handled"
+    assert d.reply_to is None and d.reply_body is None
     assert d.requires_approval is True
     assert d.stage is ActionStage.EXECUTE_WITH_APPROVAL
     assert "[🚨 CRITICAL THREAT]" in d.body
     assert "Hey Andrew" in d.body
+
+
+def test_email_sourced_sign_form_gets_mailto_handoff():
+    g = _graph_with(timedelta(hours=20),
+                    extra={"source_sender": "frontoffice@westhigh.example.edu"})
+    d = ActionEngine(g, parent_first_name="Andrew").draft_all(now=NOW)[0]
+    assert d.handoff is HandoffKind.MAILTO
+    assert d.reply_to == "frontoffice@westhigh.example.edu"
+    assert d.reply_subject == "Re: West High Weekly Newsletter"
+    assert "Olivia has my permission" in d.reply_body
+    assert d.reply_body.endswith("Andrew")
+    assert d.primary_action_label == "Open reply in your mail app"
+    # The push copy is allowed its send-shaped claim only because the
+    # reply genuinely exists.
+    assert "[👉 Review & Send Reply]" in d.body
+    # The human is still the transport: approval is still gated.
+    assert d.requires_approval is True
+
+
+def test_non_sign_form_never_replies_to_sender():
+    """A record request goes to the doctor — replying to the newsletter
+    sender would be the wrong recipient, so no handoff is offered."""
+
+    g = _graph_with(timedelta(hours=20), name="State Immunization Record",
+                    sub_type=None,
+                    extra={"source_sender": "frontoffice@westhigh.example.edu"})
+    d = ActionEngine(g).draft_all(now=NOW)[0]
+    assert d.action_type is ActionType.REQUEST_RECORD
+    assert d.handoff is HandoffKind.NONE
+    assert d.reply_to is None
+    assert d.primary_action_label == "Mark handled"
 
 
 def test_important_gap_drafts_dependency_briefing_element():

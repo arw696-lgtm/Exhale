@@ -14,6 +14,7 @@ def test_critical_deadline_alarm_includes_all_fields():
         source_document_name="West High Weekly Newsletter",
         source_document_date=date(2026, 7, 15),
         is_tomorrow=True,
+        has_reply_draft=True,
     )
     assert body.startswith("[🚨 CRITICAL THREAT]")
     assert "Hey Andrew" in body
@@ -22,7 +23,8 @@ def test_critical_deadline_alarm_includes_all_fields():
     assert "2026-07-20 (Tomorrow)" in body
     assert "West High Weekly Newsletter" in body
     assert "sent on 2026-07-15" in body
-    assert body.endswith("[👉 Review, Sign, and Send Now]")
+    assert "send it from your own mail app" in body
+    assert body.endswith("[👉 Review & Send Reply]")
 
 
 def test_critical_alarm_without_person_or_source():
@@ -34,6 +36,51 @@ def test_critical_alarm_without_person_or_source():
     )
     assert "• Who: your household" in body
     assert "We parsed this" not in body
+
+
+def test_critical_alarm_never_promises_a_send_it_cannot_make():
+    """Honest copy: no reply draft → no send-shaped claims anywhere."""
+
+    body = templates.critical_deadline_alarm(
+        parent_first_name="Andrew",
+        extracted_event="Field Trip Permission Slip",
+        target_person_name="Olivia",
+        deadline_date=date(2026, 7, 20),
+        source_document_name="West High Weekly Newsletter",
+    )
+    assert "reply" not in body.lower()
+    assert "send" not in body.lower()
+    assert body.endswith("[👉 Review & Mark Handled]")
+
+
+def test_sign_form_reply_is_parent_voiced_and_asks_about_paper():
+    body = templates.sign_form_reply(
+        parent_name="Andrew",
+        target_person_name="Olivia",
+        obligation_name="West High Field Trip Permission Slip",
+        deadline_date=date(2026, 8, 1),
+    )
+    assert body.startswith("Hi,")
+    assert "Olivia has my permission" in body
+    assert "Please accept this email as my sign-off." in body
+    # It asks whether paper is still required — never assumes email suffices.
+    assert "if a printed or signed paper copy is still required" in body.lower()
+    assert "2026-08-01" in body
+    assert body.endswith("Thank you,\nAndrew")
+    # The reply is the parent's words leaving the household: no branding,
+    # no robot voice.
+    assert "Exhale" not in body
+    assert "Forgetting Engine" not in body
+
+
+def test_sign_form_reply_without_child_or_deadline():
+    body = templates.sign_form_reply(
+        parent_name="Andrew",
+        target_person_name=None,
+        obligation_name="Field Day Waiver",
+    )
+    assert "our child has my permission" in body
+    assert "deadline" not in body.lower()
 
 
 def test_dependency_gap_alarm_lists_confirmed_and_missing():

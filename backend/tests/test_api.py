@@ -88,6 +88,13 @@ def test_demo_drafts_are_generated():
     assert "CRITICAL THREAT" in critical[0]["body"]
     # Personalized with the demo family's parent name.
     assert "Hey Andrew" in critical[0]["body"]
+    # The email-sourced permission slip carries the human send handoff over
+    # the wire: a real reply, addressed to the real sender.
+    slip = next(d for d in drafts if "Permission Slip" in d["title"])
+    assert slip["handoff"] == "MAILTO"
+    assert slip["reply_to"] == "frontoffice@westhigh.example.edu"
+    assert slip["reply_subject"].startswith("Re: ")
+    assert "has my permission" in slip["reply_body"]
 
 
 def test_approve_action_resolves_gap_and_updates_briefing():

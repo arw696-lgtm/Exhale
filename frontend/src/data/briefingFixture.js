@@ -24,7 +24,7 @@ export const briefingFixture = {
       risk_score: 0.765,
       threat_level: "CRITICAL",
       source_document_name: "West High Weekly Newsletter",
-      primary_action: "Review & Sign Draft",
+      primary_action: "Review reply draft",
       secondary_action: "View Source Email",
     },
     {
@@ -37,7 +37,7 @@ export const briefingFixture = {
       risk_score: 0.72,
       threat_level: "CRITICAL",
       source_document_name: "Soccer League Onboarding Packet",
-      primary_action: "Text Doctor for Record",
+      primary_action: "Mark handled",
       secondary_action: "View Attached Form",
     },
   ],

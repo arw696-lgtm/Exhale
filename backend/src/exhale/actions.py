@@ -51,14 +51,18 @@ class DeliveryVector(str, Enum):
     SMS = "SMS"
 
 
-# Keyword → action-type inference and its presentation.
-_ACTION_LABELS = {
-    ActionType.SIGN_FORM: "Review & Sign Draft",
-    ActionType.REQUEST_RECORD: "Text Doctor for Record",
-    ActionType.PURCHASE_SUPPLIES: "Add to Household Cart",
-    ActionType.RESOLVE_CONFLICT: "Auto-draft Coverage Text",
-    ActionType.ACKNOWLEDGE: "Mark Handled",
-}
+class HandoffKind(str, Enum):
+    """How an approved draft actually leaves the household.
+
+    Exhale prepares to the threshold; a human crosses it. MAILTO hands the
+    rendered reply to the user's own mail app — sent from their address, by
+    them. NONE means approval only records "handled" in the graph, and the
+    button must say so (honest buttons: no label may promise a send that
+    doesn't happen).
+    """
+
+    MAILTO = "MAILTO"
+    NONE = "NONE"
 
 
 def infer_action_type(obligation_name: str, sub_type: str | None) -> ActionType:
@@ -91,6 +95,14 @@ class ActionDraft(BaseModel):
     body: str
     primary_action_label: str
     requires_approval: bool
+    # The human send handoff (§6): present only when Exhale has both a real
+    # reply and a real recipient — a signature-type obligation whose source
+    # was an email. The reply rides to the user's own mail app; Exhale never
+    # transmits it.
+    handoff: HandoffKind = HandoffKind.NONE
+    reply_to: str | None = None
+    reply_subject: str | None = None
+    reply_body: str | None = None
 
 
 class ActionEngine:
@@ -127,6 +139,13 @@ class ActionEngine:
         days_until = max(0, int(gap.hours_until_deadline // 24))
         is_tomorrow = gap.hours_until_deadline <= 36
 
+        # The handoff: only a signature-type obligation sourced from an email
+        # has both a genuine reply and a genuine recipient. Replying to the
+        # sender would be the wrong recipient for anything else (a record
+        # request goes to the doctor, not the newsletter).
+        sender = obligation.properties.get("source_sender")
+        has_handoff = action_type is ActionType.SIGN_FORM and bool(sender)
+
         if gap.threat_level is ThreatLevel.CRITICAL:
             vector = DeliveryVector.PUSH
             body = templates.critical_deadline_alarm(
@@ -137,6 +156,7 @@ class ActionEngine:
                 source_document_name=obligation.properties.get("source_document_name"),
                 source_document_date=obligation.properties.get("source_document_date"),
                 is_tomorrow=is_tomorrow,
+                has_reply_draft=has_handoff,
             )
             title = f"Critical: {gap.obligation_name}"
         else:
@@ -151,6 +171,25 @@ class ActionEngine:
             )
             title = f"Dependency gap: {gap.obligation_name}"
 
+        reply_to = reply_subject = reply_body = None
+        if has_handoff:
+            handoff = HandoffKind.MAILTO
+            reply_to = sender
+            source_name = obligation.properties.get("source_document_name")
+            reply_subject = f"Re: {source_name or gap.obligation_name}"
+            reply_body = templates.sign_form_reply(
+                parent_name=self.parent_first_name,
+                target_person_name=gap.target_person_name,
+                obligation_name=gap.obligation_name,
+                deadline_date=gap.deadline.date(),
+            )
+            label = "Open reply in your mail app"
+        else:
+            # Honest button: without a handoff, approval only marks the
+            # obligation handled in the graph — so that is all it may claim.
+            handoff = HandoffKind.NONE
+            label = "Mark handled"
+
         autonomous = action_type in self.autonomous_actions
         return ActionDraft(
             obligation_node_id=gap.obligation_node_id,
@@ -160,8 +199,12 @@ class ActionEngine:
             threat_level=gap.threat_level,
             title=title,
             body=body,
-            primary_action_label=_ACTION_LABELS[action_type],
+            primary_action_label=label,
             requires_approval=not autonomous,
+            handoff=handoff,
+            reply_to=reply_to,
+            reply_subject=reply_subject,
+            reply_body=reply_body,
         )
 
     def draft_all(self, *, now=None) -> list[ActionDraft]:

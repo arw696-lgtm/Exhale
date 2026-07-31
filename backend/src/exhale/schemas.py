@@ -99,6 +99,11 @@ class ExtractionPayload(BaseModel):
         default=None,
         description="Opaque provenance handle (message id, drive file id) for source lookup.",
     )
+    source_sender: str | None = Field(
+        default=None,
+        description="Email address the source message came from — the reply-to "
+        "for a human send handoff. Null for non-email artifacts.",
+    )
     # --- Credibility layer -------------------------------------------------------
     artifact_tier: ArtifactTier = Field(
         default=ArtifactTier.UNKNOWN,

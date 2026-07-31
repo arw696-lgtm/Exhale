@@ -276,6 +276,7 @@ def extract_payload(raw: RawMessage, ctx: ExtractionContext | None = None) -> Ex
         confidence_score=score,
         source_document_name=raw.display_name,
         source_reference=raw.source_id,
+        source_sender=raw.sender,
         artifact_tier=tier,
         # A fuzzy token ("next week", a bare weekday) is the pipeline's
         # arithmetic, not the artifact's text — that is an inference.

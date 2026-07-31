@@ -37,7 +37,8 @@ def build_demo_graph(now: datetime | None = None) -> KnowledgeGraph:
             "name": "West High Field Trip Permission Slip", "status": "UNRESOLVED",
             "deadline": (now + timedelta(hours=20)).isoformat(), "target_person_name": "Olivia",
             "likelihood_of_forgetting": 0.9, "impact_of_forgetting": 0.85,
-            "source_document_name": "West High Weekly Newsletter"}),
+            "source_document_name": "West High Weekly Newsletter",
+            "source_sender": "frontoffice@westhigh.example.edu"}),
         ("immunization", "soccer_dep", "soccer_league", {
             "name": "State Immunization Record", "status": "UNRESOLVED",
             "deadline": (now + timedelta(hours=30)).isoformat(), "target_person_name": "Leo",

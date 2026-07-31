@@ -270,6 +270,7 @@ class HouseholdStore:
             "impact_of_forgetting": 0.85 if payload.deadline_date else 0.5,
             "source_document_name": payload.source_document_name,
             "source_reference": payload.source_reference,
+            "source_sender": payload.source_sender,
             # Credibility layer: cite-or-gap, never a silent default.
             "artifact_tier": payload.artifact_tier.value,
             "event_date_origin": payload.event_date_origin.value,

@@ -189,6 +189,7 @@ class LLMExtractor:
             # Provenance comes from the pipeline, never from the model.
             source_document_name=raw.display_name,
             source_reference=raw.source_id,
+            source_sender=raw.sender,
             # Credibility: the tier is classified pipeline-side (deterministic),
             # while the observed/inferred distinction comes from the model's own
             # account of whether it read the date or derived it.

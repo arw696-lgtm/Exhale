@@ -26,8 +26,13 @@ def critical_deadline_alarm(
     source_document_name: str | None = None,
     source_document_date: date | str | None = None,
     is_tomorrow: bool = False,
+    has_reply_draft: bool = False,
 ) -> str:
-    """§10.1 — Critical Deadline Alarm (PUSH / immediate app-tray launch view)."""
+    """§10.1 — Critical Deadline Alarm (PUSH / immediate app-tray launch view).
+
+    ``has_reply_draft`` gates every send-shaped claim: the copy may only
+    promise a ready reply when the action engine actually rendered one.
+    """
 
     who = target_person_name or "your household"
     deadline = _fmt_date(deadline_date) + (" (Tomorrow)" if is_tomorrow else "")
@@ -42,9 +47,12 @@ def critical_deadline_alarm(
         provenance = f"We parsed this directly from the {source_document_name}"
         if source_document_date:
             provenance += f" sent on {_fmt_date(source_document_date)}"
-        provenance += ". We've already generated your dynamic response draft."
+        if has_reply_draft:
+            provenance += ". Your reply is drafted below — review it, then send it from your own mail app."
+        else:
+            provenance += "."
         lines.append(provenance)
-    lines.append("[👉 Review, Sign, and Send Now]")
+    lines.append("[👉 Review & Send Reply]" if has_reply_draft else "[👉 Review & Mark Handled]")
     return "\n".join(lines)
 
 
@@ -78,6 +86,43 @@ def dependency_gap_alarm(
             f"There are {total_items_count} required tracking items."
         )
         lines.append(f"[🛒 Add all {total_items_count} items to Household Shopping Cart]")
+    return "\n".join(lines)
+
+
+def sign_form_reply(
+    *,
+    parent_name: str,
+    target_person_name: str | None,
+    obligation_name: str,
+    deadline_date: date | str | None = None,
+) -> str:
+    """§10.4 — the actual outbound reply for a signature-type obligation.
+
+    This is the text that leaves the household, so it is written in the
+    parent's voice, states only what the parent is affirming, and asks —
+    never assumes — whether a paper form is still required. Exhale writes
+    it; the human reads, edits, and presses send from their own mail app.
+    """
+
+    who = target_person_name or "our child"
+    lines = [
+        "Hi,",
+        "",
+        f"{who} has my permission for the {obligation_name.rstrip('.')}."
+        " Please accept this email as my sign-off.",
+    ]
+    if deadline_date:
+        lines.append(
+            f"I understand the deadline is {_fmt_date(deadline_date)} — "
+            "if a printed or signed paper copy is still required, let me know "
+            "and I'll send it in."
+        )
+    else:
+        lines.append(
+            "If a printed or signed paper copy is still required, let me know "
+            "and I'll send it in."
+        )
+    lines += ["", "Thank you,", parent_name]
     return "\n".join(lines)
 
 
