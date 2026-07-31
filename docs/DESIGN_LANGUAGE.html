@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Exhale — Design Language</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     EXHALE DESIGN LANGUAGE — this document is set in the system
+     it describes. Tokens below are the app's actual values.
+     ============================================================ */
+  :root {
+    --ink: 26 43 76;        /* Sanctuary Navy */
+    --canvas: 244 246 249;  /* Pure Breath ground */
+    --surface: 255 255 255;
+    --sage: 124 157 150;    /* Sage Release */
+    --amber: 226 149 120;   /* Looming Amber */
+    --ink-solid: 26 43 76;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: 226 232 240; --canvas: 12 20 32; --surface: 22 35 59;
+      --sage: 166 195 188; --amber: 237 171 144; --ink-solid: 42 62 100;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+    background-color: rgb(var(--canvas));
+    background-image:
+      radial-gradient(120% 70% at 12% -5%, rgb(var(--sage) / 0.12), transparent 55%),
+      radial-gradient(110% 70% at 100% 4%, rgb(var(--amber) / 0.10), transparent 50%);
+    background-attachment: fixed;
+    color: rgb(var(--ink));
+    -webkit-font-smoothing: antialiased;
+    padding: clamp(28px, 5vw, 64px) 20px 80px;
+  }
+  .sheet { max-width: 920px; margin: 0 auto; }
+
+  .top { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;
+         border-bottom: 1px solid rgb(var(--ink) / 0.10); padding-bottom: 16px; }
+  .brandmark { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 28px; }
+  .doctype { font-family: "Inter Tight", sans-serif; text-transform: uppercase; letter-spacing: .17em;
+             font-size: 11px; font-weight: 700; color: rgb(var(--sage)); filter: brightness(.85); }
+
+  h1 { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400;
+       font-size: clamp(30px, 5.5vw, 46px); line-height: 1.06; margin: 28px 0 14px;
+       letter-spacing: -.01em; text-wrap: balance; }
+  .thesis { font-size: clamp(15px, 2.3vw, 17px); line-height: 1.62; color: rgb(var(--ink) / .65); max-width: 66ch; }
+  .thesis b { color: rgb(var(--ink)); font-weight: 600; }
+
+  h2 { font-family: "Inter Tight", sans-serif; font-size: 11.5px; text-transform: uppercase;
+       letter-spacing: .14em; font-weight: 700; color: rgb(var(--sage)); filter: brightness(.85); margin: 0 0 14px; }
+  .sec { margin-top: clamp(30px, 4.5vw, 48px); }
+  .card { background: rgb(var(--surface)); border: 1px solid rgb(var(--ink) / 0.10);
+          border-radius: 22px; padding: clamp(18px, 3vw, 26px);
+          box-shadow: 0 12px 24px rgba(26,43,76,.04); }
+  .card + .card { margin-top: 14px; }
+  .lead { font-size: 14px; line-height: 1.62; color: rgb(var(--ink) / .70); margin: 0 0 14px; max-width: 70ch; }
+  .lead b { color: rgb(var(--ink)); }
+
+  /* -- swatches -- */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .sw { border-radius: 16px; overflow: hidden; border: 1px solid rgb(var(--ink) / 0.10); background: rgb(var(--surface)); }
+  .sw .chip { height: 74px; }
+  .sw .meta { padding: 10px 12px; }
+  .sw .nm { font-family: "Inter Tight", sans-serif; font-weight: 600; font-size: 13.5px; }
+  .sw .hx { font-size: 11.5px; color: rgb(var(--ink) / .5); font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .sw .use { font-size: 11.5px; color: rgb(var(--ink) / .62); line-height: 1.45; margin-top: 6px; }
+
+  /* -- type specimens -- */
+  .spec { display: grid; gap: 18px; }
+  .spec .row { display: grid; grid-template-columns: 150px 1fr; gap: 14px; align-items: baseline; }
+  @media (max-width: 620px) { .spec .row { grid-template-columns: 1fr; gap: 4px; } }
+  .spec .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600;
+               color: rgb(var(--ink) / .45); font-family: "Inter Tight", sans-serif; }
+  .ex-display { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 30px; line-height: 1.15; }
+  .ex-interface { font-family: "Inter Tight", sans-serif; font-weight: 600; font-size: 15px; letter-spacing: -0.02em; }
+  .ex-label { font-family: "Inter Tight", sans-serif; font-weight: 700; font-size: 11px;
+              text-transform: uppercase; letter-spacing: .14em; color: rgb(var(--sage)); filter: brightness(.85); }
+  .ex-micro { font-family: "Plus Jakarta Sans", sans-serif; font-size: 14px; line-height: 1.6; color: rgb(var(--ink) / .8); }
+
+  /* -- live component demos -- */
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .demo-grid { grid-template-columns: 1fr; } }
+  .demo { background: rgb(var(--surface)); border: 1px solid rgb(var(--ink) / 0.10); border-radius: 22px;
+          padding: 20px; box-shadow: 0 12px 24px rgba(26,43,76,.04); }
+  .demo .cap { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600;
+               color: rgb(var(--ink) / .40); font-family: "Inter Tight", sans-serif; margin-bottom: 12px; }
+
+  @keyframes exhale-breathe {
+    0%, 100% { transform: scale(1); opacity: 0.75; }
+    50% { transform: scale(1.14); opacity: 1; }
+  }
+  .breath-orb {
+    width: 96px; height: 96px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, rgb(var(--sage) / 0.45), transparent 66%);
+    animation: exhale-breathe 7s ease-in-out infinite;
+    transform-origin: 40% 40%;
+  }
+  @media (prefers-reduced-motion: reduce) { .breath-orb { animation: none; } }
+
+  .severity-dot { width: 7px; height: 7px; border-radius: 9999px; flex: none; display: inline-block; }
+  .dot-amber { background: rgb(var(--amber)); box-shadow: 0 0 0 4px rgb(var(--amber) / 0.16); }
+  .dot-sage  { background: rgb(var(--sage));  box-shadow: 0 0 0 4px rgb(var(--sage) / 0.16); }
+  .dot-navy  { background: rgb(var(--ink));   box-shadow: 0 0 0 4px rgb(var(--ink) / 0.12); }
+  .sevrow { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: rgb(var(--ink) / .8); margin-bottom: 10px; }
+
+  .btn { font-family: "Plus Jakarta Sans", sans-serif; font-size: 13.5px; font-weight: 500;
+         border-radius: 9999px; padding: 8px 18px; cursor: pointer; transition: background .18s ease; border: 0; }
+  .btn-primary { background: rgb(var(--ink-solid)); color: #fff; font-weight: 600; }
+  .btn-action  { background: rgb(var(--sage) / 0.10); color: rgb(var(--ink)); border: 1px solid rgb(var(--sage) / 0.4); }
+  .btn-action:hover { background: rgb(var(--sage) / 0.2); }
+  .btn-quiet   { background: transparent; color: rgb(var(--ink)); border: 1px solid rgb(var(--ink) / 0.15); }
+  .btn-quiet:hover { background: rgb(var(--canvas)); }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+  .pill { display: inline-block; border-radius: 9999px; padding: 3px 9px; font-size: 10px; font-weight: 600;
+          text-transform: uppercase; letter-spacing: .06em; font-family: "Plus Jakarta Sans", sans-serif; }
+  .pill-sage  { background: rgb(var(--sage) / 0.12); color: rgb(var(--sage)); filter: brightness(.85); }
+  .pill-navy  { background: rgb(var(--ink) / 0.05); color: rgb(var(--ink) / 0.45); }
+
+  .input-demo { border: 1px solid rgb(var(--ink) / 0.15); background: rgb(var(--canvas));
+                border-radius: 9999px; padding: 8px 18px; font-family: "Plus Jakarta Sans", sans-serif;
+                font-size: 13.5px; color: rgb(var(--ink)); width: 100%; outline: none; }
+  .input-demo:focus { border-color: rgb(var(--sage)); }
+
+  /* -- principles / rails -- */
+  .rails { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .rails li { font-size: 13.5px; line-height: 1.58; color: rgb(var(--ink) / .65); padding-left: 21px; position: relative; }
+  .rails li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 7px; height: 7px;
+                      border-radius: 50%; background: rgb(var(--sage)); box-shadow: 0 0 0 4px rgb(var(--sage) / 0.14); }
+  .rails li b { color: rgb(var(--ink)); font-weight: 600; }
+
+  .dd { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 620px) { .dd { grid-template-columns: 1fr; } }
+  .dd h3 { font-family: "Inter Tight", sans-serif; font-size: 13px; font-weight: 700; margin: 0 0 8px; }
+  .dd .no h3 { color: rgb(var(--amber)); filter: brightness(.8); }
+  .dd .yes h3 { color: rgb(var(--sage)); filter: brightness(.8); }
+  .dd ul { margin: 0; padding-left: 16px; }
+  .dd li { font-size: 13px; line-height: 1.55; color: rgb(var(--ink) / .68); margin-bottom: 6px; }
+
+  /* -- token table + code -- */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-family: "Inter Tight", sans-serif; font-size: 11px; text-transform: uppercase;
+       letter-spacing: .08em; color: rgb(var(--ink) / .45); padding: 6px 10px 8px 0; border-bottom: 1px solid rgb(var(--ink) / 0.12); }
+  td { padding: 8px 10px 8px 0; border-bottom: 1px solid rgb(var(--ink) / 0.06);
+       color: rgb(var(--ink) / .78); vertical-align: top; }
+  td code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  .tint { display: inline-block; width: 13px; height: 13px; border-radius: 4px; vertical-align: -2px;
+          margin-right: 7px; border: 1px solid rgb(var(--ink) / 0.15); }
+  .tablewrap { overflow-x: auto; }
+
+  pre { background: rgb(var(--ink) / 0.045); border: 1px solid rgb(var(--ink) / 0.08); border-radius: 14px;
+        padding: 16px 18px; overflow-x: auto; font-size: 12px; line-height: 1.6;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace; color: rgb(var(--ink) / .85); }
+
+  .foot { margin-top: 44px; font-size: 11px; color: rgb(var(--ink) / .4); line-height: 1.6;
+          border-top: 1px solid rgb(var(--ink) / 0.10); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="top">
+    <span class="brandmark">Exhale</span>
+    <span class="doctype">Design language · v1 · late July 2026</span>
+  </div>
+
+  <h1>Sensory relief, rendered.</h1>
+  <p class="thesis">
+    Exhale is a shared brain for the household — and its visual identity has one job:
+    <b>lower the reader's heart rate while telling them the truth.</b> Every choice below
+    serves that. This document is set in the system it describes; view it in light and
+    dark (it follows your OS) and share it as-is. All values are the shipped app's actual
+    tokens, not aspirations.
+  </p>
+
+  <!-- ===================== EMOTIONAL FOUNDATION ===================== -->
+  <section class="sec">
+    <h2>The emotional foundation</h2>
+    <div class="card">
+      <p class="lead">The product is named for the second half of a breath. The inhale is
+        the world demanding things of a family; Exhale is the release — <b>what's handled,
+        what can wait, who has it covered.</b> The identity projects three things, in order:</p>
+      <ul class="rails">
+        <li><b>Sensory relief.</b> Muted colors, generous whitespace, soft elevation, slow
+          motion. The app should feel like exhaling — never like a dashboard, never like a
+          to-do app's guilt engine.</li>
+        <li><b>Emotional de-escalation.</b> Urgency is communicated without alarm. There is
+          no red anywhere in the product: attention is a warm amber, and severity is a
+          quiet dot with a halo — not a siren, not a badge shouting a number.</li>
+        <li><b>Data reliability.</b> Calm must never read as vague. Numbers are set in
+          tabular figures, provenance is cited, and the honest states — "a quiet week,"
+          "still listening," "nothing asserted yet" — are designed states, not empty ones.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== PALETTE ===================== -->
+  <section class="sec">
+    <h2>Palette — 60 / 20 / 10 / 10</h2>
+    <div class="card">
+      <p class="lead">Four named colors, balanced so the page is mostly ground and text with
+        sage as the working accent and amber reserved for attention. <b>No pure red, no pure
+        black, no saturated success-green.</b> Every hex lives behind a CSS token, so the
+        entire app flips light ↔ dark by swapping token values — no component knows a hex.</p>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#1A2B4C"></div>
+          <div class="meta"><div class="nm">Sanctuary Navy</div><div class="hx">#1A2B4C · 60%</div>
+          <div class="use">Structure and text. Used at opacity steps (70/60/45/40/10) for hierarchy instead of extra greys.</div></div></div>
+        <div class="sw"><div class="chip" style="background:#7C9D96"></div>
+          <div class="meta"><div class="nm">Sage Release</div><div class="hx">#7C9D96 · 20%</div>
+          <div class="use">The working accent: safe, shared, verified, actions, success. Soft tints (10–16%) for fills and halos.</div></div></div>
+        <div class="sw"><div class="chip" style="background:#E29578"></div>
+          <div class="meta"><div class="nm">Looming Amber</div><div class="hx">#E29578 · 10%</div>
+          <div class="use">Attention without alarm — deadlines, hard weeks, dying threads. The product's only "warning" color.</div></div></div>
+        <div class="sw"><div class="chip" style="background:#F8F9FA;border-bottom:1px solid rgba(26,43,76,.08)"></div>
+          <div class="meta"><div class="nm">Pure Breath</div><div class="hx">#F8F9FA · 10%</div>
+          <div class="use">The canvas. Carries two faint radial washes (sage top-left, amber top-right) — a barely-there dawn.</div></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <p class="lead" style="margin-bottom:10px"><b>Dark theme is a token swap, not an inversion.</b>
+        The navy deepens into the ground; ink becomes a soft off-white; sage and amber lift
+        and desaturate slightly so they glow rather than shout on the dark surface.</p>
+      <div class="tablewrap"><table>
+        <tr><th>Token</th><th>Light</th><th>Dark</th><th>Role</th></tr>
+        <tr><td><code>--ink</code></td><td><span class="tint" style="background:#1A2B4C"></span>26 43 76</td><td><span class="tint" style="background:#E2E8F0"></span>226 232 240</td><td>Text, borders (via alpha)</td></tr>
+        <tr><td><code>--canvas</code></td><td><span class="tint" style="background:#F4F6F9"></span>244 246 249</td><td><span class="tint" style="background:#0C1420"></span>12 20 32</td><td>Page ground</td></tr>
+        <tr><td><code>--surface</code></td><td><span class="tint" style="background:#FFFFFF"></span>255 255 255</td><td><span class="tint" style="background:#16233B"></span>22 35 59</td><td>Cards, panels</td></tr>
+        <tr><td><code>--sage</code></td><td><span class="tint" style="background:#7C9D96"></span>124 157 150</td><td><span class="tint" style="background:#A6C3BC"></span>166 195 188</td><td>Accent, success, halos</td></tr>
+        <tr><td><code>--amber</code></td><td><span class="tint" style="background:#E29578"></span>226 149 120</td><td><span class="tint" style="background:#EDAB90"></span>237 171 144</td><td>Attention</td></tr>
+        <tr><td><code>--ink-solid</code></td><td><span class="tint" style="background:#1A2B4C"></span>26 43 76</td><td><span class="tint" style="background:#2A3E64"></span>42 62 100</td><td>Filled primary buttons (white text in both themes)</td></tr>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ===================== TYPOGRAPHY ===================== -->
+  <section class="sec">
+    <h2>Typography — three voices</h2>
+    <div class="card">
+      <p class="lead">Three faces, three jobs, never mixed roles. The pairing is the
+        personality: an editorial italic serif that makes headlines feel like a person
+        speaking, over precise sans-serif workhorses that make the data feel dependable.</p>
+      <div class="spec">
+        <div class="row"><span class="tag">Display · Instrument Serif italic</span>
+          <span class="ex-display">A lighter week. Breathe out.</span></div>
+        <div class="row"><span class="tag">Interface · Inter Tight 600</span>
+          <span class="ex-interface">Review &amp; Sign Draft → &nbsp; (−0.02em tracking)</span></div>
+        <div class="row"><span class="tag">Labels · Inter Tight 700 caps</span>
+          <span class="ex-label">What the family carried</span></div>
+        <div class="row"><span class="tag">Micro · Plus Jakarta Sans</span>
+          <span class="ex-micro">Body copy, data rows, captions — humanist and clean down to 12px.
+          Numbers in columns get <span class="mono">tabular-nums</span>.</span></div>
+      </div>
+      <p class="lead" style="margin:16px 0 0">Conventions: display is <b>always italic, never
+        bold</b> — headlines are spoken, not shouted. Section labels are uppercase with wide
+        tracking (.13–.17em) in sage or muted ink. Interface text tightens (−0.02em); micro
+        text never fakes smallcaps. Loaded from Google Fonts
+        (<span class="mono">Instrument Serif ital · Inter Tight 400–700 · Plus Jakarta Sans 400–600</span>)
+        with serif/system fallbacks.</p>
+    </div>
+  </section>
+
+  <!-- ===================== MOTION ===================== -->
+  <section class="sec">
+    <h2>Motion — everything breathes, nothing bounces</h2>
+    <div class="demo-grid">
+      <div class="demo">
+        <div class="cap">The breath orb — the thesis, made literal</div>
+        <div style="display:flex;align-items:center;gap:20px">
+          <div class="breath-orb"></div>
+          <p style="font-size:13px;line-height:1.55;color:rgb(var(--ink)/.65);margin:0">
+            A soft sage radial glow behind the header, scaling 1 → 1.14 over a
+            <b>7-second</b> ease-in-out cycle — the cadence of a calm human breath.
+            It is the app's only ambient animation.</p>
+        </div>
+        <pre style="margin:14px 0 0">@keyframes exhale-breathe {
+  0%, 100% { transform: scale(1);    opacity: .75; }
+  50%      { transform: scale(1.14); opacity: 1;   }
+}
+.breath-orb { animation: exhale-breathe 7s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .breath-orb { animation: none; }
+}</pre>
+      </div>
+      <div class="demo">
+        <div class="cap">Motion rules</div>
+        <ul class="rails">
+          <li><b>One ambient motion per screen</b> — the orb. Everything else moves only in
+            response to the user.</li>
+          <li><b>Transitions are fades and tint-shifts,</b> 150–200ms ease. No slides, no
+            bounces, no springs, no confetti — ever. Celebration is warm words, not particles.</li>
+          <li><b>Hover states deepen a tint</b> (sage 10% → 20%) or warm a border; they never
+            grow, lift, or glow elements.</li>
+          <li><b>Reduced motion is honored</b> — the orb stills, nothing else needs to change
+            because nothing else was moving.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== COMPONENT VOCABULARY ===================== -->
+  <section class="sec">
+    <h2>Component vocabulary</h2>
+    <div class="demo-grid">
+      <div class="demo">
+        <div class="cap">Severity — the dot-and-halo, never a siren</div>
+        <div class="sevrow"><span class="severity-dot dot-amber"></span> Needs you — deadlines, hard weeks, dying threads</div>
+        <div class="sevrow"><span class="severity-dot dot-sage"></span> Safe / covered / verified / success</div>
+        <div class="sevrow"><span class="severity-dot dot-navy"></span> Advisory — worth knowing, not worth worrying</div>
+        <p style="font-size:12.5px;color:rgb(var(--ink)/.55);line-height:1.55;margin:10px 0 0">
+          7px dot, 4px halo at 12–16% tint. Severity is stated once, quietly, next to the
+          section title — never as a count badge, never blinking.</p>
+      </div>
+      <div class="demo">
+        <div class="cap">Buttons — three weights of ask</div>
+        <div class="btnrow">
+          <button class="btn btn-primary">Review &amp; Sign Draft →</button>
+          <button class="btn btn-action">+ Keep this time</button>
+          <button class="btn btn-quiet">Let it go</button>
+        </div>
+        <p style="font-size:12.5px;color:rgb(var(--ink)/.55);line-height:1.55;margin:12px 0 0">
+          All fully rounded. Filled navy (<span class="mono">--ink-solid</span>) for the one
+          primary act on a screen; sage-tint outline for affirmative actions; quiet outline
+          for everything reversible. Labels say exactly what happens.</p>
+      </div>
+      <div class="demo">
+        <div class="cap">Cards &amp; chips</div>
+        <p style="font-size:13px;line-height:1.6;color:rgb(var(--ink)/.7);margin:0 0 10px">
+          Surfaces are white (navy in dark), <b>16–22px radius</b>, 1px ink-10% border, and a
+          low soft shadow (<span class="mono">0 12px 24px rgba(26,43,76,.04)</span>) —
+          elevation you feel rather than see. Chips label state in the family's language:</p>
+        <span class="pill pill-sage">Checked off</span>&nbsp;
+        <span class="pill pill-sage">Ali's got it</span>&nbsp;
+        <span class="pill pill-navy">Weekly</span>&nbsp;
+        <span class="pill pill-sage">Together</span>
+      </div>
+      <div class="demo">
+        <div class="cap">Inputs</div>
+        <input class="input-demo" placeholder="The house needs…" />
+        <p style="font-size:12.5px;color:rgb(var(--ink)/.55);line-height:1.55;margin:12px 0 0">
+          Fully rounded, canvas-tinted fill, ink-15% border warming to sage on focus.
+          Placeholders are invitations ("The house needs…"), not formats ("Enter task name").</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== VOICE ===================== -->
+  <section class="sec">
+    <h2>Voice — the copy is part of the design</h2>
+    <div class="card">
+      <div class="dd">
+        <div class="yes">
+          <h3>Exhale says</h3>
+          <ul>
+            <li>"A lighter week. Breathe out."</li>
+            <li>"Needs you · 2" — then everything else is handled or watched</li>
+            <li>"Saturday morning looks open — got a little time?"</li>
+            <li>"Everything's covered this week. Nicely done."</li>
+            <li>"Last week was a hard one. That's not a failure, it's a week."</li>
+            <li>"Contributions" — the family's own word for chores</li>
+            <li>"Take a deep breath — your memory systems are secure."</li>
+          </ul>
+        </div>
+        <div class="no">
+          <h3>Exhale never says</h3>
+          <ul>
+            <li>"⚠️ URGENT: 7 tasks overdue!" — no alarm voice, no count badges</li>
+            <li>"🎉 Great job!!" on a bad week — no confetti, no false cheer</li>
+            <li>"Ali: 7, Andy: 3" — no scores, totals, or rankings, anywhere</li>
+            <li>"You haven't…" — no guilt framing; absence is never displayed</li>
+            <li>"Streak: 12 days 🔥" — no gamification mechanics at all</li>
+            <li>Jargon — "sync failed (E401)" becomes "Google needs reconnecting"</li>
+          </ul>
+        </div>
+      </div>
+      <p class="lead" style="margin:16px 0 0"><b>The tenor rule:</b> the interface always tells
+        the truth at the temperature the truth deserves. A quiet week reads as calm only when
+        nothing urgent is open; a behind week must never wear a party hat; cold-start states
+        say "still listening," never fake fullness.</p>
+    </div>
+  </section>
+
+  <!-- ===================== EMOTIONAL RAILS ===================== -->
+  <section class="sec">
+    <h2>Emotional design rails — structural, not stylistic</h2>
+    <div class="card">
+      <p class="lead">These are product-level commitments the visual layer must uphold. They
+        are enforced in the data (the payloads contain nothing that could violate them), and
+        any new surface is held to the same bar.</p>
+      <ul class="rails">
+        <li><b>Names, never numbers.</b> Who-did-what is shown as prose with names — never
+          counts, totals, percentages, or side-by-side comparisons.</li>
+        <li><b>No zero sections.</b> A person with a quiet week is absent, never an empty
+          column with their name on it.</li>
+        <li><b>Gratitude points outward.</b> The thanks ♡ appears only on a partner's work.</li>
+        <li><b>Letting go is a release, not a win.</b> Deleting or dropping is never
+          celebrated, logged, or counted.</li>
+        <li><b>Suggestion, never nag.</b> Time and tasks are laid side by side as an
+          invitation; nothing is auto-scheduled into a person's day.</li>
+        <li><b>Attention without alarm.</b> The worst news in the product is rendered in warm
+          amber prose with a quiet dot — and it still leads with what to do next.</li>
+        <li><b>Honest instruments.</b> Metrics never flatter: no score is shown before
+          something real is measured, and corrected facts visibly lower what they touched.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== TOKENS ===================== -->
+  <section class="sec">
+    <h2>The tokens — copy-paste foundation</h2>
+    <div class="card">
+      <p class="lead">The complete CSS custom-property set, exactly as shipped. Components
+        reference tokens only (e.g. <span class="mono">rgb(var(--sage) / 0.16)</span>);
+        an explicit user toggle sets <span class="mono">data-theme</span> on the root and
+        must win over the OS preference in both directions.</p>
+<pre>:root {                       /* LIGHT */
+  --ink: 26 43 76;            /* Sanctuary Navy — text, borders */
+  --canvas: 244 246 249;      /* Pure Breath — page ground */
+  --surface: 255 255 255;     /* cards / panels */
+  --sage: 124 157 150;        /* Sage Release — safe, shared, success */
+  --amber: 226 149 120;       /* Looming Amber — attention, not alarm */
+  --ink-solid: 26 43 76;      /* filled primary button */
+}
+@media (prefers-color-scheme: dark) { :root {
+  --ink: 226 232 240; --canvas: 12 20 32; --surface: 22 35 59;
+  --sage: 166 195 188; --amber: 237 171 144; --ink-solid: 42 62 100;
+} }
+/* data-theme (user toggle) repeats both sets and wins over the media query */
+
+body {
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  background-color: rgb(var(--canvas));
+  background-image:  /* the faint dawn */
+    radial-gradient(120% 70% at 12% -5%, rgb(var(--sage) / .12), transparent 55%),
+    radial-gradient(110% 70% at 100% 4%, rgb(var(--amber) / .10), transparent 50%);
+  color: rgb(var(--ink));
+}
+
+/* Shape & elevation */
+--radius-card: 16–22px;  --radius-control: 9999px (fully rounded);
+--shadow-card: 0 12px 24px rgba(26,43,76,.04);
+--border-hairline: 1px solid rgb(var(--ink) / .10);
+
+/* Type roles */
+--display:   "Instrument Serif", ui-serif, Georgia, serif;   /* italic, never bold */
+--interface: "Inter Tight", system-ui, sans-serif;           /* -0.02em; labels 700 caps +.14em */
+--micro:     "Plus Jakarta Sans", system-ui, sans-serif;     /* body & data; tabular-nums */</pre>
+    </div>
+  </section>
+
+  <div class="foot">
+    Exhale design language v1 · extracted from the shipped application (Blueprint §8 +
+    the reflection-cycle additions) · late July 2026. This file is self-contained — share
+    it as-is; it renders in the reader's light or dark preference. Companion documents:
+    the council brief, the strategy brief, and DEPLOY.md.
+  </div>
+
+</div>
+</body>
+</html>
