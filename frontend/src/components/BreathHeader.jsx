@@ -1,5 +1,6 @@
 import React from "react";
 import ThemeToggle from "./ThemeToggle.jsx";
+import { weekTenor } from "../data/tenor.js";
 
 /**
  * Breath Header — the Today screen opens with a breath, not a dashboard.
@@ -18,30 +19,8 @@ function timeGreeting() {
 
 export default function BreathHeader({ user, briefing, inviteCode, onLogout }) {
   const first = user?.display_name?.trim().split(/\s+/)[0];
-  const critical = briefing.summary?.critical_count ?? briefing.critical_threats?.length ?? 0;
-  const watch = briefing.summary?.dependency_watch_count ?? briefing.dependency_watch?.length ?? 0;
-  const careGaps = briefing.care_watch?.summary?.total_gaps ?? 0;
-  const needs = critical + watch;
-  const brandNew =
-    !briefing.care_watch &&
-    (briefing.learned_rules?.length ?? 0) === 0 &&
-    needs === 0 &&
-    careGaps === 0;
-
-  let headline, sub;
-  if (brandNew) {
-    headline = ["All clear.", "Breathe out."];
-    sub = "Connect Gmail or forward a school email, and Exhale starts catching things before they catch you.";
-  } else if (needs === 0 && careGaps === 0) {
-    headline = ["A clear week.", "Breathe out."];
-    sub = "Nothing needs you right now — a good week to take some time back.";
-  } else if (needs <= 2) {
-    headline = ["A lighter week.", "Breathe out."];
-    sub = `${needs || "No"} thing${needs === 1 ? "" : "s"} want${needs === 1 ? "s" : ""} your attention. Everything else is handled or watched.`;
-  } else {
-    headline = ["A full week.", "You've got this."];
-    sub = `${needs} things want your attention this week — here they are, in order.`;
-  }
+  // One source of truth with the Breath Glance — the two can never disagree.
+  const { headline, sub } = weekTenor(briefing);
 
   return (
     <header className="relative mb-8 overflow-hidden">

@@ -28,20 +28,31 @@ export default function WeeklyBriefing({
   live = false,
   onRefresh,
   onOpenReview,
+  hideHero = false, // the Breath Glance above already carries the tenor + account bar
 }) {
   const criticalCount = briefing.summary?.critical_count ?? briefing.critical_threats.length;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
-      {/* Open with a breath — the week's temperature, said plainly. */}
-      <BreathHeader
-        user={user}
-        briefing={briefing}
-        inviteCode={inviteCode}
-        onLogout={onLogout}
-      />
+      {/* Open with a breath — unless the Glance already did. */}
+      {hideHero ? (
+        <p className="mb-6 font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-release">
+          {briefing.week_of
+            ? /^week of/i.test(briefing.week_of)
+              ? briefing.week_of
+              : `Week of ${briefing.week_of}`
+            : "This week"}
+        </p>
+      ) : (
+        <BreathHeader
+          user={user}
+          briefing={briefing}
+          inviteCode={inviteCode}
+          onLogout={onLogout}
+        />
+      )}
 
-      {/* Quiet doorway to the look-back — leads on Sunday, one tap any day. */}
+      {/* Quiet doorway to the look-back — one tap any day. */}
       {onOpenReview && (
         <div className="-mt-2 mb-6 text-center">
           <button

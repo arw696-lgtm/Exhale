@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import BreathGlance from "./components/BreathGlance.jsx";
 import WeeklyBriefing from "./components/WeeklyBriefing.jsx";
 import WeeklyReflection from "./components/WeeklyReflection.jsx";
 import CalendarScreen from "./components/CalendarScreen.jsx";
@@ -27,10 +28,11 @@ export default function App() {
   const [openObligationId, setOpenObligationId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("today");
-  // Sunday, the home tab leads with the week-in-review reflection; any other
-  // day it's one tap away. reviewClosed lets "see this week's tasks" stick.
+  // The Breath Glance is the opening state every day; the reflection is one
+  // tap away (a prominent CTA on Sundays, the quiet link otherwise).
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [reviewClosed, setReviewClosed] = useState(false);
+  // "Handled. One thing lighter." — the counting-down confirmation.
+  const [lighter, setLighter] = useState(false);
 
   const familyId = me?.family_id ?? DEMO_FAMILY;
 
@@ -93,6 +95,8 @@ export default function App() {
       await approveAction(openObligationId, familyId);
       setOpenObligationId(null);
       await loadData(familyId); // resolved gap drops out of the briefing
+      setLighter(true);
+      setTimeout(() => setLighter(false), 3500);
     } catch (err) {
       console.error("Approval failed:", err.message);
     } finally {
@@ -128,12 +132,8 @@ export default function App() {
   const live = source === "api";
   const refresh = () => loadData(familyId);
   const needsCount = briefing.summary?.critical_count ?? briefing.critical_threats?.length ?? 0;
-  const isSunday = new Date().getDay() === 0;
-  const showReview = live && (reviewOpen || (isSunday && !reviewClosed));
-  const closeReview = () => {
-    setReviewOpen(false);
-    setReviewClosed(true);
-  };
+  const showReview = live && reviewOpen;
+  const closeReview = () => setReviewOpen(false);
 
   return (
     <>
@@ -148,18 +148,34 @@ export default function App() {
           />
         )}
         {tab === "today" && !showReview && (
-          <WeeklyBriefing
-            briefing={briefing}
-            drafts={drafts}
-            onOpenDraft={setOpenObligationId}
-            user={me}
-            inviteCode={me?.invite_code}
-            onLogout={me ? handleLogout : undefined}
-            familyId={familyId}
-            live={live}
-            onRefresh={refresh}
-            onOpenReview={live ? () => setReviewOpen(true) : undefined}
-          />
+          <>
+            {/* The opening state — most opens should end here. */}
+            <BreathGlance
+              briefing={briefing}
+              drafts={drafts}
+              user={me}
+              inviteCode={me?.invite_code}
+              onLogout={me ? handleLogout : undefined}
+              onOpenDraft={setOpenObligationId}
+              onOpenReview={live ? () => setReviewOpen(true) : undefined}
+              detailId="week-detail"
+            />
+            <div id="week-detail">
+              <WeeklyBriefing
+                briefing={briefing}
+                drafts={drafts}
+                onOpenDraft={setOpenObligationId}
+                user={me}
+                inviteCode={me?.invite_code}
+                onLogout={me ? handleLogout : undefined}
+                familyId={familyId}
+                live={live}
+                onRefresh={refresh}
+                onOpenReview={live ? () => setReviewOpen(true) : undefined}
+                hideHero
+              />
+            </div>
+          </>
         )}
         {tab === "calendar" && <CalendarScreen briefing={briefing} />}
         {tab === "household" && (
@@ -188,6 +204,18 @@ export default function App() {
       </div>
 
       <TabBar active={tab} onChange={setTab} todayCount={needsCount} />
+
+      {/* The counting-down confirmation — relief, not celebration. */}
+      {lighter && (
+        <div
+          className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center"
+          role="status"
+        >
+          <span className="rounded-full border border-sage-release/40 bg-surface px-5 py-2.5 font-display text-lg italic text-sanctuary-navy shadow-card">
+            Handled. One thing lighter.
+          </span>
+        </div>
+      )}
 
       <DraftModal
         draft={openObligationId ? drafts[openObligationId] : null}
