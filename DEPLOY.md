@@ -5,7 +5,7 @@ my real inbox on a Tuesday." Written for you to follow one evening, in order.
 Nothing here needs to be memorized; just do the steps top to bottom.*
 
 **What you need before you start:**
-- A domain name you control (e.g. `exhale.yourname.com` — a subdomain of
+- A domain name you control (e.g. `exhale.thewards.space` — a subdomain of
   something you already own is perfect, and free).
 - A small server — a $6–12/month VPS (DigitalOcean, Hetzner, Linode all work).
   You do **not** need anything powerful; this is a household, not a startup.
@@ -22,8 +22,14 @@ no guessing.
 ## Step 1 — Get a server
 
 1. Create a VPS with **Ubuntu 24.04**. On DigitalOcean this is "Create → Droplet
-   → Ubuntu → the $6/mo basic size." Give it a password or SSH key you'll
-   remember.
+   → Ubuntu → the $6/mo basic size."
+   - For authentication choose **SSH key**, not a password. If you don't have
+     one, run `ssh-keygen -t ed25519 -C "exhale"` on your laptop, then
+     `cat ~/.ssh/id_ed25519.pub` and paste that line (the one starting
+     `ssh-ed25519`) into DigitalOcean. The file *without* `.pub` is the private
+     half — it never leaves your laptop.
+   - Afterwards, in the droplet's settings, enable **Backups** (+$1.20/mo).
+     That is your off-box copy of everything except the master secret.
 2. Note its **public IP address** (e.g. `203.0.113.42`).
 3. SSH in from your laptop's terminal: `ssh root@203.0.113.42`
 4. Install Docker (one command, paste it in):
@@ -40,7 +46,7 @@ In your domain registrar's DNS settings, add one record:
 |------|------|-------|
 | A | `exhale` (or whatever subdomain you want) | your server IP |
 
-So `exhale.yourname.com → 203.0.113.42`. DNS can take a few minutes to an hour
+So `exhale.thewards.space → 203.0.113.42`. DNS can take a few minutes to an hour
 to propagate — you can keep going while it does.
 
 ## Step 3 — Get the code and set your secrets
@@ -53,7 +59,7 @@ cd Exhale
 cp .env.example .env
 ```
 
-Now generate two secrets (run each; copy the output):
+Now generate three secrets (run each; copy the output):
 
 ```sh
 python3 -c "import secrets; print(secrets.token_urlsafe(48))"   # → EXHALE_MASTER_SECRET
@@ -64,7 +70,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(12))"   # → EXHALE_BOO
 Open `.env` (`nano .env`) and fill in at minimum:
 
 ```
-EXHALE_DOMAIN=exhale.yourname.com
+EXHALE_DOMAIN=exhale.thewards.space
 EXHALE_TLS_EMAIL=you@yourname.com
 POSTGRES_PASSWORD=(the second secret)
 EXHALE_MASTER_SECRET=(the first secret)
@@ -94,27 +100,40 @@ it's clicky but not hard.
 3. **OAuth consent screen** (left menu → "APIs & Services" → "OAuth consent
    screen"):
    - User type: **External**. (This just means "not a Google Workspace org." It
-     stays private to the people you add.)
+     stays private to whoever you hand the app to.)
    - App name "Exhale", your email as support + developer contact. Save.
    - **Scopes**: add `.../auth/gmail.readonly` and `.../auth/calendar.events`
      and `.../auth/calendar.readonly`. (You can also just add them later.)
-   - **Test users**: add your email and Ali's. While the app is in "Testing"
-     mode, only these people can connect — which is exactly what you want for
-     now. (Going beyond ~100 users later needs Google's verification review;
-     not your problem yet.)
+     That trio is the whole permission story: read mail, read calendars, write
+     calendar *events* — never send mail, never delete a calendar.
+   - **Publish the app.** Click **"Publish app"** so its status is *In
+     production*, not *Testing*.
+
+     > ⚠️ **This step is not optional for a set-it-and-forget-it household.**
+     > In *Testing* mode Google expires every refresh token after **7 days** —
+     > Exhale would silently lose access to Gmail once a week, forever. In
+     > production the tokens persist.
+     >
+     > The tradeoff: because Gmail is a "restricted" scope and you aren't going
+     > through Google's formal verification review (that process is for
+     > companies shipping to strangers), you and Ali will each see a
+     > **"Google hasn't verified this app"** warning the *first* time you
+     > connect. Click **Advanced → Go to Exhale (unsafe)**. It says "unsafe"
+     > because Google can't vouch for the developer — the developer is you.
+     > One click each, once.
 4. **Create the credential** (left menu → "Credentials" → "Create Credentials"
    → "OAuth client ID"):
    - Application type: **Web application**.
    - Authorized redirect URI — paste exactly this, with your domain:
      ```
-     https://exhale.yourname.com/v1/oauth/google/callback
+     https://exhale.thewards.space/v1/oauth/google/callback
      ```
    - Create. Google shows you a **Client ID** and **Client Secret**.
 5. Put them in `.env`:
    ```
    EXHALE_GOOGLE_CLIENT_ID=(the client id)
    EXHALE_GOOGLE_CLIENT_SECRET=(the client secret)
-   EXHALE_GOOGLE_REDIRECT_URI=https://exhale.yourname.com/v1/oauth/google/callback
+   EXHALE_GOOGLE_REDIRECT_URI=https://exhale.thewards.space/v1/oauth/google/callback
    ```
 
 That's the hard part done. (Outlook is the same shape via Azure if you ever want
@@ -153,7 +172,7 @@ it's set.
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-First build takes a few minutes. Then visit **https://exhale.yourname.com** —
+First build takes a few minutes. Then visit **https://exhale.thewards.space** —
 Caddy will have fetched a real HTTPS certificate automatically (if it hasn't
 yet, wait for DNS from Step 2 and reload). You should see the Exhale sign-in.
 
