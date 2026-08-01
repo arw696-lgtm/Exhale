@@ -59,23 +59,21 @@ cd Exhale
 cp .env.example .env
 ```
 
-Now generate three secrets (run each; copy the output):
+One command generates all three secrets, sets the production posture (auth
+on, invite-only, hourly sync), and prints what you need to save:
 
 ```sh
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"   # → EXHALE_MASTER_SECRET
-python3 -c "import secrets; print(secrets.token_urlsafe(16))"   # → POSTGRES_PASSWORD
-python3 -c "import secrets; print(secrets.token_urlsafe(12))"   # → EXHALE_BOOTSTRAP_INVITE
+./scripts/setup-env.sh exhale.thewards.space you@yourname.com
 ```
 
-Open `.env` (`nano .env`) and fill in at minimum:
+It refuses to overwrite an existing `.env` — deliberately. Generating a new
+master secret against a database encrypted under the old one locks every
+family out of their own data.
 
-```
-EXHALE_DOMAIN=exhale.thewards.space
-EXHALE_TLS_EMAIL=you@yourname.com
-POSTGRES_PASSWORD=(the second secret)
-EXHALE_MASTER_SECRET=(the first secret)
-EXHALE_BOOTSTRAP_INVITE=(the third secret)
-```
+*(Prefer doing it by hand? `cp .env.example .env`, then `nano .env` and fill
+in `EXHALE_DOMAIN`, `EXHALE_TLS_EMAIL`, `POSTGRES_PASSWORD`,
+`EXHALE_MASTER_SECRET`, and `EXHALE_BOOTSTRAP_INVITE`. Generate each secret
+with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.)*
 
 > **⚠️ The master secret is the one thing you can never lose.** It's what
 > decrypts every family's data, and it is deliberately *not* stored in the
