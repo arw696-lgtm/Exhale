@@ -38,11 +38,18 @@ import pathlib, re, secrets, sys
 
 domain, tls_email = sys.argv[1], sys.argv[2]
 
+# The bootstrap invite gets typed by a human, off a terminal, once — so it
+# uses the same unambiguous alphabet as auth.new_invite_code(): no 0/O, no
+# 1/I/L. (token_urlsafe would happily hand you "JCEJslnsUCwIsmh3", where the
+# lowercase L and capital i are the same glyph in most fonts.)
+_UNAMBIGUOUS = "BCDFGHJKMNPQRSTVWXYZ23456789"
+bootstrap_invite = "".join(secrets.choice(_UNAMBIGUOUS) for _ in range(14))
+
 # Production posture: auth on, invite-only, hourly background sync.
 values = {
     "EXHALE_MASTER_SECRET": secrets.token_urlsafe(48),
     "POSTGRES_PASSWORD": secrets.token_urlsafe(16),
-    "EXHALE_BOOTSTRAP_INVITE": secrets.token_urlsafe(12),
+    "EXHALE_BOOTSTRAP_INVITE": bootstrap_invite,
     "EXHALE_DOMAIN": domain,
     "EXHALE_TLS_EMAIL": tls_email,
     "EXHALE_REQUIRE_AUTH": "1",
