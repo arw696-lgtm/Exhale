@@ -171,7 +171,7 @@
 
   <div class="top">
     <span class="brandmark">Exhale</span>
-    <span class="doctype">Design language · v1 · late July 2026</span>
+    <span class="doctype">Design language · v2 · August 2026</span>
   </div>
 
   <h1>Sensory relief, rendered.</h1>
@@ -308,6 +308,82 @@
     </div>
   </section>
 
+  <!-- ===================== THE GLANCE ===================== -->
+  <section class="sec">
+    <h2>The Breath Glance — the opening state</h2>
+    <div class="card">
+      <p class="lead">Exhale opens on one full screen and <b>most opens should end there</b>:
+        the breath, the time of day, the week's temperature in a sentence, and only what
+        actually needs a person. Three seconds, breathe out, pocket the phone. Everything
+        else — the full briefing — lives one scroll below. This is set-it-and-forget-it
+        made visible: the home screen's job is to <b>end the session</b>, not extend it.</p>
+
+      <div style="max-width:330px;margin:6px auto 4px;text-align:center;padding:26px 18px 22px;
+                  border:1px solid rgb(var(--ink)/.10);border-radius:26px;background:rgb(var(--canvas))">
+        <div class="breath-orb" style="margin:0 auto 18px"></div>
+        <div style="font-family:'Inter Tight',sans-serif;font-size:10px;font-weight:600;
+                    letter-spacing:.2em;text-transform:uppercase;color:rgb(var(--ink)/.45)">
+          Friday afternoon · Andy</div>
+        <div style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:31px;
+                    line-height:1.08;margin:10px 0 0;color:rgb(var(--ink))">
+          A lighter week.<br>Breathe out.</div>
+        <div style="font-size:12.5px;line-height:1.55;color:rgb(var(--ink)/.55);margin:12px auto 0;max-width:19rem">
+          2 things want you this week. Everything else is handled or watched.</div>
+        <div style="margin-top:20px;text-align:left;display:grid;gap:2px">
+          <div class="sevrow" style="margin:0;padding:7px 10px;border-radius:14px;font-size:13px">
+            <span class="severity-dot dot-amber"></span>
+            <span style="flex:1">Field Trip Permission Slip</span>
+            <span style="font-size:11.5px;color:rgb(var(--amber));filter:brightness(.9)">Sat</span></div>
+          <div class="sevrow" style="margin:0;padding:7px 10px;border-radius:14px;font-size:13px">
+            <span class="severity-dot dot-amber"></span>
+            <span style="flex:1">State Immunization Record</span>
+            <span style="font-size:11.5px;color:rgb(var(--amber));filter:brightness(.9)">Sat</span></div>
+        </div>
+        <div style="margin-top:20px;font-size:11px;color:rgb(var(--ink)/.4)">see the full week ↓</div>
+      </div>
+
+      <p class="lead" style="margin:18px 0 0">Rules the glance holds: at most <b>three</b>
+        rows (a fourth becomes "and 2 more below"); every row is a doorway that opens the
+        actual draft, never a dead label; a quiet week offers <b>"See what's handled →"</b>
+        because reassurance must be evidenced, not asserted; and a brand-new household
+        reads cold — the setup nudge, not a fabricated calm.</p>
+    </div>
+
+    <div class="card">
+      <p class="lead"><b>The tenor system.</b> One function derives the week's temperature and
+        both the glance and the briefing header read from it, so the two can never disagree.
+        The rails are structural: the copy is <i>selected</i> by the state, so a behind week
+        physically cannot render "breathe out."</p>
+      <div class="tablewrap"><table>
+        <tr><th>State</th><th>Condition</th><th>Headline</th><th>Beneath</th></tr>
+        <tr><td><code>new</code></td><td>Nothing connected, nothing learned</td>
+          <td><i>All clear. / Breathe out.</i></td>
+          <td>Connect Gmail and Exhale starts catching things — an honest cold start</td></tr>
+        <tr><td><code>quiet</code></td><td>Nothing needs you, no care gaps</td>
+          <td><i>A quiet week. / Nothing needs you.</i></td>
+          <td>"N threads are handled or being watched. Rest easy — we're still listening."</td></tr>
+        <tr><td><code>lighter</code></td><td>1–2 open items</td>
+          <td><i>A lighter week. / Breathe out.</i></td>
+          <td>What wants you, and that the rest is covered</td></tr>
+        <tr><td><code>full</code></td><td>3+ open items</td>
+          <td><i>A full week. / You've got this.</i></td>
+          <td>Steadiness — never alarm, never apology, and never celebration</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <p class="lead"><b>The counting-down confirmation.</b> When an item is handled, the
+        glance re-reads the week and the count visibly drops — and one line rises for 3.5
+        seconds. It names relief, not achievement: no checkmark animation, no confetti, no
+        tally. The reward for finishing something is <i>less</i>, and the interface says so.</p>
+      <div style="text-align:center;padding:6px 0 2px">
+        <span style="display:inline-block;border-radius:9999px;border:1px solid rgb(var(--sage)/.4);
+                     background:rgb(var(--surface));padding:9px 20px;font-family:'Instrument Serif',Georgia,serif;
+                     font-style:italic;font-size:18px;color:rgb(var(--ink))">Handled. One thing lighter.</span>
+      </div>
+    </div>
+  </section>
+
   <!-- ===================== COMPONENT VOCABULARY ===================== -->
   <section class="sec">
     <h2>Component vocabulary</h2>
@@ -324,14 +400,15 @@
       <div class="demo">
         <div class="cap">Buttons — three weights of ask</div>
         <div class="btnrow">
-          <button class="btn btn-primary">Review &amp; Sign Draft →</button>
+          <button class="btn btn-primary">Open reply in your mail app →</button>
           <button class="btn btn-action">+ Keep this time</button>
           <button class="btn btn-quiet">Let it go</button>
         </div>
         <p style="font-size:12.5px;color:rgb(var(--ink)/.55);line-height:1.55;margin:12px 0 0">
           All fully rounded. Filled navy (<span class="mono">--ink-solid</span>) for the one
           primary act on a screen; sage-tint outline for affirmative actions; quiet outline
-          for everything reversible. Labels say exactly what happens.</p>
+          for everything reversible. <b>Labels say exactly what happens</b> — the same button
+          reads "Mark handled" when nothing is actually sent.</p>
       </div>
       <div class="demo">
         <div class="cap">Cards &amp; chips</div>
@@ -363,11 +440,13 @@
           <h3>Exhale says</h3>
           <ul>
             <li>"A lighter week. Breathe out."</li>
-            <li>"Needs you · 2" — then everything else is handled or watched</li>
+            <li>"Handled. One thing lighter." — relief, not achievement</li>
             <li>"Saturday morning looks open — got a little time?"</li>
             <li>"Everything's covered this week. Nicely done."</li>
             <li>"Last week was a hard one. That's not a failure, it's a week."</li>
             <li>"Contributions" — the family's own word for chores</li>
+            <li>"Olivia has my permission… please accept this email as my sign-off."
+              — outbound copy in the parent's voice, never the product's</li>
             <li>"Take a deep breath — your memory systems are secure."</li>
           </ul>
         </div>
@@ -411,6 +490,13 @@
           amber prose with a quiet dot — and it still leads with what to do next.</li>
         <li><b>Honest instruments.</b> Metrics never flatter: no score is shown before
           something real is measured, and corrected facts visibly lower what they touched.</li>
+        <li><b>Honest buttons.</b> A label may never promise an act the system doesn't
+          perform. Where a real reply exists it says "Open reply in your mail app"; where
+          approval only records a state it says "Mark handled" — and the surrounding copy
+          claims a drafted reply only when one was rendered.</li>
+        <li><b>Prepared to the threshold, never across it.</b> Exhale writes the email and
+          hands it to a person to send from their own address; it buys nothing and
+          transmits nothing on the family's behalf. The approval <i>is</i> the send.</li>
       </ul>
     </div>
   </section>
@@ -459,8 +545,8 @@ body {
   </section>
 
   <div class="foot">
-    Exhale design language v1 · extracted from the shipped application (Blueprint §8 +
-    the reflection-cycle additions) · late July 2026. This file is self-contained — share
+    Exhale design language v2 · extracted from the shipped application (Blueprint §8, the
+    reflection cycle, the Breath Glance, and the send handoff) · August 2026. This file is self-contained — share
     it as-is; it renders in the reader's light or dark preference. Companion documents:
     the council brief, the strategy brief, and DEPLOY.md.
   </div>
