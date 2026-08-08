@@ -127,10 +127,13 @@ export default function ConnectionsPanel({ familyId }) {
       </ul>
 
       {feedUrl && (
-        <div className="mt-4 flex items-center justify-between border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/60">
+        <div className="mt-4 flex items-start justify-between gap-3 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/60">
           <span>
-            <span className="font-semibold text-sanctuary-navy/80">Exhale calendar feed</span>
-            {" — subscribe on your phone and Exhale's events show up in your calendar (and CarPlay)."}
+            <span className="font-semibold text-sanctuary-navy/80">Family calendar feed</span>
+            {" — what's protected, what's due, and where cover is needed. Subscribe on a phone, or paste it into a family display (Skylight: Sync new calendar → Calendar URL)."}
+            <span className="mt-1 block text-sanctuary-navy/45">
+              Anyone with this link can read the feed — share it like a password.
+            </span>
           </span>
           <button
             onClick={() => {

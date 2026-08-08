@@ -1413,7 +1413,13 @@ def get_feed_url(family_id: str = Depends(require_family_access)) -> dict:
 
 @app.get("/v1/feeds/{family_id}.ics")
 def serve_feed(family_id: str, token: str = Query(...)):
-    """The published Exhale calendar — every event scheduled via the feed provider.
+    """The published Exhale calendar — for a family display (Skylight, a shared
+    Google calendar, a fridge tablet) or any subscribing calendar app.
+
+    Carries protected time, upcoming deadlines, and coverage gaps, phrased for
+    a screen the whole household reads (see exhale.wall_feed): what's happening
+    and who has it, never what anyone owes. No threat bands or counts cross
+    this boundary.
 
     Deliberately outside the auth guard (calendar apps can't send bearer
     tokens); the secret token in the URL is the credential.
@@ -1423,30 +1429,27 @@ def serve_feed(family_id: str, token: str = Query(...)):
 
     from fastapi.responses import Response
 
+    from exhale.wall_feed import build_wall_feed
+
     profile = store.profile(family_id)
     expected = profile.get("feed_token")
     if not expected or not _hmac.compare_digest(token, expected):
         raise HTTPException(status_code=403, detail="Bad feed token")
 
-    def esc(text: str) -> str:
-        """RFC 5545 TEXT escaping — a comma or newline in a title must not
-        corrupt the feed's line structure."""
+    briefing = build_weekly_briefing(store.graph(family_id))
+    deadlines = briefing["critical_threats"] + briefing["dependency_watch"]
 
-        return (text.replace("\\", "\\\\").replace(";", "\\;")
-                .replace(",", "\\,").replace("\r\n", "\\n")
-                .replace("\n", "\\n").replace("\r", "\\n"))
+    care_watch = _care_watch_for(profile)
+    care_gaps = (care_watch or {}).get("gaps") or []
 
-    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Exhale//Family Feed//EN",
-             "X-WR-CALNAME:Exhale"]
-    for ev in profile.get("scheduled_events") or []:
-        start = datetime.fromisoformat(ev["start"]).strftime("%Y%m%dT%H%M%S")
-        end = datetime.fromisoformat(ev["end"]).strftime("%Y%m%dT%H%M%S")
-        lines += ["BEGIN:VEVENT", f"UID:{ev['uid']}", f"SUMMARY:{esc(ev['title'])}",
-                  f"DTSTART:{start}", f"DTEND:{end}",
-                  f"DESCRIPTION:{esc(ev.get('description') or 'Added by Exhale')}",
-                  "END:VEVENT"]
-    lines.append("END:VCALENDAR")
-    return Response("\r\n".join(lines) + "\r\n", media_type="text/calendar")
+    return Response(
+        build_wall_feed(
+            scheduled_events=profile.get("scheduled_events") or [],
+            deadlines=deadlines,
+            care_gaps=care_gaps,
+        ),
+        media_type="text/calendar",
+    )
 
 
 # --- Waiting-On ledger: the ball is in someone else's court -------------------------
