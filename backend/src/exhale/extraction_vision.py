@@ -260,5 +260,7 @@ def vision_extractor_from_env() -> VisionExtractor | None:
 
     if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
         return None
-    model = os.environ.get("EXHALE_VISION_MODEL", DEFAULT_VISION_MODEL)
+    # `or` (not a get() default): compose passes the var as present-but-empty
+    # when unset in .env, and an empty model string 400s every call.
+    model = os.environ.get("EXHALE_VISION_MODEL", "").strip() or DEFAULT_VISION_MODEL
     return VisionExtractor(model=model)

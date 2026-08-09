@@ -241,7 +241,9 @@ def extractor_from_env():
     """
 
     if os.environ.get("EXHALE_LLM_EXTRACTOR", "").strip().lower() in ("1", "true", "yes"):
-        model = os.environ.get("EXHALE_LLM_MODEL", DEFAULT_MODEL)
+        # `or` (not a get() default): compose passes the var as present-but-
+        # empty when unset in .env, and an empty model string 400s every call.
+        model = os.environ.get("EXHALE_LLM_MODEL", "").strip() or DEFAULT_MODEL
         try:
             return HybridExtractor(LLMExtractor(model=model)).extract
         except Exception as exc:  # noqa: BLE001 — missing SDK/key config

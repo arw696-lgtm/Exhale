@@ -212,3 +212,24 @@ def test_flag_on_without_sdk_degrades_instead_of_crashing(monkeypatch, caplog):
         extractor = mod.extractor_from_env()
     assert extractor is mod.extract_payload
     assert "deterministic-only" in caplog.text
+
+
+def test_empty_model_env_falls_back_to_default(monkeypatch):
+    """Compose passes EXHALE_LLM_MODEL as present-but-empty when unset in
+    .env; an empty model string 400s every API call. Empty must mean
+    default, exactly like absent."""
+
+    import exhale.extraction_llm as mod
+
+    captured = {}
+
+    class _Extractor:
+        def __init__(self, *, model):
+            captured["model"] = model
+            self.extract = lambda raw, ctx=None: None
+
+    monkeypatch.setenv("EXHALE_LLM_EXTRACTOR", "1")
+    monkeypatch.setenv("EXHALE_LLM_MODEL", "")
+    monkeypatch.setattr(mod, "LLMExtractor", _Extractor)
+    mod.extractor_from_env()
+    assert captured["model"] == mod.DEFAULT_MODEL
