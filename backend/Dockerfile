@@ -6,7 +6,9 @@ WORKDIR /app
 # Install the package (src layout; sql/schema.sql ships as package data).
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install --no-cache-dir ".[api,secure,pg,connectors]"
+# llm included: the extractor no-ops without ANTHROPIC_API_KEY, but the SDK
+# must be present or enabling the key later crash-loops the container.
+RUN pip install --no-cache-dir ".[api,secure,pg,connectors,llm]"
 
 EXPOSE 8000
 
