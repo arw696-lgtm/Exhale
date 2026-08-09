@@ -45,7 +45,10 @@ domain, tls_email = sys.argv[1], sys.argv[2]
 _UNAMBIGUOUS = "BCDFGHJKMNPQRSTVWXYZ23456789"
 bootstrap_invite = "".join(secrets.choice(_UNAMBIGUOUS) for _ in range(14))
 
-# Production posture: auth on, invite-only, hourly background sync.
+# Production posture: auth on, invite-only, hourly background sync, LLM
+# extraction on (it no-ops until ANTHROPIC_API_KEY is set — but leaving the
+# .env.example dev default of 0 here means the key later arrives to a dead
+# switch, and the only symptom is a review queue nobody triages).
 values = {
     "EXHALE_MASTER_SECRET": secrets.token_urlsafe(48),
     "POSTGRES_PASSWORD": secrets.token_urlsafe(16),
@@ -55,6 +58,7 @@ values = {
     "EXHALE_REQUIRE_AUTH": "1",
     "EXHALE_INVITE_ONLY": "1",
     "EXHALE_AUTO_SYNC_MINUTES": "60",
+    "EXHALE_LLM_EXTRACTOR": "1",
 }
 
 path = pathlib.Path(".env")
