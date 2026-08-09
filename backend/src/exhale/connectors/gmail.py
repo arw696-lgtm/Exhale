@@ -179,10 +179,17 @@ class GmailConnector(Connector):
         Used by the review-queue second-opinion sweep: raw bodies are never
         stored (the ledger keeps only the structured payload), so giving a
         held item a real second read means going back to the source.
+
+        Accepts either the bare Gmail id or the ledger's prefixed form —
+        ``parse_gmail_message`` stamps ``source_id`` as ``gmail_<id>``, and
+        passing that through verbatim 404s on every message (which is exactly
+        how the first production sweep marked an entire inbox unfetchable).
         """
 
-        msg = self._get(f"{GMAIL_API}/users/me/messages/{message_id}",
-                        {"format": "full"})
+        msg = self._get(
+            f"{GMAIL_API}/users/me/messages/{message_id.removeprefix('gmail_')}",
+            {"format": "full"},
+        )
         return parse_gmail_message(msg)
 
     # -- fetch -----------------------------------------------------------------

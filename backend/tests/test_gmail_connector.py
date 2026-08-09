@@ -148,3 +148,23 @@ def test_incremental_sync_uses_and_advances_watermark():
     second = run_incremental_sync(connector, store, "fam", ctx, now=later)
     assert second.scanned == 0
     assert store.profile("fam")["last_sync_at"] == later.isoformat()
+
+
+def test_fetch_by_id_strips_the_ledger_prefix():
+    """source_references are stamped ``gmail_<id>``; the API wants the bare
+    id. Passing the prefixed form through 404s on every message — which is
+    how the first production sweep marked an entire inbox unfetchable."""
+
+    seen_paths = []
+
+    def handler(request):
+        seen_paths.append(request.url.path)
+        return httpx.Response(200, json=_full_message())
+
+    connector = _mock_gmail(handler)
+    raw = connector.fetch_by_id("gmail_abc123")
+    assert seen_paths == ["/gmail/v1/users/me/messages/abc123"]
+    assert raw.source_id == "gmail_abc123"  # round-trips back to ledger form
+
+    connector.fetch_by_id("abc123")  # bare id also accepted
+    assert seen_paths[-1] == "/gmail/v1/users/me/messages/abc123"

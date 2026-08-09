@@ -140,11 +140,16 @@ def _retriage(store, family_id: str, profile: dict, extractor) -> dict:
             # try each connected account (a miss raises 404 → next account).
             if not ref:
                 return None
+            last_exc = None
             for connector in connectors:
                 try:
                     return connector.fetch_by_id(ref)
-                except Exception:  # noqa: BLE001 — not this inbox; try the next
-                    continue
+                except Exception as exc:  # noqa: BLE001 — not this inbox; try the next
+                    last_exc = exc
+            # Every account failing is signal, not noise — a systematic error
+            # here silently marks the whole queue unfetchable (it happened).
+            log.warning("retriage: could not re-fetch %s from any account: %s",
+                        ref, last_exc)
             return None
 
     from exhale.costs import metering
