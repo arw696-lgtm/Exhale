@@ -7,6 +7,7 @@ import AwayPanel from "./AwayPanel.jsx";
 import IcsPanel from "./IcsPanel.jsx";
 import PhotoDrop from "./PhotoDrop.jsx";
 import SetupPanel from "./SetupPanel.jsx";
+import UnattributedPanel from "./UnattributedPanel.jsx";
 
 /**
  * Household — the setup surface. Who's connected, who helps, and how the
@@ -45,6 +46,7 @@ export default function HouseholdScreen({ briefing, familyId, live, onRefresh })
       {live && briefing?.care_watch == null && (
         <SetupPanel familyId={familyId} onSaved={onRefresh} />
       )}
+      {live && <UnattributedPanel familyId={familyId} onChanged={onRefresh} />}
       {live && (
         <PhotoDrop
           familyId={familyId}

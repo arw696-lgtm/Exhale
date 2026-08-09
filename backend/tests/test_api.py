@@ -1095,3 +1095,55 @@ def test_photo_endpoint_derives_children_and_reports_unattributed(monkeypatch):
     # Nothing was guessed onto the item; it's reported for a one-tap answer.
     assert body["items"][0]["target_person_name"] is None
     assert body["unattributed"] == [body["items"][0]["extraction_id"]]
+
+
+def test_assign_unattributed_items_in_place():
+    """Photos of one child's schedule land with no person. Re-uploading can't
+    fix it (same bytes = duplicates), so they're assigned where they sit."""
+
+    from datetime import date, timedelta
+
+    fam = "family_assign_api"
+    ids = []
+    for i in range(3):
+        r = client.post(f"/v1/families/{fam}/extractions", json={
+            "extracted_event": f"Foxes (Purple) Practice {i}",
+            "event_date": (date.today() + timedelta(days=i + 2)).isoformat(),
+            "action_required": False,
+            "confidence_score": 0.95,
+        })
+        ids.append(r.json()["extraction_id"])
+
+    listing = client.get(f"/v1/families/{fam}/unattributed").json()
+    assert listing["count"] == 3
+
+    r = client.post(f"/v1/families/{fam}/unattributed/assign",
+                    json={"extraction_ids": ids, "person": "Stevie"})
+    assert r.json()["assigned"] == 3
+
+    # They're attributed now, and gone from the unattributed list.
+    assert client.get(f"/v1/families/{fam}/unattributed").json()["count"] == 0
+    briefing = client.get(f"/v1/families/{fam}/briefing").json()
+    people = {i["person"] for section in
+              ("critical_threats", "dependency_watch", "advisories")
+              for i in briefing[section]}
+    assert people == {"Stevie"}
+
+
+def test_assign_skips_already_superseded_without_failing_the_batch():
+    from datetime import date, timedelta
+
+    fam = "family_assign_partial"
+    r = client.post(f"/v1/families/{fam}/extractions", json={
+        "extracted_event": "Practice",
+        "event_date": (date.today() + timedelta(days=3)).isoformat(),
+        "action_required": False, "confidence_score": 0.95,
+    })
+    eid = r.json()["extraction_id"]
+    client.post(f"/v1/families/{fam}/unattributed/assign",
+                json={"extraction_ids": [eid], "person": "Stevie"})
+    # Second pass over the same (now superseded) id must not 500.
+    again = client.post(f"/v1/families/{fam}/unattributed/assign",
+                        json={"extraction_ids": [eid, "ext_nope"], "person": "Stevie"})
+    assert again.status_code == 200
+    assert again.json()["skipped"] == 2

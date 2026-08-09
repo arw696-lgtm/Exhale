@@ -1479,6 +1479,72 @@ def schedule_event(
             "title": req.title, "start": start.isoformat(), "end": end.isoformat()}
 
 
+class AssignRequest(BaseModel):
+    """Attach already-ingested items to a child."""
+
+    extraction_ids: list[str]
+    person: str
+
+
+@app.get("/v1/families/{family_id}/unattributed")
+def get_unattributed(family_id: str = Depends(require_family_access)) -> dict:
+    """Items in the graph that don't say who they're for.
+
+    A photo of one child's schedule yields items with no person when the
+    image never names them. Re-uploading can't fix it — the same bytes are
+    fingerprinted as duplicates — so they're assigned in place instead.
+    """
+
+    from exhale.auto_sync import _known_children
+    from exhale.routing import RecordStatus
+
+    profile = store.profile(family_id)
+    dismissed = _dismissed_ids(family_id)
+    items = [
+        {"extraction_id": e.extraction_id,
+         "title": e.payload.extracted_event,
+         "event_date": e.payload.event_date.isoformat(),
+         "source": e.payload.source_document_name}
+        for e in store.ledger(family_id)
+        if e.payload.target_person_name is None
+        and e.superseded_by is None
+        and e.extraction_id not in dismissed
+        and e.decision.status is not RecordStatus.REJECTED
+    ]
+    items.sort(key=lambda i: i["event_date"])
+    return {"family_id": family_id, "count": len(items), "items": items,
+            "known_children": _known_children(profile)}
+
+
+@app.post("/v1/families/{family_id}/unattributed/assign")
+def assign_unattributed(
+    req: AssignRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Assign a batch of items to one child.
+
+    Each is a correction (USER_CONFIRMED ground truth) that changes only the
+    person — the obligation is updated in place, never duplicated. Items that
+    were already superseded are skipped rather than failing the batch.
+    """
+
+    person = req.person.strip()
+    if not person:
+        raise HTTPException(status_code=400, detail="person must be non-empty")
+
+    assigned, skipped = [], []
+    for extraction_id in req.extraction_ids[:200]:
+        try:
+            entry = store.correct(family_id, extraction_id,
+                                  target_person_name=person)
+            assigned.append(entry.extraction_id)
+        except KeyError:
+            skipped.append(extraction_id)
+        except ValueError:  # already superseded — someone got there first
+            skipped.append(extraction_id)
+    return {"family_id": family_id, "person": person,
+            "assigned": len(assigned), "skipped": len(skipped)}
+
+
 class AskRequest(BaseModel):
     """One question for the household concierge."""
 

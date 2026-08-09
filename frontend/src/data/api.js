@@ -525,3 +525,21 @@ export async function askExhale(question, familyId = DEMO_FAMILY, history = [], 
   if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
   return body;
 }
+
+// --- unattributed items (assign a photo's events to a child) -------------------
+export async function fetchUnattributed(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/unattributed`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export function assignUnattributed(extractionIds, person, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/unattributed/assign`, {
+    extraction_ids: extractionIds,
+    person,
+  });
+}
