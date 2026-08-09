@@ -74,9 +74,11 @@ def _connect_as(monkeypatch, fam: str, user_id: str, token: str) -> None:
                                               "scope": "gmail.readonly"})
     state = sign_state(f"{fam}|{user_id}", _oauth_state_secret())
     r = client.get("/v1/oauth/google/callback",
-                   params={"code": "authcode", "state": state})
-    assert r.status_code == 200, r.text
-    assert r.json()["account"] == user_id
+                   params={"code": "authcode", "state": state},
+                   follow_redirects=False)
+    # The callback lands a person back in the app, not on a page of JSON.
+    assert r.status_code == 303, r.text
+    assert r.headers["location"] == "/?connected=google"
 
 
 def test_two_members_connecting_gmail_both_persist(monkeypatch):

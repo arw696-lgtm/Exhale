@@ -474,11 +474,11 @@ def test_callback_stores_tokens_and_connections_reflects_it(monkeypatch):
     monkeypatch.setattr("exhale.oauth.exchange_code", lambda cfg, code, **k: {
         "access_token": "at-1", "refresh_token": "rt-1",
         "scope": "https://www.googleapis.com/auth/calendar.readonly"})
-    r = client.get("/v1/oauth/google/callback", params={"code": "abc", "state": state})
-    assert r.status_code == 200
-    # Anonymous dev-mode connect files under the legacy/primary account slot.
-    assert r.json() == {"status": "connected", "provider": "google",
-                        "family_id": fam, "account": "primary"}
+    r = client.get("/v1/oauth/google/callback", params={"code": "abc", "state": state},
+                   follow_redirects=False)
+    # After consent the browser is sent back into the app, not shown JSON.
+    assert r.status_code == 303
+    assert r.headers["location"] == "/?connected=google"
 
     conns = client.get(f"/v1/families/{fam}/connections").json()
     assert conns["google"]["connected"] is True
@@ -544,9 +544,10 @@ def test_microsoft_callback_stores_tokens_and_connections_shows_both(monkeypatch
     state = parse_qs(urlparse(url).query)["state"][0]
     monkeypatch.setattr("exhale.oauth.exchange_code", lambda cfg, code, **k: {
         "access_token": "at", "refresh_token": "rt", "scope": "Calendars.Read"})
-    r = client.get("/v1/oauth/microsoft/callback", params={"code": "abc", "state": state})
-    assert r.status_code == 200
-    assert r.json()["provider"] == "microsoft"
+    r = client.get("/v1/oauth/microsoft/callback", params={"code": "abc", "state": state},
+                   follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/?connected=microsoft"
 
     conns = client.get(f"/v1/families/{fam}/connections").json()
     assert conns["microsoft"]["connected"] is True

@@ -469,6 +469,25 @@ def _handle_callback(provider: str, code: str, state: str) -> dict:
             "account": user_key}
 
 
+def _connected_redirect(provider: str):
+    """Send the browser back into the app after consent.
+
+    Google returns the user to this endpoint, so whatever it renders is the
+    last thing a person sees when connecting their mail — and a page of raw
+    JSON reads like something went wrong at the exact moment we most need it
+    to read like it worked. In production Caddy serves the app and the API on
+    one origin, so a relative redirect lands on the app; EXHALE_APP_URL
+    overrides that for split-origin deployments.
+    """
+
+    import os
+
+    from fastapi.responses import RedirectResponse
+
+    base = os.environ.get("EXHALE_APP_URL", "").strip().rstrip("/")
+    return RedirectResponse(f"{base}/?connected={provider}", status_code=303)
+
+
 @app.get("/v1/families/{family_id}/connect/google")
 def connect_google(
     family_id: str = Depends(require_family_access),
@@ -488,15 +507,17 @@ def connect_microsoft(
 
 
 @app.get("/v1/oauth/google/callback")
-def google_callback(code: str = Query(...), state: str = Query(...)) -> dict:
+def google_callback(code: str = Query(...), state: str = Query(...)):
     """Google redirects here after consent — identity comes from the signed state."""
-    return _handle_callback("google", code, state)
+    _handle_callback("google", code, state)
+    return _connected_redirect("google")
 
 
 @app.get("/v1/oauth/microsoft/callback")
-def microsoft_callback(code: str = Query(...), state: str = Query(...)) -> dict:
+def microsoft_callback(code: str = Query(...), state: str = Query(...)):
     """Microsoft redirects here after consent."""
-    return _handle_callback("microsoft", code, state)
+    _handle_callback("microsoft", code, state)
+    return _connected_redirect("microsoft")
 
 
 @app.get("/v1/families/{family_id}/connections")
