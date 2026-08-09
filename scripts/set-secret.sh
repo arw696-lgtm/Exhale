@@ -36,7 +36,9 @@ case "$KEY" in
 esac
 
 if [ "$SENSITIVE" = "1" ]; then
-	printf 'Paste the value for %s (input hidden), then press Enter:\n> ' "$KEY"
+	printf 'Paste the value for %s, then press Enter.\n' "$KEY"
+	printf 'NOTE: nothing appears on screen as you paste — no dots, no cursor\n'
+	printf 'movement. That is correct. Paste ONCE, then press Enter.\n> '
 	read -rs VALUE
 	echo
 else
@@ -67,10 +69,30 @@ if n == 0:
 path.write_text(text)
 path.chmod(0o600)
 
+def repeated_unit(text: str) -> str | None:
+    """Return the unit if `text` is the same string pasted N>1 times.
+
+    Hidden input shows nothing as you paste, so pasting again "because it
+    didn't take" is the single easiest mistake to make here — and the result
+    is a value that looks fine but authenticates against nothing.
+    """
+
+    for size in range(1, len(text) // 2 + 1):
+        if len(text) % size == 0 and text[:size] * (len(text) // size) == text:
+            return text[:size]
+    return None
+
 if os.environ["SENSITIVE"] == "1":
     shown = value[:6] + "…" + value[-4:] if len(value) > 14 else "(short value)"
     print(f"\n✓ {key} set — {shown}  ({len(value)} characters)")
-    print("  Check that length looks right; a truncated paste is the usual bug.")
+    unit = repeated_unit(value)
+    if unit:
+        print(f"\n  !! That looks like the same {len(unit)}-character value pasted "
+              f"{len(value) // len(unit)} times.")
+        print("     Nothing shows on screen while pasting — it did take the first")
+        print("     time. Re-run this command and paste exactly once.")
+    else:
+        print("  Check that length looks right; a truncated paste is the usual bug.")
 else:
     print(f"\n✓ {key} = {value}")
 
