@@ -18,6 +18,15 @@
 		reverse_proxy api:8000
 	}
 
+	# GitHub's deploy webhook. Handled on the HOST, not in a container — a
+	# container can't rebuild the containers around it. Every request is
+	# HMAC-verified by the listener itself (see scripts/webhook.py); Caddy
+	# only carries it. host.docker.internal resolves via the extra_hosts
+	# mapping in docker-compose.prod.yml.
+	handle /deploy-webhook {
+		reverse_proxy host.docker.internal:9000
+	}
+
 	# Everything else is the React app.
 	handle {
 		reverse_proxy web:80

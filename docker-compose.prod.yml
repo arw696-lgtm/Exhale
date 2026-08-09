@@ -88,6 +88,10 @@ services:
     environment:
       EXHALE_DOMAIN: ${EXHALE_DOMAIN:?set EXHALE_DOMAIN in .env}
       EXHALE_TLS_EMAIL: ${EXHALE_TLS_EMAIL:-}
+    # Lets Caddy reach the host-side deploy webhook (scripts/webhook.py),
+    # which must live outside Docker to rebuild the stack.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
       - "443:443"

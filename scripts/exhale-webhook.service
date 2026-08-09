@@ -1,0 +1,25 @@
+# Exhale deploy webhook — install with scripts/install-webhook.sh
+#
+# Runs on the host (not in Docker) because deploying means driving
+# `docker compose` for the containers themselves. Reads its secret from
+# /etc/exhale-webhook.env, which the installer creates with 600 perms.
+
+[Unit]
+Description=Exhale deploy webhook
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/exhale-webhook.env
+WorkingDirectory=/root/Exhale
+ExecStart=/usr/bin/python3 /root/Exhale/scripts/webhook.py
+Restart=always
+RestartSec=5
+
+# The service exists to run a build; it cannot be meaningfully sandboxed
+# from Docker. Keep the blast radius honest rather than pretending.
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
