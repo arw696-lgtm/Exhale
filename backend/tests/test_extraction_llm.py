@@ -194,3 +194,21 @@ def test_extractor_from_env_enables_hybrid(monkeypatch):
     extractor = extractor_from_env()
     assert extractor is not extract_payload
     assert extractor.__self__.__class__ is HybridExtractor
+
+def test_flag_on_without_sdk_degrades_instead_of_crashing(monkeypatch, caplog):
+    """EXHALE_LLM_EXTRACTOR=1 with a broken/absent SDK must fall back to the
+    deterministic engine — a config flag can never take the API down."""
+
+    import exhale.extraction_llm as mod
+
+    monkeypatch.setenv("EXHALE_LLM_EXTRACTOR", "1")
+
+    class _Boom:
+        def __init__(self, **kwargs):
+            raise ModuleNotFoundError("No module named 'anthropic'")
+
+    monkeypatch.setattr(mod, "LLMExtractor", _Boom)
+    with caplog.at_level("ERROR", logger="exhale.extraction_llm"):
+        extractor = mod.extractor_from_env()
+    assert extractor is mod.extract_payload
+    assert "deterministic-only" in caplog.text

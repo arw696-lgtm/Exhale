@@ -24,6 +24,7 @@ profile). Model override: ``EXHALE_LLM_MODEL``.
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import date, time
 
@@ -241,5 +242,13 @@ def extractor_from_env():
 
     if os.environ.get("EXHALE_LLM_EXTRACTOR", "").strip().lower() in ("1", "true", "yes"):
         model = os.environ.get("EXHALE_LLM_MODEL", DEFAULT_MODEL)
-        return HybridExtractor(LLMExtractor(model=model)).extract
+        try:
+            return HybridExtractor(LLMExtractor(model=model)).extract
+        except Exception as exc:  # noqa: BLE001 — missing SDK/key config
+            # A config flag must never take the whole API down: fall back to
+            # the deterministic engine and say so, loudly, instead of
+            # crash-looping the container at import time.
+            logging.getLogger("exhale.extraction_llm").error(
+                "EXHALE_LLM_EXTRACTOR=1 but the LLM extractor could not "
+                "start (%s) — running deterministic-only", exc)
     return extract_payload
