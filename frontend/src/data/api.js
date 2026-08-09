@@ -460,3 +460,24 @@ export async function removeAwayPeriod(awayId, familyId = DEMO_FAMILY) {
 export function dismissTripSuggestion(tripId, familyId = DEMO_FAMILY) {
   return postJson(`/v1/families/${familyId}/away/suggestions/${tripId}/dismiss`);
 }
+
+// --- ICS calendar import (iCloud/Outlook shared calendars) ---------------------
+export async function syncIcsUrl(url, attendees, familyId = DEMO_FAMILY, holder = null) {
+  const res = await apiFetch(`/v1/families/${familyId}/sync/ics`, {
+    method: "POST",
+    body: JSON.stringify({ url, attendees, holder }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
+export async function uploadIcsFile(content, attendees, familyId = DEMO_FAMILY, holder = null) {
+  const res = await apiFetch(`/v1/families/${familyId}/sync/ics/upload`, {
+    method: "POST",
+    body: JSON.stringify({ content, attendees, holder }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}

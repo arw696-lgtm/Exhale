@@ -4,6 +4,7 @@ import CostMeterPanel from "./CostMeterPanel.jsx";
 import HelperInvitePanel from "./HelperInvitePanel.jsx";
 import LearningScoreboard from "./LearningScoreboard.jsx";
 import AwayPanel from "./AwayPanel.jsx";
+import IcsPanel from "./IcsPanel.jsx";
 import PhotoDrop from "./PhotoDrop.jsx";
 import SetupPanel from "./SetupPanel.jsx";
 
@@ -45,6 +46,13 @@ export default function HouseholdScreen({ briefing, familyId, live, onRefresh })
         <SetupPanel familyId={familyId} onSaved={onRefresh} />
       )}
       {live && <PhotoDrop familyId={familyId} onChanged={onRefresh} />}
+      {live && (
+        <IcsPanel
+          familyId={familyId}
+          hasCoverageModel={briefing?.care_watch != null}
+          onChanged={onRefresh}
+        />
+      )}
       {live && <AwayPanel familyId={familyId} onChanged={onRefresh} />}
       {live && <ConnectionsPanel familyId={familyId} />}
       {live && <HelperInvitePanel familyId={familyId} />}
