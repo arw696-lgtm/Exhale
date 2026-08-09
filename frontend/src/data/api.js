@@ -456,3 +456,7 @@ export async function removeAwayPeriod(awayId, familyId = DEMO_FAMILY) {
   if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
   return body;
 }
+
+export function dismissTripSuggestion(tripId, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/away/suggestions/${tripId}/dismiss`);
+}

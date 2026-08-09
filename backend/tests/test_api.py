@@ -1001,3 +1001,56 @@ def test_away_rejects_backwards_range():
     r = client.post("/v1/families/family_away_api/away", json={
         "label": "Oops", "start": "2026-09-10", "end": "2026-09-01"})
     assert r.status_code == 400
+
+
+def test_trip_suggestion_end_to_end():
+    """Bookings in the ledger surface as a suggestion; declaring or
+    dismissing it makes it disappear."""
+
+    from datetime import date, timedelta
+
+    fam = "family_trip_api"
+    base = date.today() + timedelta(days=9)
+    for title, sender, offset in [
+        ("Budget Rent A Car: Reservation at PDX", "confirmation@budget.com", 0),
+        ("Your Airbnb reservation is confirmed", "automated@airbnb.com", 0),
+        ("Flight confirmation - MSP to PDX", "delta@delta.com", 1),
+    ]:
+        client.post(f"/v1/families/{fam}/extractions", json={
+            "extracted_event": title,
+            "event_date": (base + timedelta(days=offset)).isoformat(),
+            "action_required": False,
+            "confidence_score": 0.95,
+            "source_sender": sender,
+        })
+
+    away = client.get(f"/v1/families/{fam}/away").json()
+    assert len(away["trip_suggestions"]) == 1
+    trip = away["trip_suggestions"][0]
+    assert trip["artifact_count"] == 3
+    assert trip["start"] == base.isoformat()
+
+    # Declare it → the suggestion is covered and disappears.
+    client.post(f"/v1/families/{fam}/away", json={
+        "label": "Trip", "start": trip["start"], "end": trip["end"]})
+    assert client.get(f"/v1/families/{fam}/away").json()["trip_suggestions"] == []
+
+
+def test_trip_suggestion_dismiss_sticks():
+    from datetime import date, timedelta
+
+    fam = "family_trip_dismiss_api"
+    base = date.today() + timedelta(days=20)
+    for title, sender in [("Airbnb reservation confirmed", "automated@airbnb.com"),
+                          ("Hertz rental confirmation", "no-reply@hertz.com")]:
+        client.post(f"/v1/families/{fam}/extractions", json={
+            "extracted_event": title,
+            "event_date": base.isoformat(),
+            "action_required": False,
+            "confidence_score": 0.95,
+            "source_sender": sender,
+        })
+    trip = client.get(f"/v1/families/{fam}/away").json()["trip_suggestions"][0]
+    r = client.post(f"/v1/families/{fam}/away/suggestions/{trip['trip_id']}/dismiss")
+    assert r.status_code == 200
+    assert client.get(f"/v1/families/{fam}/away").json()["trip_suggestions"] == []

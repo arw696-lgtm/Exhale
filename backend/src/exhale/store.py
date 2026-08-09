@@ -56,6 +56,7 @@ class LedgerEntry:
             "obligation_node_id": self.obligation_node_id,
             "source_document_name": self.payload.source_document_name,
             "source_reference": self.payload.source_reference,
+            "source_sender": self.payload.source_sender,
             # Credibility layer: how authoritative the artifact is, whether the
             # date was read or derived, the observed time window (null = the
             # honest UNKNOWN state), and the named gaps.

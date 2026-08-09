@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { addAwayPeriod, fetchAway, removeAwayPeriod } from "../data/api.js";
+import {
+  addAwayPeriod,
+  dismissTripSuggestion,
+  fetchAway,
+  removeAwayPeriod,
+} from "../data/api.js";
 
 /**
  * Away — vacation mode ("we're together, elsewhere").
@@ -18,6 +23,7 @@ function prettyRange(p) {
 
 export default function AwayPanel({ familyId, onChanged }) {
   const [periods, setPeriods] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
   const [label, setLabel] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -27,6 +33,7 @@ export default function AwayPanel({ familyId, onChanged }) {
   const load = useCallback(async () => {
     const data = await fetchAway(familyId);
     setPeriods(data?.away_periods ?? null);
+    setSuggestions(data?.trip_suggestions ?? []);
   }, [familyId]);
 
   useEffect(() => {
@@ -34,6 +41,20 @@ export default function AwayPanel({ familyId, onChanged }) {
   }, [load]);
 
   if (periods === null) return null; // offline/anon — no empty shell
+
+  const act = async (fn) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const add = async () => {
     if (!start || !end) return;
@@ -78,6 +99,50 @@ export default function AwayPanel({ familyId, onChanged }) {
         shows the trip. Deadlines still stand — that's when they're easiest to
         forget.
       </p>
+
+      {/* Trips Exhale thinks it sees — clustered bookings, one tap to declare.
+          Suggestion, never enactment: nothing suppresses until a human says so. */}
+      {suggestions.map((s) => (
+        <div
+          key={s.trip_id}
+          className="mb-3 rounded-2xl border border-sage-release/30 bg-sage-release/8 p-4"
+        >
+          <p className="font-micro text-sm text-sanctuary-navy/85">
+            ✈️ Looks like a trip:{" "}
+            <span className="font-semibold">{prettyRange(s)}</span>
+            <span className="text-sanctuary-navy/55">
+              {" "}— {s.artifact_count} travel booking{s.artifact_count === 1 ? "" : "s"}
+            </span>
+          </p>
+          <p className="mt-1 font-micro text-xs text-sanctuary-navy/50">
+            {s.artifacts.slice(0, 3).join(" · ")}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() =>
+                act(async () => {
+                  await addAwayPeriod("Trip", s.start, s.end, familyId);
+                })
+              }
+              disabled={busy}
+              className="rounded-full border border-sage-release/40 bg-sage-release/15 px-4 py-1.5 font-micro text-sm font-medium text-sanctuary-navy transition hover:bg-sage-release/25 disabled:opacity-50"
+            >
+              We'll be away — turn it on
+            </button>
+            <button
+              onClick={() =>
+                act(async () => {
+                  await dismissTripSuggestion(s.trip_id, familyId);
+                })
+              }
+              disabled={busy}
+              className="rounded-full border border-sanctuary-navy/15 px-4 py-1.5 font-micro text-sm text-sanctuary-navy transition hover:bg-pure-breath disabled:opacity-50"
+            >
+              Not a trip
+            </button>
+          </div>
+        </div>
+      ))}
 
       {periods.length > 0 && (
         <ul className="mb-4 space-y-2">

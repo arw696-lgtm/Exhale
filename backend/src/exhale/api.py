@@ -1465,10 +1465,41 @@ class AwayIn(BaseModel):
 
 @app.get("/v1/families/{family_id}/away")
 def get_away(family_id: str = Depends(require_family_access)) -> dict:
-    """The family's away periods (vacation mode ranges)."""
+    """The family's away periods, plus trips Exhale thinks it sees.
 
-    periods = store.profile(family_id).get("away_periods") or []
-    return {"family_id": family_id, "away_periods": periods}
+    Suggestions come from clustered travel bookings in the ledger (flights,
+    Airbnb, rental cars landing within the same few days). Suggestion-never-
+    enactment: a human's tap turns one into an away period; a dismissal is
+    remembered and never re-nags.
+    """
+
+    from exhale.trips import suggest_trips
+
+    profile = store.profile(family_id)
+    periods = profile.get("away_periods") or []
+    entries = [e.to_dict() for e in store.ledger(family_id)
+               if e.superseded_by is None]
+    suggestions = suggest_trips(
+        entries,
+        existing_away=periods,
+        dismissed=set(profile.get("trip_dismissed") or []),
+    )
+    return {"family_id": family_id, "away_periods": periods,
+            "trip_suggestions": suggestions}
+
+
+@app.post("/v1/families/{family_id}/away/suggestions/{trip_id}/dismiss")
+def dismiss_trip_suggestion(
+    trip_id: str, family_id: str = Depends(require_family_access)
+) -> dict:
+    """'Not a trip' — remembered so the same cluster never re-suggests."""
+
+    with store.family_lock(family_id):
+        profile = store.profile(family_id)
+        dismissed = set(profile.get("trip_dismissed") or [])
+        dismissed.add(trip_id)
+        store.set_profile(family_id, trip_dismissed=sorted(dismissed))
+    return {"family_id": family_id, "trip_id": trip_id, "status": "dismissed"}
 
 
 @app.post("/v1/families/{family_id}/away")
