@@ -204,3 +204,19 @@ def test_first_cycle_never_waits_longer_than_the_interval():
 
     sched = AutoSyncScheduler(HouseholdStore(), extract_payload, interval_minutes=0.001)
     assert sched.first_cycle_seconds == pytest.approx(0.06)
+
+
+def test_llm_is_found_on_the_bound_method_extractor():
+    """extractor_from_env returns HybridExtractor(...).extract — the bound
+    method. The sweep must find .llm via __self__, or it silently runs
+    LLM-less with the key fully configured (the first production sweep)."""
+
+    from exhale.auto_sync import _llm_of
+    from exhale.extraction_llm import HybridExtractor
+
+    sentinel = object()
+    hybrid = HybridExtractor.__new__(HybridExtractor)
+    hybrid.llm = sentinel
+    assert _llm_of(hybrid.extract) is sentinel      # the shape prod uses
+    assert _llm_of(hybrid) is sentinel              # the object itself
+    assert _llm_of(extract_payload) is None         # plain deterministic fn

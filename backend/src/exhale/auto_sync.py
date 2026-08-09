@@ -96,6 +96,20 @@ def _sync_gmail(store, family_id: str, profile: dict, extractor) -> dict:
     return report
 
 
+def _llm_of(extractor):
+    """The LLM half of the pipeline extractor, if it has one.
+
+    extractor_from_env() hands out the hybrid's BOUND METHOD (`.extract`),
+    not the object — so the `.llm` attribute lives on `__self__`, not on the
+    callable. Looking on the method alone silently returns None and the
+    sweep runs LLM-less while the key sits configured (exactly how the
+    first production sweep failed).
+    """
+
+    owner = getattr(extractor, "__self__", extractor)
+    return getattr(owner, "llm", None)
+
+
 def _retriage(store, family_id: str, profile: dict, extractor) -> dict:
     """Second-opinion sweep over held review items (see exhale.retriage).
 
@@ -106,7 +120,7 @@ def _retriage(store, family_id: str, profile: dict, extractor) -> dict:
 
     from exhale.retriage import second_opinion_sweep
 
-    llm = getattr(extractor, "llm", None)
+    llm = _llm_of(extractor)
     fetch_message = None
     accounts = _accounts(profile, "google")
     if accounts:
