@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import AskExhale from "./components/AskExhale.jsx";
 import BreathGlance from "./components/BreathGlance.jsx";
 import WeeklyBriefing from "./components/WeeklyBriefing.jsx";
 import WeeklyReflection from "./components/WeeklyReflection.jsx";
@@ -160,6 +161,7 @@ export default function App() {
               onOpenReview={live ? () => setReviewOpen(true) : undefined}
               detailId="week-detail"
             />
+            <AskExhale familyId={familyId} live={live} onChanged={refresh} />
             <div id="week-detail">
               <WeeklyBriefing
                 briefing={briefing}

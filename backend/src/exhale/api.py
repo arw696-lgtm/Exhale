@@ -633,8 +633,14 @@ def ingest_photo(
         )
     from exhale.costs import metering
 
+    # Whose kids these are is server-side knowledge, not something a caller
+    # must remember to send. Without it the vision model is told "known family
+    # members: (none provided)" and nothing can be attributed to a child.
+    from exhale.auto_sync import _known_children
+
     digest = hashlib.sha256(req.image_base64.encode()).hexdigest()[:12]
-    ctx = ExtractionContext(known_children=req.known_children)
+    children = req.known_children or _known_children(store.profile(family_id))
+    ctx = ExtractionContext(known_children=children)
     try:
         with metering(store, family_id):
             payloads = extractor.extract(
@@ -665,12 +671,21 @@ def ingest_photo(
             "extraction_id": entry.extraction_id,
             "extracted_event": payload.extracted_event,
             "event_date": payload.event_date.isoformat(),
+            # Who it's for — null means the image didn't say and Exhale won't
+            # guess. The UI offers a one-tap "who's this for?" instead.
+            "target_person_name": payload.target_person_name,
             "band": entry.decision.band.value,
             "status": entry.decision.status.value,
             "obligation_node_id": entry.obligation_node_id,
         })
+    unattributed = [r["extraction_id"] for r in results
+                    if not r["target_person_name"]]
     return {"family_id": family_id, "extracted": len(results),
-            "duplicates_skipped": duplicates, "items": results}
+            "duplicates_skipped": duplicates, "items": results,
+            # The household's children, so the caller can offer attribution
+            # without a second round-trip.
+            "known_children": children,
+            "unattributed": unattributed}
 
 
 class SchoolPhotoRequest(BaseModel):
@@ -781,6 +796,13 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     has configured a coverage model, the child-supervision Care Watch for the
     next two weeks rides along.
     """
+
+    return _briefing_for(family_id)
+
+
+def _briefing_for(family_id: str) -> dict:
+    """The briefing payload, callable from other server-side code (the
+    concierge grounds its answers in exactly what the family can see)."""
 
     from exhale.handled import handled_this_week
     from exhale.memory import learn_rules
@@ -1455,6 +1477,70 @@ def schedule_event(
 
     return {"family_id": family_id, "provider": provider, "reference": ref,
             "title": req.title, "start": start.isoformat(), "end": end.isoformat()}
+
+
+class AskRequest(BaseModel):
+    """One question for the household concierge."""
+
+    question: str
+    caregiver: str | None = None  # whose free time to look up (default: asker)
+    history: list[dict] = Field(default_factory=list)
+
+
+@app.post("/v1/families/{family_id}/ask")
+def ask_exhale(
+    req: AskRequest,
+    family_id: str = Depends(require_family_access),
+    user: User | None = Depends(current_user),
+) -> dict:
+    """Ask Exhale about the household — and let it find you time.
+
+    Grounded entirely in a snapshot built at question time (see
+    exhale.concierge): the assistant answers from real state or says it
+    doesn't know. It proposes time blocks; it never writes one. Confirming a
+    proposal goes through the existing /schedule approval path.
+    """
+
+    from exhale.concierge import ask, build_snapshot
+    from exhale.costs import metering
+
+    profile = store.profile(family_id)
+    briefing = _briefing_for(family_id)
+
+    # Free time comes from the coverage engine, for whoever is asking.
+    windows = None
+    caregiver = req.caregiver or _member_name(user, fallback=None)
+    config = profile.get("coverage_model")
+    if config and caregiver:
+        from exhale.coverage import build_work_plan
+
+        start, end = default_range(days=7)
+        try:
+            windows = build_work_plan(
+                build_family(CoverageModelIn(**config)), caregiver, start, end,
+                count=5, min_hours=1.0,
+            )
+        except KeyError:
+            windows = None  # that name isn't a caregiver in the model
+
+    from exhale.tasks import open_tasks
+
+    snapshot = build_snapshot(
+        briefing=briefing,
+        tasks=open_tasks(profile.get("tasks") or []),
+        work_windows=windows,
+    )
+    try:
+        with metering(store, family_id):
+            answer = ask(req.question, snapshot, history=req.history)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Exhale can't answer right now (the assistant is "
+                   f"unavailable: {exc}).",
+        ) from exc
+    return {"family_id": family_id, "reply": answer.reply,
+            "proposal": answer.proposal}
 
 
 class AwayIn(BaseModel):

@@ -1054,3 +1054,44 @@ def test_trip_suggestion_dismiss_sticks():
     r = client.post(f"/v1/families/{fam}/away/suggestions/{trip['trip_id']}/dismiss")
     assert r.status_code == 200
     assert client.get(f"/v1/families/{fam}/away").json()["trip_suggestions"] == []
+
+
+def test_photo_endpoint_derives_children_and_reports_unattributed(monkeypatch):
+    """The server knows whose kids these are — a caller must not have to send
+    them. Items the image can't attribute come back flagged, never guessed."""
+
+    from exhale.api import store
+    import exhale.api as api_mod
+    from exhale.schemas import ExtractionPayload
+    from datetime import date, timedelta
+
+    fam = "family_photo_attr"
+    store.set_profile(fam, coverage_model={
+        "children": [{"recipient": {"name": "Steve", "birthdate": None},
+                      "school": None}],
+        "caregivers": [],
+    })
+
+    seen_ctx = {}
+
+    class _Vision:
+        def extract(self, image_b64, media_type, *, source_name, source_reference, ctx):
+            seen_ctx["children"] = list(ctx.known_children)
+            return [ExtractionPayload(
+                extracted_event="Foxes (Purple) Practice",
+                event_date=date.today() + timedelta(days=3),
+                action_required=False, confidence_score=0.95,
+                source_reference=source_reference,
+            )]
+
+    monkeypatch.setattr(api_mod, "_vision_extractor", lambda: _Vision())
+    r = client.post(f"/v1/families/{fam}/extractions/photo",
+                    json={"image_base64": "Zm9v", "media_type": "image/png"})
+    assert r.status_code == 200
+    body = r.json()
+    # The endpoint supplied the household's children without being told.
+    assert seen_ctx["children"] == ["Steve"]
+    assert body["known_children"] == ["Steve"]
+    # Nothing was guessed onto the item; it's reported for a one-tap answer.
+    assert body["items"][0]["target_person_name"] is None
+    assert body["unattributed"] == [body["items"][0]["extraction_id"]]

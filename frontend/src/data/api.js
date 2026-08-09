@@ -481,3 +481,47 @@ export async function uploadIcsFile(content, attendees, familyId = DEMO_FAMILY, 
   if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
   return body;
 }
+
+/** Attribute an extraction to a child (a correction that only sets the person). */
+export async function attributeExtraction(extractionId, childName, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(
+    `/v1/families/${familyId}/extractions/${extractionId}/correct`,
+    { method: "POST", body: JSON.stringify({ target_person_name: childName }) }
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
+/** Read a school-year calendar photo into a child's coverage model. */
+export async function uploadSchoolCalendar(file, childName, familyId = DEMO_FAMILY, schoolName = null) {
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",", 2)[1] ?? "");
+    reader.onerror = () => reject(new Error("Could not read the file"));
+    reader.readAsDataURL(file);
+  });
+  const res = await apiFetch(`/v1/families/${familyId}/coverage-model/school/photo`, {
+    method: "POST",
+    body: JSON.stringify({
+      image_base64: base64,
+      media_type: file.type || "image/png",
+      child: childName,
+      school_name: schoolName,
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
+// --- ask exhale (household concierge) -----------------------------------------
+export async function askExhale(question, familyId = DEMO_FAMILY, history = [], caregiver = null) {
+  const res = await apiFetch(`/v1/families/${familyId}/ask`, {
+    method: "POST",
+    body: JSON.stringify({ question, history, caregiver }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}

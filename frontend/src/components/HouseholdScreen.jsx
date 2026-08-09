@@ -45,7 +45,13 @@ export default function HouseholdScreen({ briefing, familyId, live, onRefresh })
       {live && briefing?.care_watch == null && (
         <SetupPanel familyId={familyId} onSaved={onRefresh} />
       )}
-      {live && <PhotoDrop familyId={familyId} onChanged={onRefresh} />}
+      {live && (
+        <PhotoDrop
+          familyId={familyId}
+          knownChildren={(briefing?.care_watch?.recipients ?? []).filter(Boolean)}
+          onChanged={onRefresh}
+        />
+      )}
       {live && (
         <IcsPanel
           familyId={familyId}
