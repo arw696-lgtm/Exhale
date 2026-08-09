@@ -169,6 +169,27 @@ def _replay_ics(store, family_id: str, profile: dict, config: dict) -> dict:
     return {"synced_busy_events": len(events)}
 
 
+def _summarize(unit_report: dict) -> str:
+    """Compress one sync unit's report to a log-line token."""
+
+    if not isinstance(unit_report, dict):
+        return "ok"
+    if "error" in unit_report:
+        return f"ERROR({unit_report['error']})"
+    if "skipped" in unit_report:
+        return "skipped"
+    # Gmail reports are keyed per account; calendar replays return flat dicts.
+    parts = []
+    for key, value in unit_report.items():
+        if isinstance(value, dict):
+            token = (f"ERROR({value['error']})" if "error" in value
+                     else str(value.get("scanned", value.get("events", "ok"))))
+            parts.append(f"{key}:{token}")
+    if parts:
+        return " ".join(parts)
+    return str(unit_report.get("scanned", unit_report.get("events", "ok")))
+
+
 def run_cycle(store, extractor, notifier=None) -> dict:
     """One full pass over every family: replay remembered syncs, report results.
 
@@ -206,6 +227,12 @@ def run_cycle(store, extractor, notifier=None) -> dict:
                 log.warning("auto-sync %s/%s failed: %s", family_id, name, exc)
                 family_report[name] = {"error": str(exc)}
         report["families"][family_id] = family_report
+        # One INFO line per family per cycle. Someone watching `logs -f` right
+        # after connecting Gmail is asking "is it working?" — silence is the
+        # one answer we must never give.
+        log.info("auto-sync %s: %s", family_id,
+                 ", ".join(f"{n}={_summarize(r)}" for n, r in family_report.items())
+                 or "nothing to sync")
 
     if notifier is not None:
         from exhale.notify import run_notification_cycle

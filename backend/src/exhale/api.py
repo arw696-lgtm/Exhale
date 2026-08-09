@@ -269,7 +269,22 @@ async def _rate_limit(request, call_next):
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "product": "Exhale", "version": __version__}
+    """Liveness, plus enough auto-sync state to answer "is it working?".
+
+    Only counts and timestamps cross this line — /health is unauthenticated,
+    so no family data, sync details, or family ids belong here.
+    """
+
+    body = {"status": "ok", "product": "Exhale", "version": __version__}
+    if auto_sync_scheduler is not None:
+        last = auto_sync_scheduler.last_report or {}
+        body["auto_sync"] = {
+            "interval_minutes": auto_sync_scheduler.interval_minutes,
+            "cycles_run": auto_sync_scheduler.cycles_run,
+            "last_cycle_at": last.get("started_at"),
+            "families_synced": len(last.get("families") or {}),
+        }
+    return body
 
 
 # --- auth endpoints -----------------------------------------------------------
