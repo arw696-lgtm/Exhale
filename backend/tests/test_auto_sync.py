@@ -184,3 +184,23 @@ def test_two_ics_feeds_for_one_person_coexist(monkeypatch):
     titles = sorted(e["title"] for e in ali["events"] if "block" in e["title"])
     # Both calendars' events present, exactly once each — no clobber, no dupes.
     assert titles == ["family block", "work block"]
+
+
+def test_first_cycle_does_not_wait_a_full_interval():
+    """Someone who just connected Gmail is deciding whether this works — an
+    hour of nothing is the wrong answer."""
+
+    sched = AutoSyncScheduler(HouseholdStore(), extract_payload,
+                              interval_minutes=60, first_cycle_seconds=0.02)
+    assert sched.first_cycle_seconds == 0.02
+    sched.start()
+    _time.sleep(0.15)
+    sched.stop()
+    assert sched.cycles_run >= 1, "first cycle should have run already"
+
+
+def test_first_cycle_never_waits_longer_than_the_interval():
+    """A deliberately fast interval (tests, debug deploys) must stay fast."""
+
+    sched = AutoSyncScheduler(HouseholdStore(), extract_payload, interval_minutes=0.001)
+    assert sched.first_cycle_seconds == pytest.approx(0.06)

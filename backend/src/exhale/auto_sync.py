@@ -221,20 +221,35 @@ def run_cycle(store, extractor, notifier=None) -> dict:
 class AutoSyncScheduler:
     """A daemon thread that runs :func:`run_cycle` every ``interval_minutes``."""
 
-    def __init__(self, store, extractor, interval_minutes: float, notifier=None) -> None:
+    # The first cycle runs shortly after boot rather than a full interval
+    # later. Someone who has just connected Gmail is standing there deciding
+    # whether this thing works; an hour of nothing is the wrong answer. Short
+    # enough to feel immediate, long enough that the API is serving first.
+    FIRST_CYCLE_SECONDS = 45.0
+
+    def __init__(self, store, extractor, interval_minutes: float, notifier=None,
+                 first_cycle_seconds: float | None = None) -> None:
         if interval_minutes <= 0:
             raise ValueError("interval_minutes must be positive")
         self.store = store
         self.extractor = extractor
         self.notifier = notifier
         self.interval_minutes = interval_minutes
+        # Never wait longer for the first cycle than for a regular one — a
+        # deliberately fast interval (tests, a debug deploy) must stay fast.
+        self.first_cycle_seconds = min(
+            self.FIRST_CYCLE_SECONDS if first_cycle_seconds is None else first_cycle_seconds,
+            interval_minutes * 60,
+        )
         self.cycles_run = 0
         self.last_report: dict | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
     def _loop(self) -> None:
-        while not self._stop.wait(self.interval_minutes * 60):
+        delay = self.first_cycle_seconds
+        while not self._stop.wait(delay):
+            delay = self.interval_minutes * 60
             try:
                 self.last_report = run_cycle(self.store, self.extractor,
                                              notifier=self.notifier)
