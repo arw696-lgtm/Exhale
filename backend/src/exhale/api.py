@@ -23,6 +23,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+import logging
+
 from exhale import __version__
 from exhale.auth import ROLE_HELPER, ROLE_MEMBER, AuthError, InMemoryAuthStore, User
 from exhale.briefing import build_weekly_briefing
@@ -36,6 +38,20 @@ from exhale.retro_scan import run_incremental_sync, run_retro_scan
 from exhale.schemas import ExtractionPayload
 from exhale.seed import DEMO_FAMILY_ID, seed_demo
 from exhale.store import HouseholdStore
+
+# Exhale's own loggers print at INFO. Uvicorn only configures *its* loggers;
+# without this, application logs (auto-sync cycle lines, connector warnings)
+# silently vanish — the root logger defaults to WARNING with no handler.
+# Scoped to the "exhale" namespace so third-party INFO chatter stays out.
+_exhale_log = logging.getLogger("exhale")
+if not _exhale_log.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(
+        logging.Formatter("%(levelname)s:     %(name)s — %(message)s")
+    )
+    _exhale_log.addHandler(_handler)
+    _exhale_log.setLevel(logging.INFO)
+
 
 def _build_store() -> HouseholdStore:
     """Choose the store backend from the environment.
