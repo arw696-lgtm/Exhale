@@ -162,6 +162,7 @@ def build_wall_feed(
     scheduled_events: list[dict] | None = None,
     deadlines: list[dict] | None = None,
     care_gaps: list[dict] | None = None,
+    away_periods: list[dict] | None = None,
     now: datetime | None = None,
     calendar_name: str = "Exhale",
 ) -> str:
@@ -206,7 +207,28 @@ def build_wall_feed(
             description=item.get("anchor_event") and f"For {item['anchor_event']}",
         )
 
-    # 3. Coverage gaps — the wall's most useful job is answering "who's got it?"
+    # 3. Away periods — one all-day span, and no fabricated needs inside it.
+    away_ranges: list[tuple[date, date]] = []
+    for period in away_periods or []:
+        start_d = _parse_date(period.get("start", ""))
+        end_d = _parse_date(period.get("end", ""))
+        if start_d is None or end_d is None or end_d < today:
+            continue
+        away_ranges.append((start_d, end_d))
+        body += _event_lines(
+            uid=_uid("away", str(period.get("away_id") or f"{start_d}{end_d}")),
+            summary=f"Family away — {period.get('label') or 'together, elsewhere'}",
+            stamp=now,
+            start=start_d,
+            end=end_d + timedelta(days=1),  # inclusive range → exclusive DTEND
+        )
+
+    def _while_away(day: date) -> bool:
+        return any(a <= day <= b for a, b in away_ranges)
+
+    # 4. Coverage gaps — the wall's most useful job is answering "who's got
+    #    it?". Suppressed inside away ranges: the family is together,
+    #    elsewhere, and "Leo needs someone" on a beach day is a lie.
     for gap in care_gaps or []:
         start = _parse_dt(gap.get("start", ""))
         end = _parse_dt(gap.get("end", ""))
@@ -215,6 +237,8 @@ def build_wall_feed(
         if _as_utc(start).date() < today:
             continue
         if (_as_utc(start).date() - today).days > CARE_GAP_HORIZON_DAYS:
+            continue
+        if _while_away(_as_utc(start).date()):
             continue
         body += _event_lines(
             uid=_uid("cover", f"{gap.get('recipient')}{gap.get('start')}"),

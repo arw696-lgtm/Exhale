@@ -432,3 +432,27 @@ export async function startConnect(provider, familyId = DEMO_FAMILY) {
 }
 
 export { DEMO_FAMILY };
+
+// --- away periods (vacation mode) ----------------------------------------------
+export async function fetchAway(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/away`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export function addAwayPeriod(label, start, end, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/away`, { label, start, end });
+}
+
+export async function removeAwayPeriod(awayId, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(`/v1/families/${familyId}/away/${awayId}`, {
+    method: "DELETE",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}

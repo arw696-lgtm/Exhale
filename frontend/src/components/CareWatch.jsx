@@ -83,6 +83,15 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
         </span>
       </header>
 
+      {/* Suppression is stated, never silent (honesty rails). */}
+      {(careWatch.away_suppressed ?? 0) > 0 && (
+        <p className="mb-3 font-micro text-xs text-sanctuary-navy/50">
+          ✈️ {careWatch.away_suppressed} gap
+          {careWatch.away_suppressed === 1 ? "" : "s"} hidden — the family is
+          away together then.
+        </p>
+      )}
+
       <ul className="space-y-4">
         {gaps.map((gap) => {
           const dot = DOT[gap.threat_level] ?? DOT.ADVISORY;

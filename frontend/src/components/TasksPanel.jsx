@@ -28,6 +28,7 @@ function windowPhrase(w) {
 
 export default function TasksPanel({ familyId, window: suggestedWindow, onChanged }) {
   const [tasks, setTasks] = useState(null);
+  const [away, setAway] = useState(null);
   const [covered, setCovered] = useState([]);
   const [draft, setDraft] = useState("");
   const [weekly, setWeekly] = useState(false);
@@ -37,6 +38,7 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
     const data = await fetchTasks(familyId);
     setTasks(data?.open ?? null);
     setCovered(data?.covered_this_week ?? []);
+    setAway(data?.away ?? null);
   }, [familyId]);
 
   useEffect(() => {
@@ -81,7 +83,12 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
         <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
           Contributions
         </h2>
-        {tasks.length > 0 && when && (
+        {away && (
+          <p className="mt-1 font-micro text-xs text-sanctuary-navy/50">
+            ✈️ Weekly contributions are paused — the family's away.
+          </p>
+        )}
+        {!away && tasks.length > 0 && when && (
           <p className="mt-1 font-micro text-xs text-sage-release">
             {when} looks open — got a little time?
           </p>

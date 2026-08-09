@@ -786,9 +786,13 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
     from exhale.memory import learn_rules
     from exhale.waiting import build_waiting_watch
 
+    from datetime import date as _date
+
+    from exhale.away import away_on
+
     profile = store.profile(family_id)
     waiting_items = profile.get("waiting_on") or []
-    return build_weekly_briefing(
+    briefing = build_weekly_briefing(
         store.graph(family_id),
         coverage=build_coverage(profile),
         care_watch=_care_watch_for(profile),
@@ -797,12 +801,18 @@ def get_briefing(family_id: str = Depends(require_family_access)) -> dict:
         handled=handled_this_week(profile),
         time_for_what_matters=_time_for_what_matters(family_id, profile),
     )
+    # Vacation mode: when the family is away today, the glance says so
+    # instead of inventing needs. Deadlines are untouched — a form due
+    # mid-trip is still due.
+    briefing["away"] = away_on(profile, _date.today())
+    return briefing
 
 
 def _care_watch_for(profile: dict) -> dict | None:
     """Build the next-two-weeks Care Watch (all children) if a model exists."""
 
     from exhale.ages import age_prompts
+    from exhale.away import suppress_care_gaps
 
     config = profile.get("coverage_model")
     if not config:
@@ -811,6 +821,9 @@ def _care_watch_for(profile: dict) -> dict | None:
     family = build_family(model)
     start, end = default_range()
     watch = build_family_care_watch(family, start, end)
+    # Vacation mode: gaps inside an away period are suppressed, visibly —
+    # the payload carries away_suppressed so nothing vanishes silently.
+    watch = suppress_care_gaps(watch, profile.get("away_periods") or [])
     # Age-triggered questions ride along (asks, never actions — exhale.ages).
     watch["age_prompts"] = age_prompts(model)
     return watch
@@ -1444,6 +1457,48 @@ def schedule_event(
             "title": req.title, "start": start.isoformat(), "end": end.isoformat()}
 
 
+class AwayIn(BaseModel):
+    label: str = "Away"
+    start: str  # ISO date, inclusive
+    end: str    # ISO date, inclusive
+
+
+@app.get("/v1/families/{family_id}/away")
+def get_away(family_id: str = Depends(require_family_access)) -> dict:
+    """The family's away periods (vacation mode ranges)."""
+
+    periods = store.profile(family_id).get("away_periods") or []
+    return {"family_id": family_id, "away_periods": periods}
+
+
+@app.post("/v1/families/{family_id}/away")
+def add_away_period(
+    req: AwayIn, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Declare an away period: care gaps suppress, contributions pause,
+    the glance and wall feed say the family is away. Deadlines still stand."""
+
+    from exhale.away import add_away
+
+    try:
+        period = add_away(store, family_id, label=req.label,
+                          start=req.start, end=req.end)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"family_id": family_id, **period}
+
+
+@app.delete("/v1/families/{family_id}/away/{away_id}")
+def delete_away_period(
+    away_id: str, family_id: str = Depends(require_family_access)
+) -> dict:
+    from exhale.away import remove_away
+
+    if not remove_away(store, family_id, away_id):
+        raise HTTPException(status_code=404, detail=f"No away period {away_id!r}")
+    return {"family_id": family_id, "away_id": away_id, "status": "removed"}
+
+
 @app.get("/v1/families/{family_id}/feed-url")
 def get_feed_url(family_id: str = Depends(require_family_access)) -> dict:
     """The family's private Exhale-calendar URL (subscribe on a phone → CarPlay).
@@ -1499,6 +1554,7 @@ def serve_feed(family_id: str, token: str = Query(...)):
             scheduled_events=profile.get("scheduled_events") or [],
             deadlines=deadlines,
             care_gaps=care_gaps,
+            away_periods=profile.get("away_periods") or [],
         ),
         media_type="text/calendar",
     )
@@ -1620,14 +1676,28 @@ def _member_name(user, fallback: str | None = "Someone") -> str | None:
 
 @app.get("/v1/families/{family_id}/tasks")
 def get_tasks(family_id: str = Depends(require_family_access)) -> dict:
-    """The contributions pile: open items, plus weeklies already covered."""
+    """The contributions pile: open items, plus weeklies already covered.
 
+    While the family is away, weekly contributions step out of the open pile
+    (nobody mows the lawn from Portland — the week simply doesn't count
+    against anyone); one-off tasks stay, quietly, for whenever.
+    """
+
+    from datetime import date as _date
+
+    from exhale.away import away_on
     from exhale.tasks import done_this_week, open_tasks
 
-    items = store.profile(family_id).get("tasks") or []
+    profile = store.profile(family_id)
+    items = profile.get("tasks") or []
+    open_items = open_tasks(items)
+    away = away_on(profile, _date.today())
+    if away:
+        open_items = [t for t in open_items if t.get("cadence") != "weekly"]
     return {"family_id": family_id, "view": "task_list",
-            "open": open_tasks(items),
-            "covered_this_week": done_this_week(items)}
+            "open": open_items,
+            "covered_this_week": done_this_week(items),
+            "away": away}
 
 
 @app.post("/v1/families/{family_id}/tasks")

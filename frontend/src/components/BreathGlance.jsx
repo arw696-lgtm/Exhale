@@ -96,6 +96,16 @@ export default function BreathGlance({
           {first && ` · ${first}`}
         </p>
 
+        {/* Vacation mode — the family is together, elsewhere. */}
+        {briefing.away && (
+          <p className="mt-2 rounded-full bg-sage-release/12 px-4 py-1 font-micro text-xs font-medium text-sage-release">
+            ✈️ {briefing.away.label} — back{" "}
+            {new Date(`${briefing.away.end}T00:00:00`).toLocaleDateString(undefined, {
+              weekday: "long",
+            })}
+          </p>
+        )}
+
         <h1 className="mt-3 font-display text-[2.4rem] italic leading-[1.08] text-sanctuary-navy sm:text-[2.7rem]">
           {tenor.headline[0]}
           <br />

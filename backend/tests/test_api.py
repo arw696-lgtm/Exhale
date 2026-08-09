@@ -957,3 +957,47 @@ def test_notification_run_reports_pending_without_smtp(monkeypatch):
     body = r.json()
     assert body["smtp_configured"] is False
     assert any(line.startswith("🔴") for line in body["pending_alerts"])
+
+
+# --- vacation mode (away periods) --------------------------------------------
+def test_away_crud_and_briefing_stamp():
+    from datetime import date, timedelta
+
+    fam = "family_away_api"
+    today = date.today()
+    r = client.post(f"/v1/families/{fam}/away", json={
+        "label": "Portland",
+        "start": today.isoformat(),
+        "end": (today + timedelta(days=4)).isoformat(),
+    })
+    assert r.status_code == 200
+    away_id = r.json()["away_id"]
+
+    assert client.get(f"/v1/families/{fam}/away").json()["away_periods"][0][
+        "label"] == "Portland"
+
+    # The briefing says the family is away today.
+    briefing = client.get(f"/v1/families/{fam}/briefing").json()
+    assert briefing["away"]["label"] == "Portland"
+
+    # Weekly contributions step out of the open pile; one-offs stay.
+    client.post(f"/v1/families/{fam}/tasks",
+                json={"description": "Mow the lawn", "cadence": "weekly"})
+    client.post(f"/v1/families/{fam}/tasks",
+                json={"description": "Call the plumber"})
+    tasks = client.get(f"/v1/families/{fam}/tasks").json()
+    assert [t["description"] for t in tasks["open"]] == ["Call the plumber"]
+    assert tasks["away"]["label"] == "Portland"
+
+    # Delete → everything back to normal.
+    assert client.delete(f"/v1/families/{fam}/away/{away_id}").status_code == 200
+    briefing = client.get(f"/v1/families/{fam}/briefing").json()
+    assert briefing["away"] is None
+    tasks = client.get(f"/v1/families/{fam}/tasks").json()
+    assert len(tasks["open"]) == 2
+
+
+def test_away_rejects_backwards_range():
+    r = client.post("/v1/families/family_away_api/away", json={
+        "label": "Oops", "start": "2026-09-10", "end": "2026-09-01"})
+    assert r.status_code == 400
