@@ -173,6 +173,18 @@ class GmailConnector(Connector):
             return resp.json()
         raise RuntimeError("unreachable")
 
+    def fetch_by_id(self, message_id: str) -> RawMessage:
+        """Re-fetch one message by its Gmail id (a ledger source_reference).
+
+        Used by the review-queue second-opinion sweep: raw bodies are never
+        stored (the ledger keeps only the structured payload), so giving a
+        held item a real second read means going back to the source.
+        """
+
+        msg = self._get(f"{GMAIL_API}/users/me/messages/{message_id}",
+                        {"format": "full"})
+        return parse_gmail_message(msg)
+
     # -- fetch -----------------------------------------------------------------
     def fetch(self, since: datetime | None = None) -> Iterable[RawMessage]:
         q = self.query

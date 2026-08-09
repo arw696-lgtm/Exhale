@@ -96,6 +96,50 @@ def _sync_gmail(store, family_id: str, profile: dict, extractor) -> dict:
     return report
 
 
+def _retriage(store, family_id: str, profile: dict, extractor) -> dict:
+    """Second-opinion sweep over held review items (see exhale.retriage).
+
+    Runs after the inbox pulls so freshly-held items get their read the same
+    cycle. Uses the LLM half of the hybrid extractor when it exists; without
+    one, only the free staleness rule fires.
+    """
+
+    from exhale.retriage import second_opinion_sweep
+
+    llm = getattr(extractor, "llm", None)
+    fetch_message = None
+    accounts = _accounts(profile, "google")
+    if accounts:
+        cfg = config_from_env("google")
+        connectors = [
+            GmailConnector(
+                access_token=tokens.get("access_token"),
+                refresh_token=tokens.get("refresh_token"),
+                client_id=cfg.client_id if cfg else None,
+                client_secret=cfg.client_secret if cfg else None,
+            )
+            for _, tokens in sorted(accounts.items())
+        ]
+
+        def fetch_message(ref):  # noqa: F811 — the real fetcher when connected
+            # A source_reference belongs to whichever member's inbox held it;
+            # try each connected account (a miss raises 404 → next account).
+            if not ref:
+                return None
+            for connector in connectors:
+                try:
+                    return connector.fetch_by_id(ref)
+                except Exception:  # noqa: BLE001 — not this inbox; try the next
+                    continue
+            return None
+
+    from exhale.costs import metering
+
+    with metering(store, family_id):
+        return second_opinion_sweep(store, family_id, llm=llm,
+                                    fetch_message=fetch_message)
+
+
 def _replay_calendar(store, family_id: str, profile: dict, config: dict) -> dict:
     # Re-read the live profile: an earlier replay this cycle may have merged
     # events already, and composing calendars requires building on that, not
@@ -178,6 +222,9 @@ def _summarize(unit_report: dict) -> str:
         return f"ERROR({unit_report['error']})"
     if "skipped" in unit_report:
         return "skipped"
+    if "noise" in unit_report:  # the retriage sweep
+        dismissed = unit_report.get("stale", 0) + unit_report.get("noise", 0)
+        return f"dismissed:{dismissed} held:{unit_report.get('kept_held', 0)}"
     # Gmail reports are keyed per account; calendar replays return flat dicts.
     parts = []
     for key, value in unit_report.items():
@@ -219,6 +266,9 @@ def run_cycle(store, extractor, notifier=None) -> dict:
         for i, ics_cfg in enumerate(_as_list(configs.get("ics"))):
             units.append((f"ics_{i}", lambda p=profile, c=ics_cfg:
                           _replay_ics(store, family_id, p, c)))
+        # After the pulls: give held review items their second read.
+        units.append(("retriage", lambda p=profile:
+                      _retriage(store, family_id, p, extractor)))
 
         for name, unit in units:
             try:
