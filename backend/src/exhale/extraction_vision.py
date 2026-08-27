@@ -29,6 +29,7 @@ from datetime import date, time
 from pydantic import BaseModel, Field
 
 from exhale.costs import note_usage
+from exhale.model_policy import model_for, output_config
 from exhale.extraction import ExtractionContext
 from exhale.schemas import ArtifactTier, ExtractionPayload, FactOrigin
 
@@ -128,13 +129,13 @@ class _SchoolCalendarExtraction(BaseModel):
 class VisionExtractor:
     """Claude-vision-backed extractor producing §3.2 payloads from an image."""
 
-    def __init__(self, *, model: str = DEFAULT_VISION_MODEL, client=None) -> None:
+    def __init__(self, *, model: str | None = None, client=None) -> None:
         if client is None:
             import anthropic
 
             client = anthropic.Anthropic()
         self._client = client
-        self.model = model
+        self.model = model or model_for("vision")
 
     def extract(
         self,
@@ -163,8 +164,9 @@ class VisionExtractor:
         try:
             response = self._client.messages.parse(
                 model=self.model,
-                max_tokens=16000,
+                max_tokens=8000,
                 thinking={"type": "adaptive"},
+                output_config=output_config("vision"),
                 system=_VISION_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": content}],
                 output_format=_VisionExtraction,
@@ -235,8 +237,9 @@ class VisionExtractor:
         try:
             response = self._client.messages.parse(
                 model=self.model,
-                max_tokens=16000,
+                max_tokens=8000,
                 thinking={"type": "adaptive"},
+                output_config=output_config("vision"),
                 system=_SCHOOL_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": content}],
                 output_format=_SchoolCalendarExtraction,
@@ -262,5 +265,5 @@ def vision_extractor_from_env() -> VisionExtractor | None:
         return None
     # `or` (not a get() default): compose passes the var as present-but-empty
     # when unset in .env, and an empty model string 400s every call.
-    model = os.environ.get("EXHALE_VISION_MODEL", "").strip() or DEFAULT_VISION_MODEL
+    model = model_for("vision")
     return VisionExtractor(model=model)

@@ -120,7 +120,17 @@ def _retriage(store, family_id: str, profile: dict, extractor) -> dict:
 
     from exhale.retriage import second_opinion_sweep
 
+    # Junk-or-real is classification, not deep reading: give the sweep its own
+    # cheap, shallow-thinking reader rather than the email extractor's. Only
+    # built when the pipeline already has a working LLM (credentials present).
     llm = _llm_of(extractor)
+    if llm is not None:
+        from exhale.extraction_llm import LLMExtractor
+
+        try:
+            llm = LLMExtractor(purpose="triage")
+        except Exception:  # noqa: BLE001 — fall back to the extractor's own
+            pass
     fetch_message = None
     accounts = _accounts(profile, "google")
     if accounts:

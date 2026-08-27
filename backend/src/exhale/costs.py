@@ -29,11 +29,14 @@ from contextvars import ContextVar
 from datetime import datetime, timedelta
 
 # Rough planning rates in USD per million tokens (input, output), mid-2026.
-# Prefix-matched so dated variants of a model price like their family.
+# Prefix-matched longest-first, so a model prices like its own tier rather
+# than its family's (Sonnet 5 is cheaper than Sonnet 4.6, not the same).
 PRICING: dict[str, tuple[float, float]] = {
     "claude-fable-5": (10.00, 50.00),
-    "claude-opus": (5.00, 25.00),      # opus-5 / 4.8 / 4.7 / 4.6
-    "claude-sonnet": (3.00, 15.00),
+    "claude-mythos-5": (10.00, 50.00),
+    "claude-opus": (5.00, 25.00),        # opus-5 / 4.8 / 4.7 / 4.6
+    "claude-sonnet-5": (2.00, 10.00),
+    "claude-sonnet": (3.00, 15.00),      # sonnet-4.6 and earlier
     "claude-haiku": (1.00, 5.00),
 }
 _FALLBACK_RATE = (5.00, 25.00)  # unknown model → price like Opus, never $0
@@ -52,9 +55,10 @@ _active_meter: ContextVar = ContextVar("exhale_cost_meter", default=None)
 
 
 def _rate_for(model: str) -> tuple[float, float]:
-    for prefix, rate in PRICING.items():
+    # Longest prefix wins: "claude-sonnet-5" must not price as "claude-sonnet".
+    for prefix in sorted(PRICING, key=len, reverse=True):
         if model.startswith(prefix):
-            return rate
+            return PRICING[prefix]
     return _FALLBACK_RATE
 
 

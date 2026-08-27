@@ -5,6 +5,7 @@ from datetime import date, time
 import pytest
 
 from exhale.extraction import ExtractionContext
+from exhale.model_policy import model_for
 from exhale.extraction_vision import (
     VisionExtractor,
     VisionUnavailable,
@@ -124,7 +125,7 @@ def test_request_includes_image_block_and_children_context():
     VisionExtractor(client=client).extract(
         *PNG, source_name="f.png", source_reference="photo_1", ctx=CTX)
     call = client.messages.calls[0]
-    assert call["model"] == "claude-opus-4-8"
+    assert call["model"] == model_for("vision")
     assert call["output_format"] is _VisionExtraction
     content = call["messages"][0]["content"]
     assert content[0]["type"] == "image"

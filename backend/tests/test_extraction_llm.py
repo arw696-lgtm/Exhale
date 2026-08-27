@@ -6,8 +6,8 @@ import pytest
 
 from exhale.connectors.base import RawMessage
 from exhale.extraction import ExtractionContext, extract_payload
+from exhale.model_policy import model_for
 from exhale.extraction_llm import (
-    DEFAULT_MODEL,
     HybridExtractor,
     LLMExtractor,
     LLMUnavailable,
@@ -90,7 +90,10 @@ def test_llm_request_shape():
         _msg(body="Hi Olivia's swim meet is Aug 2. Sign up by July 28."), CTX
     )
     call = client.messages.calls[0]
-    assert call["model"] == DEFAULT_MODEL
+    # Email reading runs on the mid-tier model at low effort — deep
+    # deliberation on every inbox message is what ran up a real bill.
+    assert call["model"] == model_for("email")
+    assert call["output_config"] == {"effort": "low"}
     assert call["thinking"] == {"type": "adaptive"}
     assert call["output_format"] is _LLMExtraction
     prompt = call["messages"][0]["content"]
@@ -224,12 +227,12 @@ def test_empty_model_env_falls_back_to_default(monkeypatch):
     captured = {}
 
     class _Extractor:
-        def __init__(self, *, model):
-            captured["model"] = model
+        def __init__(self, *, model=None, purpose="email", client=None):
+            captured["model"] = model or model_for(purpose)
             self.extract = lambda raw, ctx=None: None
 
     monkeypatch.setenv("EXHALE_LLM_EXTRACTOR", "1")
     monkeypatch.setenv("EXHALE_LLM_MODEL", "")
     monkeypatch.setattr(mod, "LLMExtractor", _Extractor)
     mod.extractor_from_env()
-    assert captured["model"] == mod.DEFAULT_MODEL
+    assert captured["model"] == model_for("email")

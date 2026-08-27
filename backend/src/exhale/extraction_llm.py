@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 from exhale.connectors.base import RawMessage
 from exhale.connectors.preprocess import clean
 from exhale.costs import note_usage
+from exhale.model_policy import model_for, output_config
 from exhale.credibility import classify_artifact
 from exhale.extraction import ExtractionContext, extract_payload
 from exhale.routing import ConfidenceBand, classify_confidence
@@ -124,15 +125,22 @@ class _LLMExtraction(BaseModel):
 
 
 class LLMExtractor:
-    """Claude-backed §3.2 extractor with the standard extractor interface."""
+    """Claude-backed §3.2 extractor with the standard extractor interface.
 
-    def __init__(self, *, model: str = DEFAULT_MODEL, client=None) -> None:
+    ``purpose`` selects the model/effort policy (exhale.model_policy). The
+    retriage sweep passes "triage" — deciding junk-or-real is classification
+    and does not repay Opus-depth deliberation on every marketing email.
+    """
+
+    def __init__(self, *, model: str | None = None, client=None,
+                 purpose: str = "email") -> None:
         if client is None:
             import anthropic
 
             client = anthropic.Anthropic()
         self._client = client
-        self.model = model
+        self.purpose = purpose
+        self.model = model or model_for(purpose)
 
     def extract(
         self, raw: RawMessage, ctx: ExtractionContext | None = None
@@ -154,8 +162,9 @@ class LLMExtractor:
         try:
             response = self._client.messages.parse(
                 model=self.model,
-                max_tokens=16000,
+                max_tokens=4000,  # one small structured record; 16k was never used
                 thinking={"type": "adaptive"},
+                output_config=output_config(self.purpose),
                 system=_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
                 output_format=_LLMExtraction,
@@ -243,9 +252,8 @@ def extractor_from_env():
     if os.environ.get("EXHALE_LLM_EXTRACTOR", "").strip().lower() in ("1", "true", "yes"):
         # `or` (not a get() default): compose passes the var as present-but-
         # empty when unset in .env, and an empty model string 400s every call.
-        model = os.environ.get("EXHALE_LLM_MODEL", "").strip() or DEFAULT_MODEL
         try:
-            return HybridExtractor(LLMExtractor(model=model)).extract
+            return HybridExtractor(LLMExtractor(purpose="email")).extract
         except Exception as exc:  # noqa: BLE001 — missing SDK/key config
             # A config flag must never take the whole API down: fall back to
             # the deterministic engine and say so, loudly, instead of

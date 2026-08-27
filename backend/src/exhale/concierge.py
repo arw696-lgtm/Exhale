@@ -30,6 +30,7 @@ import os
 from datetime import date, datetime, timedelta, timezone
 
 from exhale.costs import note_usage
+from exhale.model_policy import model_for, output_config
 
 log = logging.getLogger("exhale.concierge")
 
@@ -165,8 +166,7 @@ def ask(
         import anthropic
 
         client = anthropic.Anthropic()
-    model = (model or os.environ.get("EXHALE_LLM_MODEL", "").strip()
-             or DEFAULT_MODEL)
+    model = model or model_for("concierge")
 
     messages = []
     for turn in (history or [])[-MAX_HISTORY_TURNS:]:
@@ -184,6 +184,7 @@ def ask(
         response = client.messages.parse(
             model=model,
             max_tokens=2000,
+            output_config=output_config("concierge"),
             system=_SYSTEM_PROMPT,
             messages=messages,
             output_format=_schema(),
