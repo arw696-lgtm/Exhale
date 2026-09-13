@@ -8,6 +8,7 @@ in the first session before the user enters anything manually.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -17,6 +18,8 @@ from exhale.extraction import ExtractionContext, extract_payload
 from exhale.graph import NodeType
 from exhale.routing import RecordStatus
 from exhale.store import HouseholdStore
+
+log = logging.getLogger("exhale.retro_scan")
 
 RETRO_SCAN_DAYS = 180
 
@@ -108,6 +111,21 @@ def run_incremental_sync(
 
     now = now or datetime.now(timezone.utc)
     last = store.profile(family_id).get(watermark_key)
+    # An empty ledger with a watermark is a contradiction: the watermark says
+    # "everything up to here has been read" and there is nothing to show for
+    # it. Whatever produced that state — a reset from a build before the
+    # watermark was cleared with it, a restored database, a wiped volume — the
+    # honest reading is that nothing has been read, and trusting the watermark
+    # asks the inbox for the last few minutes and leaves the household empty
+    # with no error to explain it. Fall through to the full retro window,
+    # which is also exactly what the dedupe on message id makes safe.
+    if last and not store.ledger(family_id):
+        log.warning(
+            "family %s has a %s watermark but an empty ledger — ignoring it "
+            "and re-reading the full %d-day window",
+            family_id, watermark_key, RETRO_SCAN_DAYS,
+        )
+        last = None
     if last:
         since = datetime.fromisoformat(last)
         days = max((now - since).total_seconds() / 86400.0, 0.0)

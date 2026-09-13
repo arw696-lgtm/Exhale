@@ -159,6 +159,61 @@ def test_a_reset_household_re_reads_the_full_retro_window():
     )
 
 
+def test_a_watermark_without_a_ledger_is_ignored():
+    """Self-healing, because this state was reached in production.
+
+    Andy ran Start Over on a build whose reset did not clear the watermark.
+    The items went, the bookmark stayed, and the next scan asked Gmail for the
+    four minutes since the reset: "Read 0 messages", no error, empty app. A
+    watermark asserting everything has been read, over a ledger holding
+    nothing, is a contradiction — and whichever half is wrong, re-reading is
+    the safe answer, because ingestion dedupes on message id anyway.
+    """
+
+    from exhale.retro_scan import RETRO_SCAN_DAYS, run_incremental_sync
+
+    store = HouseholdStore()
+    fam = "fam_orphan_watermark"
+    store.set_profile(fam, last_sync_at="2026-09-13T02:10:00+00:00")
+
+    seen = {}
+
+    class _Spy:
+        def fetch(self, since=None):
+            seen["since"] = since
+            return iter(())
+
+    run_incremental_sync(_Spy(), store, fam)
+
+    window_days = (datetime.now(timezone.utc) - seen["since"]).days
+    assert window_days >= RETRO_SCAN_DAYS - 1, (
+        f"asked for {window_days} days — trusted a watermark with no ledger"
+    )
+
+
+def test_a_watermark_with_a_ledger_is_still_honoured():
+    """Guard the guard: normal incremental syncs must stay incremental."""
+
+    from exhale.retro_scan import run_incremental_sync
+
+    store, fam = _loaded_store("fam_normal_watermark")
+    store.set_profile(fam, last_sync_at="2026-09-13T02:10:00+00:00")
+
+    seen = {}
+
+    class _Spy:
+        def fetch(self, since=None):
+            seen["since"] = since
+            return iter(())
+
+    run_incremental_sync(_Spy(), store, fam)
+
+    window_days = (datetime.now(timezone.utc) - seen["since"]).days
+    assert window_days < 30, (
+        f"asked for {window_days} days — a routine sync re-read the archive"
+    )
+
+
 def test_connection_credentials_survive_the_watermark_clearing():
     """Clearing how-far-we-read must not clear how-we-connect."""
 
