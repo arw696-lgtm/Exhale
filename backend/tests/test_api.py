@@ -1,5 +1,7 @@
 """Tests for the FastAPI service layer."""
 
+from datetime import date, timedelta
+
 from fastapi.testclient import TestClient
 
 from exhale.api import app
@@ -128,6 +130,11 @@ def test_approve_unknown_obligation_is_404():
 
 def test_scan_endpoint_ingests_raw_and_returns_snapshot():
     fam = "family_scan_api"
+    # Written relative to today: pinned dates drift into the past, and a past
+    # deadline is banded PAST on purpose — no gap, no draft, and a failure that
+    # looks like a bug in scanning rather than a rotted fixture.
+    trip = date.today() + timedelta(days=40)
+    due = date.today() + timedelta(days=12)
     body = {
         "known_children": ["Olivia", "Leo"],
         "messages": [
@@ -136,7 +143,8 @@ def test_scan_endpoint_ingests_raw_and_returns_snapshot():
                 "channel": "gmail",
                 "subject": "Field Trip Permission Slip",
                 "body": "Please sign and return the slip for Olivia. Trip on "
-                        "August 25, 2026. Forms due by July 20, 2026.",
+                        f"{trip:%B} {trip.day}, {trip.year}. Forms due by "
+                        f"{due:%B} {due.day}, {due.year}.",
                 "sender_domain": "powerschool.com",
             },
             {
@@ -586,7 +594,12 @@ def test_ics_upload_validates_attendees():
 # --- Review queue (the human side of "asks when unsure") --------------------------
 def _pending_payload(event="Zoo Camp Reminder"):
     return {
-        "extracted_event": event, "event_date": "2026-08-10",
+        # Relative, not pinned: a fixed date silently becomes a past date, and
+        # past obligations are deliberately banded PAST and dropped from the
+        # briefing's live sections. The test would then be asserting the
+        # calendar rather than the behaviour.
+        "extracted_event": event,
+        "event_date": (date.today() + timedelta(days=10)).isoformat(),
         "action_required": True, "confidence_score": 0.95,
         "artifact_tier": "REMINDER",  # reminder tier → held PENDING_VERIFICATION
     }

@@ -29,13 +29,16 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timezone
 
+from exhale.forgetting_engine import MOMENT_PASSED_DAYS
 from exhale.routing import RecordStatus
 
 log = logging.getLogger("exhale.retriage")
 
 # An obligation whose event AND deadline are this far gone is moot — the wall
-# of "Appointment Scheduled (last month)" rows answers itself.
-STALE_DAYS = 14
+# of "Appointment Scheduled (last month)" rows answers itself. One number, so
+# the queue and the graph agree on when a moment has passed; the engine owns
+# it because it is the engine that has to stop calling those items urgent.
+STALE_DAYS = MOMENT_PASSED_DAYS
 
 # LLM re-reads per sweep — bounds one cycle's spend; the next cycle continues.
 MAX_LLM_READS = 60

@@ -64,6 +64,12 @@ def build_weekly_briefing(
         _gap_to_item(g) for g in gaps if g.threat_level is ThreatLevel.IMPORTANT
     ]
     advisory = [_gap_to_item(g) for g in gaps if g.threat_level is ThreatLevel.ADVISORY]
+    # Obligations whose moment is long gone. Carried so nothing disappears
+    # behind the household's back, but kept out of every count and every
+    # forward-looking view: they are not what's coming, and a form due in July
+    # cannot be the most urgent thing in September.
+    passed = [_gap_to_item(g) for g in gaps if g.threat_level is ThreatLevel.PAST]
+    live = len(gaps) - len(passed)
 
     # The handled recap must never read "quiet week" while 🔴/🟡 items are
     # still open — "nothing needed catching" and "the system is behind" are
@@ -90,11 +96,13 @@ def build_weekly_briefing(
             "critical_count": len(critical),
             "dependency_watch_count": len(dependency_watch),
             "advisory_count": len(advisory),
-            "total_gaps": len(gaps),
+            "total_gaps": live,
+            "passed_count": len(passed),
         },
         "critical_threats": critical,
         "dependency_watch": dependency_watch,
         "advisories": advisory,
+        "passed": passed,
         "coverage": coverage if coverage is not None else build_coverage(None),
         "care_watch": care_watch,
         # Layer-4 memory: recurring rules the ledger has taught (with evidence).

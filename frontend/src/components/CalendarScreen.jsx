@@ -67,10 +67,65 @@ export default function CalendarScreen({ briefing }) {
     }
   }
 
-  const days = [...byDay.keys()].sort();
+  // A screen headed "what's coming" must know what day it is. Every day key
+  // present was being rendered, so an obligation still open from July sat
+  // under "The week ahead" in September. Overdue is real and stays visible —
+  // it just isn't coming, and saying so is the difference between an agenda
+  // and a pile.
+  const todayKey = dayKey(new Date().toLocaleDateString("sv"));
+  const allDays = [...byDay.keys()].sort();
+  const overdueDays = allDays.filter((k) => k < todayKey);
+  const days = allDays.filter((k) => k >= todayKey);
+  const passed = briefing.passed ?? [];
+
+  const daySection = (key) => {
+    const d = parseDay(key);
+    const entries = byDay.get(key).sort((a, b) => a.sort - b.sort);
+    return (
+      <section key={key} className="rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
+        <h2 className="mb-3 flex items-baseline gap-2 font-interface tracking-interface text-sanctuary-navy">
+          <span className="text-base font-semibold">
+            {d.toLocaleDateString(undefined, { weekday: "long" })}
+          </span>
+          <span className="font-micro text-xs text-sanctuary-navy/70">
+            {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          </span>
+        </h2>
+        <ul className="space-y-3">
+          {entries.map((e, i) => (
+            <li key={i} className="flex items-start gap-3 font-micro text-sm">
+              <span className={`severity-dot ${e.dot} mt-[6px]`} aria-hidden="true" />
+              <div>
+                <p className="font-semibold text-sanctuary-navy">{e.title}</p>
+                <p className="mt-0.5 text-sanctuary-navy/70">{e.sub}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  };
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
+      {/* Overdue leads, because it is the only thing here that can still be
+          acted on and lost. It is deliberately not folded into "what's
+          coming": a missed deadline dressed as an upcoming one is the one
+          thing an instrument like this must never do. */}
+      {overdueDays.length > 0 && (
+        <section className="mb-8">
+          <header className="mb-4">
+            <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-text">
+              Already past
+            </p>
+            <h2 className="mt-2 font-display text-[1.6rem] italic text-sanctuary-navy">
+              Still open
+            </h2>
+          </header>
+          <div className="space-y-5">{overdueDays.map(daySection)}</div>
+        </section>
+      )}
+
       <header className="mb-6">
         <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-text">
           The week ahead
@@ -89,35 +144,35 @@ export default function CalendarScreen({ briefing }) {
           </p>
         </div>
       ) : (
-        <div className="space-y-5">
-          {days.map((key) => {
-            const d = parseDay(key);
-            const entries = byDay.get(key).sort((a, b) => a.sort - b.sort);
-            return (
-              <section key={key} className="rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
-                <h2 className="mb-3 flex items-baseline gap-2 font-interface tracking-interface text-sanctuary-navy">
-                  <span className="text-base font-semibold">
-                    {d.toLocaleDateString(undefined, { weekday: "long" })}
-                  </span>
-                  <span className="font-micro text-xs text-sanctuary-navy/70">
-                    {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
-                </h2>
-                <ul className="space-y-3">
-                  {entries.map((e, i) => (
-                    <li key={i} className="flex items-start gap-3 font-micro text-sm">
-                      <span className={`severity-dot ${e.dot} mt-[6px]`} aria-hidden="true" />
-                      <div>
-                        <p className="font-semibold text-sanctuary-navy">{e.title}</p>
-                        <p className="mt-0.5 text-sanctuary-navy/70">{e.sub}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
-        </div>
+        <div className="space-y-5">{days.map(daySection)}</div>
+      )}
+
+      {/* Counted nowhere, hidden nowhere. These are weeks gone — naming them
+          is what keeps "nothing needs you" honest. */}
+      {passed.length > 0 && (
+        <section className="mt-8 rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
+          <h2 className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sanctuary-navy/70">
+            The moment has passed · {passed.length}
+          </h2>
+          <p className="mt-2 font-micro text-sm text-sanctuary-navy/70">
+            Open in Exhale, but the date is more than two weeks behind us.
+            They're kept on the record and left out of the counts — nothing you
+            do today changes them.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {passed.slice(0, 8).map((item) => (
+              <li key={item.obligation_id} className="font-micro text-sm text-sanctuary-navy/70">
+                <span className="text-sanctuary-navy">{item.title}</span>
+                {item.deadline && <span> · {item.deadline}</span>}
+              </li>
+            ))}
+          </ul>
+          {passed.length > 8 && (
+            <p className="mt-2 font-micro text-xs text-sanctuary-navy/70">
+              and {passed.length - 8} more
+            </p>
+          )}
+        </section>
       )}
     </main>
   );

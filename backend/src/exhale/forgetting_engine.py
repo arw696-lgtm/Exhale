@@ -37,6 +37,17 @@ IMPORTANT_WINDOW_HOURS = IMPORTANT_WINDOW_DAYS * 24
 # An item is "high impact" when its impact index is at or above this threshold.
 HIGH_IMPACT_THRESHOLD = 0.5
 
+# A deadline this far behind us is not late — it is over. Nothing a person does
+# today changes it. Without this the arithmetic runs the wrong way: hours-until
+# goes negative, every past-due item clears the CRITICAL window by a wider and
+# wider margin, and a permission slip from July is still the loudest thing on
+# the screen in September. Overdue by days is still urgent and still banded as
+# such; only the genuinely moot fall out. The review queue has always used this
+# rule (see exhale.retriage) — it was simply never applied to the obligations
+# that made it into the graph.
+MOMENT_PASSED_DAYS = 14
+MOMENT_PASSED_HOURS = MOMENT_PASSED_DAYS * 24
+
 
 class ThreatLevel(str, Enum):
     """Structural threat stratification bands (blueprint §7.3)."""
@@ -44,10 +55,14 @@ class ThreatLevel(str, Enum):
     CRITICAL = "CRITICAL"
     IMPORTANT = "IMPORTANT"
     ADVISORY = "ADVISORY"
+    #: The moment has passed. Carried, never counted — see MOMENT_PASSED_DAYS.
+    PAST = "PAST"
 
     @property
     def indicator(self) -> str:
-        return {"CRITICAL": "🔴", "IMPORTANT": "🟡", "ADVISORY": "🔵"}[self.value]
+        return {"CRITICAL": "🔴", "IMPORTANT": "🟡", "ADVISORY": "🔵", "PAST": "⚪"}[
+            self.value
+        ]
 
 
 def score_risk(likelihood_of_forgetting: float, impact_of_forgetting: float) -> float:
@@ -69,6 +84,10 @@ def score_risk(likelihood_of_forgetting: float, impact_of_forgetting: float) -> 
 def stratify(hours_until_deadline: float, impact_of_forgetting: float) -> ThreatLevel:
     """Assign a :class:`ThreatLevel` from time-to-deadline and impact (§7.3)."""
 
+    # Checked first: a deadline weeks behind us passes every window below by
+    # an ever-growing margin, so without this the oldest items shout loudest.
+    if hours_until_deadline < -MOMENT_PASSED_HOURS:
+        return ThreatLevel.PAST
     high_impact = impact_of_forgetting >= HIGH_IMPACT_THRESHOLD
     if hours_until_deadline <= CRITICAL_WINDOW_HOURS and high_impact:
         return ThreatLevel.CRITICAL
