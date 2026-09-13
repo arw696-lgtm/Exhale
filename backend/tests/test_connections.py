@@ -97,11 +97,14 @@ def test_two_members_connecting_gmail_both_persist(monkeypatch):
 
 # --- both accounts feed a sync run ------------------------------------------------
 class _FakeResult:
+    """Stands in for RetroScanResult — keep the attributes in step with it."""
+
     scanned = 3
     extracted = 1
     committed = 1
     pending = 0
     rejected = 0
+    window_days = 180.0
     snapshot = {"headline": "ok"}
 
 

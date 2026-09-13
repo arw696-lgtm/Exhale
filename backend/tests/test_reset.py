@@ -283,3 +283,28 @@ def test_endpoint_resets_when_confirmed():
     assert r.status_code == 200
     assert r.json()["reset"] is True
     assert client.get(f"/v1/families/{fam}/ledger").json()["entries"] == []
+
+
+def test_a_scan_reports_the_window_it_looked_at():
+    """"Read 0 messages" is meaningless without it.
+
+    An empty inbox and a window too narrow to contain anything produce the
+    same counts. Andy saw "Read 0 messages" twice and neither he nor the log
+    could tell which had happened.
+    """
+
+    from exhale.retro_scan import RETRO_SCAN_DAYS, run_incremental_sync
+
+    class _Empty:
+        def fetch(self, since=None):
+            return iter(())
+
+    store = HouseholdStore()
+
+    fresh = run_incremental_sync(_Empty(), store, "fam_window_fresh")
+    assert fresh.window_days == RETRO_SCAN_DAYS
+
+    store.set_profile("fam_window_inc", last_sync_at="2026-09-13T02:00:00+00:00")
+    store.ingest("fam_window_inc", _payload("Return the camp form", "gmail_1"))
+    incremental = run_incremental_sync(_Empty(), store, "fam_window_inc")
+    assert incremental.window_days < RETRO_SCAN_DAYS

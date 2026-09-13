@@ -18,6 +18,16 @@ import {
  * provider's own consent screen; on return their calendar + inbox feed the
  * engines. Renders nothing when status isn't available (offline / anonymous).
  */
+/** "the last 6 months" / "the last 3 days" / "the last 12 minutes". */
+function windowLabel(days) {
+  if (days >= 150) return "the last 6 months";
+  if (days >= 25) return `the last ${Math.round(days / 30)} month${days >= 55 ? "s" : ""}`;
+  if (days >= 1) return `the last ${Math.round(days)} day${days >= 1.5 ? "s" : ""}`;
+  const hours = days * 24;
+  if (hours >= 1) return `the last ${Math.round(hours)} hour${hours >= 1.5 ? "s" : ""}`;
+  return `the last ${Math.max(1, Math.round(hours * 60))} minutes`;
+}
+
 const PROVIDERS = [
   { key: "google", label: "Google — Calendar & Gmail" },
   { key: "microsoft", label: "Outlook — Calendar & Mail" },
@@ -173,9 +183,13 @@ export default function ConnectionsPanel({ familyId }) {
           {scanReport && (
             <p className="mt-2 font-micro text-sm text-sanctuary-navy/70">
               Read {scanReport.scanned} message
-              {scanReport.scanned === 1 ? "" : "s"}: {scanReport.committed}{" "}
-              tracked, {scanReport.pending} waiting for you, {scanReport.rejected}{" "}
-              left alone.
+              {scanReport.scanned === 1 ? "" : "s"}
+              {/* Always say what was looked at. "Read 0" from six months is an
+                  empty inbox; "Read 0" from four minutes is a scan that never
+                  had a chance, and the two looked identical here. */}
+              {scanReport.window_days != null && ` from ${windowLabel(scanReport.window_days)}`}
+              : {scanReport.committed} tracked, {scanReport.pending} waiting for
+              you, {scanReport.rejected} left alone.
             </p>
           )}
           {scanError && (

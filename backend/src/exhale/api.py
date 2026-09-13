@@ -2878,14 +2878,19 @@ def sync_gmail(req: GmailSyncRequest, family_id: str = Depends(require_family_ac
         accounts_report[user_key] = {
             "scanned": result.scanned, "extracted": result.extracted,
             "committed": result.committed, "pending": result.pending,
-            "rejected": result.rejected,
+            "rejected": result.rejected, "window_days": result.window_days,
         }
         for key in totals:
             totals[key] += accounts_report[user_key][key]
         snapshot = result.snapshot  # snapshot reflects the whole graph; last wins
+    # The widest window any account looked at: "read nothing" is only
+    # meaningful alongside how far back it looked.
+    windows = [r["window_days"] for r in accounts_report.values()
+               if r["window_days"] is not None]
     return {
         "family_id": family_id,
         **totals,
+        "window_days": max(windows) if windows else None,
         "accounts": accounts_report,
         "snapshot": snapshot,
     }

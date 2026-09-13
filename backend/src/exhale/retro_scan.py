@@ -33,6 +33,12 @@ class RetroScanResult:
     pending: int = 0
     rejected: int = 0
     duplicates: int = 0  # messages already in the ledger, skipped
+    #: How far back this run actually looked. "Read 0 messages" means two
+    #: completely different things — an inbox with nothing new since the last
+    #: sync, or a window so narrow it could never have found anything — and
+    #: without this the two are indistinguishable from the outside. A scan
+    #: that reports nothing must be able to say what it looked at.
+    window_days: float | None = None
     snapshot: dict = field(default_factory=dict)
 
 
@@ -66,7 +72,7 @@ def run_retro_scan(
         if e.payload.source_reference
     }
 
-    result = RetroScanResult(family_id=family_id)
+    result = RetroScanResult(family_id=family_id, window_days=days)
     for raw in connector.fetch(since=since):
         result.scanned += 1
         if raw.source_id and raw.source_id in seen_refs:
@@ -135,6 +141,7 @@ def run_incremental_sync(
     result = run_retro_scan(
         connector, store, family_id, ctx, days=days, now=now, extractor=extractor
     )
+    result.window_days = days
     store.set_profile(family_id, **{watermark_key: now.isoformat()})
     return result
 
