@@ -28,6 +28,8 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 
+from exhale.relevance import is_transactional_notice
+
 _WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # Strip dates/numbers/week-references so recurring instances share one stem:
@@ -76,6 +78,12 @@ def learn_rules(entries, *, min_samples: int = 3) -> list[LearnedRule]:
     groups: dict[str, list] = defaultdict(list)
     for entry in entries:
         if entry.decision.status.value == "REJECTED":
+            continue
+        # A company's mailing schedule is not a family's rhythm. Left in, a
+        # real household learned "'order on draw and get in lottery credits'
+        # recurs on Mondays" and it crowded out the school and practice
+        # rhythms this surface exists to find.
+        if is_transactional_notice(entry.payload.extracted_event):
             continue
         stem = _stem(entry.payload.extracted_event)
         if stem:
