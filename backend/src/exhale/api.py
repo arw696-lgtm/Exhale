@@ -31,7 +31,13 @@ from exhale.briefing import build_weekly_briefing
 from exhale.connectors.base import RawMessage
 from exhale.connectors.memory import FixtureConnector
 from exhale.coverage import build_family_care_watch
-from exhale.coverage_config import CoverageModelIn, build_family, default_range
+from exhale.coverage_config import (
+    CareAssignmentIn,
+    CoverageModelIn,
+    HandoverPatternIn,
+    build_family,
+    default_range,
+)
 from exhale.credibility import build_coverage
 from exhale.extraction import ExtractionContext
 from exhale.retro_scan import run_incremental_sync, run_retro_scan
@@ -849,6 +855,13 @@ def _care_watch_for(profile: dict) -> dict | None:
     watch = suppress_care_gaps(watch, profile.get("away_periods") or [])
     # Age-triggered questions ride along (asks, never actions — exhale.ages).
     watch["age_prompts"] = age_prompts(model)
+    # Handovers that collide with the holder's own calendar. Not gaps — a gap
+    # says nobody is coming; this says two things the household wrote down
+    # disagree, which is quieter and easier to be caught out by.
+    conflicts: list[dict] = []
+    for engine in family.engines:
+        conflicts.extend(engine.handover_conflicts(start, end))
+    watch["handover_conflicts"] = sorted(conflicts, key=lambda c: c["start"])
     return watch
 
 
@@ -2288,6 +2301,142 @@ def set_coverage_model(
         "schools": {c.recipient.name: c.school.name
                     for c in model.children if c.school},
     }
+
+
+class HandoverRequest(BaseModel):
+    """Who has the child, and when. One-off or standing — never both."""
+
+    caregiver: str
+    #: One-off: an exact stretch.
+    start: datetime | None = None
+    end: datetime | None = None
+    #: Standing: which weekdays, and the hours on each (0=Mon .. 6=Sun).
+    weekdays: list[int] = Field(default_factory=list)
+    start_time: time | None = None
+    end_time: time | None = None
+    first_day: date | None = None
+    last_day: date | None = None
+    note: str = ""
+
+
+def _coverage_model_or_404(family_id: str) -> tuple[dict, CoverageModelIn]:
+    profile = store.profile(family_id)
+    config = profile.get("coverage_model")
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="No coverage model configured. PUT /coverage-model first.",
+        )
+    return config, CoverageModelIn(**config)
+
+
+@app.get("/v1/families/{family_id}/handovers")
+def list_handovers(family_id: str = Depends(require_family_access)) -> dict:
+    """Every stated arrangement for who has the child."""
+
+    _, model = _coverage_model_or_404(family_id)
+    out = []
+    for cg in model.caregivers:
+        for h in cg.handover_patterns:
+            out.append({
+                "handover_id": h.handover_id, "caregiver": cg.name,
+                "kind": "recurring", "weekdays": sorted(h.weekdays),
+                "start_time": h.start.isoformat(), "end_time": h.end.isoformat(),
+                "first_day": h.first_day.isoformat() if h.first_day else None,
+                "last_day": h.last_day.isoformat() if h.last_day else None,
+                "note": h.note,
+            })
+        for a in cg.care_assignments:
+            out.append({
+                "handover_id": a.handover_id, "caregiver": cg.name,
+                "kind": "once", "start": a.start.isoformat(),
+                "end": a.end.isoformat(), "note": a.note,
+            })
+    return {"family_id": family_id, "handovers": out}
+
+
+@app.post("/v1/families/{family_id}/handovers")
+def add_handover(
+    req: HandoverRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """State that someone has the child — the fact the engine could not infer.
+
+    Everything else the coverage model holds is about when a person is *busy*.
+    Without this the only way to answer "who has the child" was to invert
+    busyness, which turned an empty Saturday diary into sixteen hours of
+    promised free time. This is the positive statement, and it is the only
+    thing that opens a window outside school hours.
+    """
+
+    with store.family_lock(family_id):
+        config, model = _coverage_model_or_404(family_id)
+        target = next((c for c in model.caregivers if c.name == req.caregiver), None)
+        if target is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{req.caregiver!r} is not a caregiver in this household. "
+                       f"Known: {', '.join(c.name for c in model.caregivers) or 'none'}.",
+            )
+
+        import uuid as _uuid
+
+        handover_id = f"ho_{_uuid.uuid4().hex[:10]}"
+        recurring = bool(req.weekdays)
+        if recurring:
+            if req.start_time is None or req.end_time is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A recurring handover needs start_time and end_time.")
+            if req.end_time <= req.start_time:
+                raise HTTPException(status_code=400, detail="end_time must be after start_time.")
+            if any(d < 0 or d > 6 for d in req.weekdays):
+                raise HTTPException(status_code=400, detail="weekdays are 0=Mon .. 6=Sun.")
+            target.handover_patterns.append(HandoverPatternIn(
+                weekdays=sorted(set(req.weekdays)), start=req.start_time,
+                end=req.end_time, first_day=req.first_day, last_day=req.last_day,
+                note=req.note, handover_id=handover_id,
+            ))
+        else:
+            if req.start is None or req.end is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A one-off handover needs start and end (or weekdays "
+                           "+ start_time/end_time for a standing one).")
+            if req.end <= req.start:
+                raise HTTPException(status_code=400, detail="end must be after start.")
+            target.care_assignments.append(CareAssignmentIn(
+                start=req.start, end=req.end, note=req.note,
+                handover_id=handover_id,
+            ))
+
+        store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+
+    return {"family_id": family_id, "handover_id": handover_id,
+            "caregiver": req.caregiver, "kind": "recurring" if recurring else "once"}
+
+
+@app.delete("/v1/families/{family_id}/handovers/{handover_id}")
+def remove_handover(
+    handover_id: str, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Drop an arrangement. Windows resting on it go with it, which is the point."""
+
+    with store.family_lock(family_id):
+        config, model = _coverage_model_or_404(family_id)
+        removed = 0
+        for cg in model.caregivers:
+            before = len(cg.handover_patterns) + len(cg.care_assignments)
+            cg.handover_patterns = [
+                h for h in cg.handover_patterns if h.handover_id != handover_id
+            ]
+            cg.care_assignments = [
+                a for a in cg.care_assignments if a.handover_id != handover_id
+            ]
+            removed += before - len(cg.handover_patterns) - len(cg.care_assignments)
+        if removed == 0:
+            raise HTTPException(status_code=404, detail="No such handover.")
+        store.set_profile(family_id, coverage_model=model.model_dump(mode="json"))
+    return {"family_id": family_id, "removed": removed}
 
 
 @app.get("/v1/families/{family_id}/care-gaps")

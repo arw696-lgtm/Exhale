@@ -444,6 +444,43 @@ export async function fetchAway(familyId = DEMO_FAMILY) {
   }
 }
 
+/**
+ * Who has the child, as the household has actually stated it.
+ * Returns null without a coverage model (404) — nothing to arrange yet.
+ */
+export async function fetchHandovers(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/handovers`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** A standing arrangement: weekdays 0=Mon..6=Sun, plus the hours on each. */
+export function addRecurringHandover(caregiver, weekdays, startTime, endTime, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/handovers`, {
+    caregiver,
+    weekdays,
+    start_time: startTime,
+    end_time: endTime,
+  });
+}
+
+/** A one-off: an exact stretch on one day. */
+export function addOneOffHandover(caregiver, start, end, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/handovers`, { caregiver, start, end });
+}
+
+export async function removeHandover(handoverId, familyId = DEMO_FAMILY) {
+  const res = await apiFetch(`/v1/families/${familyId}/handovers/${handoverId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? "Failed");
+  return res.json();
+}
+
 export function addAwayPeriod(label, start, end, familyId = DEMO_FAMILY) {
   return postJson(`/v1/families/${familyId}/away`, { label, start, end });
 }

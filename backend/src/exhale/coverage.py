@@ -158,6 +158,35 @@ class CareAssignment:
     end: datetime
     note: str = ""
     origin: FactOrigin = FactOrigin.USER_CONFIRMED
+    handover_id: str = ""
+
+
+@dataclass(frozen=True)
+class HandoverPattern:
+    """A standing arrangement: "Ali has Stevie Tuesday and Thursday evenings".
+
+    The recurring form of :class:`CareAssignment`, because most households run
+    on a rhythm and nobody is going to type Tuesday in fifty-two times. Bounded
+    by ``first_day``/``last_day`` so an arrangement can end without being
+    deleted — a school-term rota, a summer where a grandparent takes Fridays.
+    """
+
+    weekdays: frozenset[int]  # 0=Mon .. 6=Sun
+    start: time
+    end: time
+    first_day: date | None = None
+    last_day: date | None = None
+    note: str = ""
+    handover_id: str = ""
+
+    def on(self, day: date) -> _Interval | None:
+        if day.weekday() not in self.weekdays:
+            return None
+        if self.first_day is not None and day < self.first_day:
+            return None
+        if self.last_day is not None and day > self.last_day:
+            return None
+        return (datetime.combine(day, self.start), datetime.combine(day, self.end))
 
 
 @dataclass
@@ -176,6 +205,8 @@ class Caregiver:
     #: When this caregiver has the child. Empty until the household says so —
     #: and an empty list means "nobody has said", never "nobody has them".
     care_assignments: list[CareAssignment] = field(default_factory=list)
+    #: Standing arrangements, expanded per day by :meth:`assigned_on`.
+    handover_patterns: list[HandoverPattern] = field(default_factory=list)
 
     def _blocks(self, day: date) -> list[tuple[datetime, datetime, str, FactOrigin]]:
         """Why (and when) this caregiver is unavailable on ``day``."""
@@ -208,6 +239,13 @@ class Caregiver:
             if a.start.date() > day or a.end.date() < day:
                 continue
             lo, hi = max(a.start, span[0]), min(a.end, span[1])
+            if lo < hi:
+                out.append((lo, hi))
+        for pattern in self.handover_patterns:
+            iv = pattern.on(day)
+            if iv is None:
+                continue
+            lo, hi = max(iv[0], span[0]), min(iv[1], span[1])
             if lo < hi:
                 out.append((lo, hi))
         return _union(out)
@@ -366,6 +404,12 @@ class CoverageEngine:
                 covered.append(pc)
         for cg in self.caregivers:
             covered.extend(cg.available_on(day, span))
+            # A stated handover covers even when that person's calendar says
+            # otherwise. It can only ever *remove* gaps, so it cannot introduce
+            # a false alarm — and where the handover and the calendar disagree,
+            # that contradiction is surfaced by handover_conflicts_on rather
+            # than left to masquerade as a gap with the wrong explanation.
+            covered.extend(cg.assigned_on(day, span))
 
         gaps_iv = _subtract([span], _union(covered))
 
@@ -384,6 +428,60 @@ class CoverageEngine:
             day += timedelta(days=1)
         gaps.sort(key=lambda g: g.start)
         return gaps
+
+    # -- handovers that collide with their own calendar ----------------------------
+    def handover_conflicts_on(self, day: date) -> list[dict]:
+        """Where someone is down to have the child and is also booked elsewhere.
+
+        Only findable once handovers exist, and the most useful thing they buy.
+        A gap is "nobody has the child"; this is worse and quieter — *someone*
+        has them on paper, so nothing looks wrong, and the household finds out
+        at six o'clock. Ali has Stevie Tuesday evenings and a work dinner lands
+        on Tuesday: no gap is reported, because the handover says she has him.
+
+        Deliberately not a gap. A gap says nobody is coming; this says two
+        things a person wrote down disagree, and only they can say which one
+        moved.
+        """
+
+        span = (
+            datetime.combine(day, self.recipient.supervised_start),
+            datetime.combine(day, self.recipient.supervised_end),
+        )
+        out: list[dict] = []
+        for cg in self.caregivers:
+            held = cg.assigned_on(day, span)
+            if not held:
+                continue
+            for bs, be, why, origin in cg._blocks(day):
+                for hs, he in held:
+                    lo, hi = max(bs, hs), min(be, he)
+                    if lo >= hi or hi <= self.now:
+                        continue
+                    out.append({
+                        "caregiver": cg.name,
+                        "recipient": self.recipient.name,
+                        "start": max(lo, self.now).isoformat(),
+                        "end": hi.isoformat(),
+                        "clash": why,
+                        "origin": origin.value,
+                        "detail": (
+                            f"{cg.name} is down to have {self.recipient.name} "
+                            f"{hs.strftime('%-I:%M%p').lower()}–"
+                            f"{he.strftime('%-I:%M%p').lower()}, and is {why} "
+                            f"{bs.strftime('%-I:%M%p').lower()}–"
+                            f"{be.strftime('%-I:%M%p').lower()}."
+                        ),
+                    })
+        return out
+
+    def handover_conflicts(self, start_day: date, end_day: date) -> list[dict]:
+        out: list[dict] = []
+        day = start_day
+        while day <= end_day:
+            out.extend(self.handover_conflicts_on(day))
+            day += timedelta(days=1)
+        return sorted(out, key=lambda c: c["start"])
 
     # -- open work windows (the intent side of the same math) ----------------------
     def _caregiver(self, name: str) -> Caregiver:
@@ -816,6 +914,11 @@ def build_family_care_watch(
         "view": "care_watch",
         "recipient": " & ".join(family.recipient_names),
         "recipients": family.recipient_names,
+        # Who could be handed the child. The interface needs the roster to
+        # offer it; without this there is no way to state an arrangement.
+        "caregivers": sorted({
+            cg.name for engine in family.engines for cg in engine.caregivers
+        }),
         "range": {"from": start_day.isoformat(), "to": end_day.isoformat()},
         "summary": {
             "total_gaps": len(gaps),

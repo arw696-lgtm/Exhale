@@ -15,12 +15,14 @@ from datetime import date, datetime, time, timedelta
 from pydantic import BaseModel, Field, model_validator
 
 from exhale.coverage import (
+    CareAssignment,
     Caregiver,
     CalendarEvent,
     CareProgram,
     CareRecipient,
     CoverageEngine,
     FamilyCoverage,
+    HandoverPattern,
     SchoolCalendar,
     WorkPattern,
 )
@@ -44,11 +46,37 @@ class CalendarEventIn(BaseModel):
     origin: FactOrigin = FactOrigin.OBSERVED
 
 
+class CareAssignmentIn(BaseModel):
+    """One stated stretch when this caregiver has the child."""
+
+    start: datetime
+    end: datetime
+    note: str = ""
+    origin: FactOrigin = FactOrigin.USER_CONFIRMED
+    handover_id: str = ""
+
+
+class HandoverPatternIn(BaseModel):
+    """A standing arrangement — "Ali has Stevie Tue/Thu 4pm-8pm"."""
+
+    weekdays: list[int] = Field(description="0=Mon .. 6=Sun")
+    start: time
+    end: time
+    first_day: date | None = None
+    last_day: date | None = None
+    note: str = ""
+    handover_id: str = ""
+
+
 class CaregiverIn(BaseModel):
     name: str
     role: str = "PARENT"
     work_pattern: WorkPatternIn | None = None
     events: list[CalendarEventIn] = Field(default_factory=list)
+    # Who has the child, stated. Never inferred from a gap in someone's diary
+    # — that mistake is what this whole pair of fields exists to correct.
+    care_assignments: list[CareAssignmentIn] = Field(default_factory=list)
+    handover_patterns: list[HandoverPatternIn] = Field(default_factory=list)
 
 
 class SchoolCalendarIn(BaseModel):
@@ -143,12 +171,29 @@ def _event(e: CalendarEventIn) -> CalendarEvent:
     )
 
 
+def _assignment(a: CareAssignmentIn) -> CareAssignment:
+    return CareAssignment(
+        start=_naive(a.start), end=_naive(a.end), note=a.note,
+        origin=a.origin, handover_id=a.handover_id,
+    )
+
+
+def _handover_pattern(h: HandoverPatternIn) -> HandoverPattern:
+    return HandoverPattern(
+        weekdays=frozenset(h.weekdays), start=h.start, end=h.end,
+        first_day=h.first_day, last_day=h.last_day, note=h.note,
+        handover_id=h.handover_id,
+    )
+
+
 def _caregiver(c: CaregiverIn) -> Caregiver:
     return Caregiver(
         name=c.name,
         role=c.role,
         work_pattern=_work_pattern(c.work_pattern) if c.work_pattern else None,
         events=[_event(e) for e in c.events],
+        care_assignments=[_assignment(a) for a in c.care_assignments],
+        handover_patterns=[_handover_pattern(h) for h in c.handover_patterns],
     )
 
 

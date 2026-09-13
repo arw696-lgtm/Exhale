@@ -1,4 +1,5 @@
 import React from "react";
+import HandoversPanel from "./HandoversPanel.jsx";
 import ConnectionsPanel from "./ConnectionsPanel.jsx";
 import CostMeterPanel from "./CostMeterPanel.jsx";
 import HelperInvitePanel from "./HelperInvitePanel.jsx";
@@ -42,6 +43,17 @@ export default function HouseholdScreen({ briefing, familyId, live, onRefresh })
 
       {/* Running costs — the unit-economics instrument (the Milo lesson). */}
       {live && <CostMeterPanel familyId={familyId} />}
+
+      {/* Who has the child — the statement the engine cannot infer, and the
+          only thing that opens a window outside school hours. */}
+      {live && briefing?.care_watch != null && (
+        <HandoversPanel
+          briefing={briefing}
+          familyId={familyId}
+          caregivers={briefing?.care_watch?.caregivers ?? []}
+          onChanged={onRefresh}
+        />
+      )}
 
       {/* Coverage model — the setup form shows until a household is configured. */}
       {live && briefing?.care_watch == null && (

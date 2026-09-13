@@ -94,6 +94,28 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
         </p>
       )}
 
+      {/* Someone is down to have them AND booked elsewhere. Not a gap — a gap
+          says nobody is coming; this says two things the household wrote down
+          disagree, which is quieter and easier to be caught out by. */}
+      {(careWatch.handover_conflicts ?? []).length > 0 && (
+        <div className="mb-4 rounded-2xl border border-amber-text/30 bg-looming-amber/8 p-4">
+          <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-amber-text">
+            Double-booked
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {careWatch.handover_conflicts.map((c, i) => (
+              <li key={i} className="font-micro text-sm text-sanctuary-navy/85">
+                {c.detail}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 font-micro text-xs text-sanctuary-navy/70">
+            Nobody's flagged this as uncovered, because on paper they have it.
+            Worth a text.
+          </p>
+        </div>
+      )}
+
       <ul className="space-y-4">
         {gaps.map((gap) => {
           const dot = DOT[gap.threat_level] ?? DOT.ADVISORY;
