@@ -73,6 +73,8 @@ services:
         # Same-origin: the browser reaches the API at https://DOMAIN/v1/...,
         # which Caddy routes to the api service. No separate API host needed.
         VITE_EXHALE_API: https://${EXHALE_DOMAIN:?set EXHALE_DOMAIN in .env}
+        # Set by scripts/deploy.sh; empty on a hand-run build, which is fine.
+        EXHALE_BUILD_COMMIT: ${EXHALE_BUILD_COMMIT:-}
     restart: unless-stopped
     depends_on:
       - api

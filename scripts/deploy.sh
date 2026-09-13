@@ -28,6 +28,9 @@ fi
 
 echo "[$(date -Is)] deploying: $(git log --oneline -1 "$REMOTE" | head -1)"
 git pull --ff-only --quiet
+# Stamped into the UI (You → Settings → Version) so the phone can confirm
+# which build it is actually running.
+export EXHALE_BUILD_COMMIT="$(git rev-parse --short HEAD)"
 $COMPOSE up -d --build
 docker image prune -f > /dev/null
 echo "[$(date -Is)] deployed $(git rev-parse --short HEAD) — containers:"

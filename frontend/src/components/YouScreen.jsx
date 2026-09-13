@@ -58,6 +58,19 @@ export default function YouScreen({ user, inviteCode, familyId, live, onLogout }
           <span className="text-sanctuary-navy/70">Appearance</span>
           <ThemeToggle />
         </div>
+        {/* Stamped at build time. "Did my deploy reach the phone?" is
+            otherwise indistinguishable from "did the change do nothing?" —
+            especially on an installed home-screen app, which will happily
+            keep running a shell it cached weeks ago. */}
+        <div className="mt-3 flex items-center justify-between border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/70">
+          <span>Version</span>
+          <span className="tabular-nums">
+            {__BUILD_COMMIT__ ? `${__BUILD_COMMIT__} · ` : ""}
+            {new Date(__BUILD_TIME__).toLocaleString(undefined, {
+              month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+            })}
+          </span>
+        </div>
         {onLogout && (
           <button
             onClick={onLogout}
