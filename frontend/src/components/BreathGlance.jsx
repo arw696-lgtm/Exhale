@@ -51,7 +51,9 @@ export default function BreathGlance({
   return (
     <section
       className="relative flex flex-col px-6"
-      style={{ minHeight: "100dvh" }} /* the opening viewport is ONLY the glance */
+      /* the opening viewport is ONLY the glance — minus the status bar the
+         body already padded past, or the fold creeps up from below */
+      style={{ minHeight: "calc(100dvh - env(safe-area-inset-top))" }}
     >
       {/* top bar — household left, theme + logout right */}
       <div className="flex items-center justify-between pt-5 font-micro text-xs text-sanctuary-navy/50">

@@ -2,9 +2,41 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Exhale — Weekly COO Briefing</title>
+    <!-- viewport-fit=cover is what makes env(safe-area-inset-*) resolve to
+         real numbers; without it the tab bar sits under the home indicator
+         once the app is installed to the home screen. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Exhale</title>
     <meta name="color-scheme" content="light dark" />
+
+    <!-- Home-screen install. Exhale is a glance you open for three seconds;
+         living behind a typed URL in a browser tab is most of the reason it
+         doesn't get opened at all. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/favicon.png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Exhale" />
+    <!-- translucent so the breath bleeds to the top edge; the page's own
+         safe-area padding (index.css) keeps content clear of the clock. -->
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta
+      name="theme-color"
+      content="#F4F6F9"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#0C1420"
+      media="(prefers-color-scheme: dark)"
+    />
     <!-- Apply the saved theme before first paint, so there's no light flash. -->
     <script>
       (function () {

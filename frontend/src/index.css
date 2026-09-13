@@ -39,6 +39,9 @@
 
 body {
   margin: 0;
+  /* Installed to the home screen the app runs full-bleed under the clock and
+     the home indicator. Zero in a browser tab, real pixels once installed. */
+  padding-top: env(safe-area-inset-top);
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   /* Pure Breath ground with the faintest sage/amber dawn — calm on both themes. */
   background-color: rgb(var(--canvas));
