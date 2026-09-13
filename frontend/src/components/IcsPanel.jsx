@@ -115,14 +115,14 @@ export default function IcsPanel({ familyId, hasCoverageModel, onChanged }) {
           value={attendees}
           onChange={(e) => setAttendees(e.target.value)}
           placeholder="Who is this calendar for? (e.g. Ali)"
-          className="w-full rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
+          className="w-full rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
         />
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://p.../published.ics"
-            className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
+            className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
           />
           <button
             onClick={doUrlSync}

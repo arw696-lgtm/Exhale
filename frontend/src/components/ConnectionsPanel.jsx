@@ -161,7 +161,7 @@ export default function ConnectionsPanel({ familyId }) {
               value={notifyEmail}
               placeholder="you@example.com"
               onChange={(e) => setNotifyEmail(e.target.value)}
-              className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-1 text-xs text-sanctuary-navy outline-none focus:border-sage-release"
+              className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-1 text-sanctuary-navy outline-none focus:border-sage-release"
             />
             <button
               onClick={saveAlerts}

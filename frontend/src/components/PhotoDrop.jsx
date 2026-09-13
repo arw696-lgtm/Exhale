@@ -200,7 +200,7 @@ export default function PhotoDrop({ familyId, knownChildren = [], onChanged }) {
             <select
               value={schoolChild}
               onChange={(e) => setSchoolChild(e.target.value)}
-              className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy focus:border-sage-release focus:outline-none"
+              className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sanctuary-navy focus:border-sage-release focus:outline-none"
             >
               {knownChildren.map((name) => (
                 <option key={name} value={name}>

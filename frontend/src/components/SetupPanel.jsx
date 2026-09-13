@@ -151,7 +151,7 @@ export default function SetupPanel({ familyId, onSaved }) {
                 value={cg.role}
                 onChange={(e) => setCg(i, { role: e.target.value })}
                 aria-label={`Role of caregiver ${i + 1}`}
-                className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-1.5 font-micro text-sm text-sanctuary-navy outline-none focus:border-sage-release"
+                className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-1.5 font-micro text-sanctuary-navy outline-none focus:border-sage-release"
               >
                 {ROLES.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>

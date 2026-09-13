@@ -171,7 +171,7 @@ export default function AskExhale({ familyId, live, onChanged }) {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Do I have any free time today?"
-            className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
+            className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
           />
           <button
             type="submit"

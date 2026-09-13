@@ -285,7 +285,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder='e.g. "See Mark", "Ali’s dermatology appointment"'
-            className="min-w-48 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-1.5 font-micro text-sm text-sanctuary-navy outline-none focus:border-sage-release"
+            className="min-w-48 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-1.5 font-micro text-sanctuary-navy outline-none focus:border-sage-release"
           />
           <button type="button" aria-pressed={kind === "standing"}
                   onClick={() => setKind(kind === "standing" ? "one_off" : "standing")}
@@ -296,7 +296,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
           <select value={context} onChange={(e) => setContext(e.target.value)}
                   aria-label="What kind of time does this need?"
                   title="Just you (child-free), the two of you together, or while you've got the kids."
-                  className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-1.5 font-micro text-xs font-medium text-sanctuary-navy/70 outline-none focus:border-sage-release">
+                  className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-1.5 font-micro font-medium text-sanctuary-navy/70 outline-none focus:border-sage-release">
             <option value="alone">just me</option>
             <option value="together">🤝 together</option>
             <option value="on_duty">🏠 with kids</option>

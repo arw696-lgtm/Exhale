@@ -174,7 +174,7 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="The house needs…"
-            className="flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-1.5 font-micro text-sm text-sanctuary-navy outline-none focus:border-sage-release"
+            className="flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-1.5 font-micro text-sanctuary-navy outline-none focus:border-sage-release"
           />
           <button
             type="submit"

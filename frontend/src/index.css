@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* iOS zooms the entire page when a focused control renders under 16px — and
+   it does not zoom back out. The app then reads as "wider than the screen",
+   and you pinch and pan to get back. Every text field here was 13–15px, so
+   the very first tap on the login screen left the app zoomed and adrift.
+   16px is the floor that suppresses it; note a utility class would beat this
+   rule, so controls must not carry text-xs/text-sm (guarded in the suite). */
+@layer base {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Brand palette as RGB channels so every token flips in one place. The whole
    app is styled through these (via the Tailwind names in tailwind.config.js);
    nothing hard-codes a hex, so light ↔ dark is a token swap, not a rewrite. */
@@ -49,6 +63,14 @@
 
 body {
   margin: 0;
+  /* Real household mail carries strings no phone is wide enough for: a school
+     district sender address, a published .ics link, a 90-character subject.
+     One of them widens the page and the whole app has to be pinched and
+     panned. `anywhere` rather than `break-word` — only `anywhere` shrinks an
+     element's min-content width, and that intrinsic size is what was actually
+     forcing the page open (measured: 471px of content on a 320px screen).
+     Deliberate `truncate` / `whitespace-nowrap` still win where they're set. */
+  overflow-wrap: anywhere;
   /* Installed to the home screen the app runs full-bleed under the clock and
      the home indicator. Zero in a browser tab, real pixels once installed. */
   padding-top: env(safe-area-inset-top);
@@ -63,28 +85,35 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The breath — a ball that fills and empties. The thesis, made literal.
-   It was a blurred radial gradient fading its opacity, which read as a
-   smudge rather than a breath; a solid sphere that visibly grows and
-   shrinks is legible at a glance and holds its edge at any size. */
+/* The breath — a soft glow that swells and settles. The thesis, made literal.
+   Not a ball. It carries no edge, no rim, no drop shadow and no off-centre
+   highlight: any of those turn it into a solid object sitting on the page,
+   and the app is not about an object. It fades to nothing at its own
+   boundary, and the ONLY thing that changes is its size.
+
+   Its opacity is deliberately constant. The first version breathed by fading
+   in and out, which read as a light flickering rather than a breath — the
+   eye tracks a change in size far better than a change in brightness. The
+   scale range is wide (0.7 → 1) for the same reason: a shape with no hard
+   edge needs a bigger swing before the growth is legible at a glance. */
 @keyframes exhale-breathe {
-  0%, 100% { transform: scale(0.86); }
+  0%, 100% { transform: scale(0.7); }
   50%      { transform: scale(1); }
 }
 .breath-orb {
   border-radius: 9999px;
-  /* The glance is a flex column — without this a short viewport shrinks the
-     orb's height and the ball breathes as an egg. */
+  /* The glance is a flex column — without this a short viewport squashes the
+     glow's height and it breathes as an oval. */
   flex: none;
-  /* A lit sphere: bright where the light falls, deepening to the rim. */
+  /* Centred, so the light is even and reads flat rather than spherical, and
+     transparent well before the edge so there is nothing to see the rim of. */
   background:
-    radial-gradient(circle at 38% 34%,
-      rgb(var(--sage) / 0.95) 0%,
-      rgb(var(--sage) / 0.85) 42%,
-      rgb(var(--sage) / 0.55) 72%,
-      rgb(var(--sage) / 0.35) 100%);
-  box-shadow: 0 0 0 1px rgb(var(--sage) / 0.28),
-              0 18px 40px rgb(var(--sage) / 0.30);
+    radial-gradient(circle,
+      rgb(var(--sage) / 0.50) 0%,
+      rgb(var(--sage) / 0.38) 32%,
+      rgb(var(--sage) / 0.18) 58%,
+      rgb(var(--sage) / 0.05) 76%,
+      transparent 88%);
   animation: exhale-breathe 7s ease-in-out infinite;
   transform-origin: center;
 }

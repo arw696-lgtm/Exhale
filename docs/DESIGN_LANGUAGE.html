@@ -100,20 +100,19 @@
                color: rgb(var(--ink) / .70); font-family: "Inter Tight", sans-serif; margin-bottom: 12px; }
 
   @keyframes exhale-breathe {
-    0%, 100% { transform: scale(0.86); }
+    0%, 100% { transform: scale(0.7); }
     50%      { transform: scale(1); }
   }
   .breath-orb {
-    width: 96px; height: 96px; border-radius: 50%;
-    flex: none;  /* a breath that a flex parent can squash is an egg, not a ball */
+    width: 132px; height: 132px; border-radius: 50%;
+    flex: none;  /* a breath a flex parent can squash is an oval, not a breath */
     background:
-      radial-gradient(circle at 38% 34%,
-        rgb(var(--sage) / 0.95) 0%,
-        rgb(var(--sage) / 0.85) 42%,
-        rgb(var(--sage) / 0.55) 72%,
-        rgb(var(--sage) / 0.35) 100%);
-    box-shadow: 0 0 0 1px rgb(var(--sage) / 0.28),
-                0 18px 40px rgb(var(--sage) / 0.30);
+      radial-gradient(circle,
+        rgb(var(--sage) / 0.50) 0%,
+        rgb(var(--sage) / 0.38) 32%,
+        rgb(var(--sage) / 0.18) 58%,
+        rgb(var(--sage) / 0.05) 76%,
+        transparent 88%);
     animation: exhale-breathe 7s ease-in-out infinite;
     transform-origin: center;
   }
@@ -328,18 +327,22 @@
         <div style="display:flex;align-items:center;gap:20px">
           <div class="breath-orb"></div>
           <p style="font-size:13px;line-height:1.55;color:rgb(var(--ink)/.70);margin:0">
-            A <b>solid lit sphere</b> that fills and empties, scaling 0.86 → 1 over a
+            A <b>soft glow that swells and settles</b>, scaling 0.7 → 1 over a
             <b>7-second</b> ease-in-out cycle — the cadence of a calm human breath.
             It is the app's only ambient animation.<br /><br />
-            <b>v3:</b> it used to be a transparent radial glow fading its opacity, which
-            read as a smudge rather than a breath — an edgeless shape has nothing to
-            measure its own growth against. A sphere that holds its edge does, at any
-            size. The only place the soft form survives is <i>behind</i> the week header,
-            where text sits on top and an opaque ball would fight it.</p>
+            <b>It is deliberately not a ball.</b> No edge, no rim, no drop shadow, no
+            off-centre highlight — each of those turns it into a solid object sitting on
+            the page, and the app is not about an object. It fades to nothing well inside
+            its own bounds, so there is no boundary to see.<br /><br />
+            <b>Only the size changes.</b> The opacity is held constant: the first version
+            breathed by fading in and out, which read as a light flickering rather than a
+            breath. The eye tracks a change in size far better than a change in
+            brightness. The scale swing is wide for the same reason — a shape with no
+            hard edge needs a bigger change before the growth is legible at a glance.</p>
         </div>
         <pre style="margin:14px 0 0">@keyframes exhale-breathe {
-  0%, 100% { transform: scale(0.86); }
-  50%      { transform: scale(1);    }
+  0%, 100% { transform: scale(0.7); }
+  50%      { transform: scale(1);   }
 }
 .breath-orb { animation: exhale-breathe 7s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {

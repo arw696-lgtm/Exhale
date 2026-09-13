@@ -172,14 +172,14 @@ export default function AwayPanel({ familyId, onChanged }) {
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Where to? (optional)"
-          className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
+          className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
         />
         <input
           type="date"
           value={start}
           onChange={(e) => setStart(e.target.value)}
           aria-label="First day away"
-          className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-2 font-micro text-sm text-sanctuary-navy focus:border-sage-release focus:outline-none"
+          className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-2 font-micro text-sanctuary-navy focus:border-sage-release focus:outline-none"
         />
         <span className="font-micro text-xs text-sanctuary-navy/70">to</span>
         <input
@@ -187,7 +187,7 @@ export default function AwayPanel({ familyId, onChanged }) {
           value={end}
           onChange={(e) => setEnd(e.target.value)}
           aria-label="Last day away"
-          className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-2 font-micro text-sm text-sanctuary-navy focus:border-sage-release focus:outline-none"
+          className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-2 font-micro text-sanctuary-navy focus:border-sage-release focus:outline-none"
         />
         <button
           onClick={add}

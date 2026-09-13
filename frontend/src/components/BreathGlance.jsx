@@ -83,10 +83,12 @@ export default function BreathGlance({
 
       {/* the glance — centered breath, tenor, and only what needs you */}
       <div className="flex flex-1 flex-col items-center justify-center text-center">
-        {/* The breath: a solid ball that fills and empties. Styling lives in
-            index.css (.breath-orb) — an inline background here would override
-            it and put the old smudge back. */}
-        <div aria-hidden="true" className="breath-orb h-44 w-44 sm:h-52 sm:w-52" />
+        {/* The breath: a soft glow that swells and settles — no ball, no edge.
+            Styling lives in index.css (.breath-orb); an inline background here
+            would override it. The box is generous because the glow goes
+            transparent well inside its own bounds and then shrinks to 0.7 of
+            that, so the element is always larger than the light it shows. */}
+        <div aria-hidden="true" className="breath-orb h-64 w-64 sm:h-72 sm:w-72" />
 
         <p className="mt-7 font-interface text-[11px] font-semibold uppercase tracking-[0.2em] text-sanctuary-navy/70">
           {timeLabel()}
