@@ -103,7 +103,10 @@ class ForgettingEngine:
     """Traverses a :class:`KnowledgeGraph` to surface unresolved dependency gaps."""
 
     # Obligation sub-types that mean "already handled" — such nodes are skipped.
-    _RESOLVED_STATUSES = {"CLEAR", "COMPLETED", "RESOLVED", "CONFIRMED"}
+    # NOT_RELEVANT: cleared as a company's notification rather than the
+    # household's business (exhale.cleanup) — closed, but never "done".
+    _RESOLVED_STATUSES = {"CLEAR", "COMPLETED", "RESOLVED", "CONFIRMED",
+                          "NOT_RELEVANT"}
 
     def __init__(self, graph: KnowledgeGraph) -> None:
         self.graph = graph

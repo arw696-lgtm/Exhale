@@ -22,7 +22,7 @@ from exhale import templates
 from exhale.forgetting_engine import DependencyGap, ForgettingEngine, ThreatLevel
 from exhale.graph import EdgeType, KnowledgeGraph, NodeType
 
-_RESOLVED = {"CLEAR", "COMPLETED", "RESOLVED", "CONFIRMED"}
+_RESOLVED = {"CLEAR", "COMPLETED", "RESOLVED", "CONFIRMED", "NOT_RELEVANT"}
 
 
 class ActionStage(str, Enum):

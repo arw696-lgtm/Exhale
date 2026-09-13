@@ -1544,6 +1544,42 @@ def get_unattributed(family_id: str = Depends(require_family_access)) -> dict:
             "known_children": _known_children(profile)}
 
 
+@app.get("/v1/families/{family_id}/cleanup/retail")
+def preview_retail_cleanup(family_id: str = Depends(require_family_access)) -> dict:
+    """Committed obligations that read as a company's notification.
+
+    A preview only. Removing something from the graph fails dangerously —
+    a wrong call makes a real obligation vanish silently — so the sweep
+    shows its work and a person taps (see exhale.cleanup).
+    """
+
+    from exhale.cleanup import find_committed_noise
+
+    items = find_committed_noise(store, family_id)
+    return {"family_id": family_id, "count": len(items), "items": items}
+
+
+class RetailCleanupRequest(BaseModel):
+    obligation_node_ids: list[str]
+
+
+@app.post("/v1/families/{family_id}/cleanup/retail")
+def apply_retail_cleanup(
+    req: RetailCleanupRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Close the named obligations as NOT_RELEVANT.
+
+    Nothing is deleted: properties and ledger entries are untouched, only
+    the status changes, and it is never logged as a win — clearing junk is
+    not an accomplishment.
+    """
+
+    from exhale.cleanup import clear_committed_noise
+
+    cleared = clear_committed_noise(store, family_id, req.obligation_node_ids[:500])
+    return {"family_id": family_id, "cleared": cleared}
+
+
 class LeaveAloneRequest(BaseModel):
     extraction_ids: list[str]
 

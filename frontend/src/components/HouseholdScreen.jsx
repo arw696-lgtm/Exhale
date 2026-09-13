@@ -6,6 +6,7 @@ import LearningScoreboard from "./LearningScoreboard.jsx";
 import AwayPanel from "./AwayPanel.jsx";
 import IcsPanel from "./IcsPanel.jsx";
 import PhotoDrop from "./PhotoDrop.jsx";
+import RetailCleanupPanel from "./RetailCleanupPanel.jsx";
 import SetupPanel from "./SetupPanel.jsx";
 import UnattributedPanel from "./UnattributedPanel.jsx";
 
@@ -46,6 +47,7 @@ export default function HouseholdScreen({ briefing, familyId, live, onRefresh })
       {live && briefing?.care_watch == null && (
         <SetupPanel familyId={familyId} onSaved={onRefresh} />
       )}
+      {live && <RetailCleanupPanel familyId={familyId} onChanged={onRefresh} />}
       {live && <UnattributedPanel familyId={familyId} onChanged={onRefresh} />}
       {live && (
         <PhotoDrop

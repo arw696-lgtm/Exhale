@@ -549,3 +549,20 @@ export function leaveUnattributedAlone(extractionIds, familyId = DEMO_FAMILY) {
     extraction_ids: extractionIds,
   });
 }
+
+// --- retail cleanup (clear committed notices) ---------------------------------
+export async function fetchRetailCleanup(familyId = DEMO_FAMILY) {
+  try {
+    const res = await apiFetch(`/v1/families/${familyId}/cleanup/retail`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export function applyRetailCleanup(obligationNodeIds, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/cleanup/retail`, {
+    obligation_node_ids: obligationNodeIds,
+  });
+}
