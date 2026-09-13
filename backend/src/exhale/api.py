@@ -822,6 +822,7 @@ def _briefing_for(family_id: str) -> dict:
         waiting_on=build_waiting_watch(waiting_items) if waiting_items else None,
         handled=handled_this_week(profile),
         time_for_what_matters=_time_for_what_matters(family_id, profile),
+        artifacts_read=len(store.ledger(family_id)),
     )
     # Vacation mode: when the family is away today, the glance says so
     # instead of inventing needs. Deadlines are untouched — a form due

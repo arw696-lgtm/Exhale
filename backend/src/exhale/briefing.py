@@ -41,6 +41,7 @@ def build_weekly_briefing(
     waiting_on: dict | None = None,
     handled: dict | None = None,
     time_for_what_matters: dict | None = None,
+    artifacts_read: int | None = None,
 ) -> dict:
     """Assemble the Weekly COO Briefing payload from a family's graph.
 
@@ -98,6 +99,14 @@ def build_weekly_briefing(
             "advisory_count": len(advisory),
             "total_gaps": live,
             "passed_count": len(passed),
+            # How many artifacts the household has ever read. The difference
+            # between "we looked and the week is clear" and "we have not
+            # looked" is invisible in every count above — both are zero — and
+            # a calm report from an empty system is the one lie an instrument
+            # like this cannot afford. ``None`` when the caller has no ledger
+            # to count (the wall feed, a test), which reads as "unknown"
+            # rather than "nothing".
+            "artifacts_read": artifacts_read,
         },
         "critical_threats": critical,
         "dependency_watch": dependency_watch,
