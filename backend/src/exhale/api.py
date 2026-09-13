@@ -1488,32 +1488,82 @@ class AssignRequest(BaseModel):
 
 @app.get("/v1/families/{family_id}/unattributed")
 def get_unattributed(family_id: str = Depends(require_family_access)) -> dict:
-    """Items in the graph that don't say who they're for.
+    """Photo-derived items that don't say who they're for, grouped by photo.
 
-    A photo of one child's schedule yields items with no person when the
-    image never names them. Re-uploading can't fix it — the same bytes are
-    fingerprinted as duplicates — so they're assigned in place instead.
+    Only PHOTOS are offered for bulk attribution, and only one photo at a
+    time. A schedule photo is one child's season, so "all of these are
+    Stevie's" is a safe, true statement about it. The inbox is not: most
+    email items legitimately have no child (a bank statement, a work
+    meeting, a Target pickup), and a household-wide "assign everything"
+    button would file a parent's work under a kid and poison the coverage
+    reasoning. Absence of a name is usually the correct answer, not a gap.
+
+    Items a person has explicitly left alone (``unattributed_ok``) stop
+    being asked about.
     """
+
+    from collections import defaultdict
 
     from exhale.auto_sync import _known_children
     from exhale.routing import RecordStatus
 
     profile = store.profile(family_id)
     dismissed = _dismissed_ids(family_id)
-    items = [
-        {"extraction_id": e.extraction_id,
-         "title": e.payload.extracted_event,
-         "event_date": e.payload.event_date.isoformat(),
-         "source": e.payload.source_document_name}
-        for e in store.ledger(family_id)
-        if e.payload.target_person_name is None
-        and e.superseded_by is None
-        and e.extraction_id not in dismissed
-        and e.decision.status is not RecordStatus.REJECTED
-    ]
-    items.sort(key=lambda i: i["event_date"])
-    return {"family_id": family_id, "count": len(items), "items": items,
+    left_alone = set(profile.get("unattributed_ok") or [])
+
+    groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for e in store.ledger(family_id):
+        ref = e.payload.source_reference or ""
+        if not ref.startswith("photo_"):
+            continue  # inbox items are not bulk-assignable; see docstring
+        if (e.payload.target_person_name is not None
+                or e.superseded_by is not None
+                or e.extraction_id in dismissed
+                or e.extraction_id in left_alone
+                or e.decision.status is RecordStatus.REJECTED):
+            continue
+        # Keyed on the photo itself, never its label: one image is one
+        # batch even when its items carry different document names.
+        groups[ref].append({
+            "extraction_id": e.extraction_id,
+            "title": e.payload.extracted_event,
+            "event_date": e.payload.event_date.isoformat(),
+            "source": e.payload.source_document_name or "A photo",
+        })
+
+    out = []
+    for ref, items in groups.items():
+        items.sort(key=lambda i: i["event_date"])
+        out.append({"source_reference": ref,
+                    "source": items[0].get("source") or "A photo",
+                    "count": len(items), "items": items})
+    out.sort(key=lambda g: g["items"][0]["event_date"])
+    return {"family_id": family_id,
+            "count": sum(g["count"] for g in out),
+            "groups": out,
             "known_children": _known_children(profile)}
+
+
+class LeaveAloneRequest(BaseModel):
+    extraction_ids: list[str]
+
+
+@app.post("/v1/families/{family_id}/unattributed/leave-alone")
+def leave_unattributed_alone(
+    req: LeaveAloneRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """'These aren't anyone's' — stop asking about this batch.
+
+    Not a dismissal: the items stay real and tracked, they just keep the
+    honest answer that no child owns them.
+    """
+
+    with store.family_lock(family_id):
+        profile = store.profile(family_id)
+        ok = set(profile.get("unattributed_ok") or [])
+        ok.update(req.extraction_ids[:500])
+        store.set_profile(family_id, unattributed_ok=sorted(ok))
+    return {"family_id": family_id, "left_alone": len(req.extraction_ids)}
 
 
 @app.post("/v1/families/{family_id}/unattributed/assign")

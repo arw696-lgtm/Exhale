@@ -1,20 +1,25 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { assignUnattributed, fetchUnattributed } from "../data/api.js";
+import {
+  assignUnattributed,
+  fetchUnattributed,
+  leaveUnattributedAlone,
+} from "../data/api.js";
 
 /**
- * "Who is this for?" — items already in the graph with nobody attached.
+ * "Who is this for?" — one card per schedule photo.
  *
- * A photo of one child's season schedule yields events the image never names
- * a person in. Re-uploading can't fix it (identical bytes are fingerprinted
- * as duplicates), so they're assigned where they sit — one tap per child,
- * applied to the whole batch.
+ * Deliberately scoped to photos, one batch at a time. A season schedule is
+ * one child's, so "all of these are Stevie's" is a true statement about it.
+ * The inbox is not: a bank statement and a parent's work meeting have no
+ * child, and that is the correct answer rather than a gap to fill. An
+ * earlier version pooled everything behind a single button and would have
+ * filed 227 mixed items — work meetings included — under a kid.
  *
- * Silent when there's nothing to assign: an empty state here would just be
- * a chore-shaped hole on the screen.
+ * Silent when there's nothing to ask about.
  */
 export default function UnattributedPanel({ familyId, onChanged }) {
   const [data, setData] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(null); // source_reference being acted on
   const [done, setDone] = useState(null);
 
   const load = useCallback(async () => {
@@ -25,19 +30,19 @@ export default function UnattributedPanel({ familyId, onChanged }) {
     load();
   }, [load]);
 
-  const items = data?.items ?? [];
+  const groups = data?.groups ?? [];
   const children = data?.known_children ?? [];
-  if (items.length === 0 || children.length === 0) return null;
+  if (groups.length === 0 || children.length === 0) return null;
 
-  const assign = async (person) => {
-    setBusy(true);
+  const act = async (group, fn, message) => {
+    setBusy(group.source_reference);
     try {
-      const body = await assignUnattributed(items.map((i) => i.extraction_id), person, familyId);
-      setDone({ person, count: body.assigned });
+      await fn(group.items.map((i) => i.extraction_id));
+      setDone(message);
       await load();
       onChanged?.();
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
@@ -48,41 +53,73 @@ export default function UnattributedPanel({ familyId, onChanged }) {
           Who is this for?
         </h2>
       </header>
-      <p className="mb-3 font-micro text-sm text-sanctuary-navy/60">
-        {items.length} item{items.length === 1 ? "" : "s"} came in without a
-        name on them — usually a schedule photo that never said whose it was.
-        Assign them and Exhale can reason about who needs to be where.
+      <p className="mb-4 font-micro text-sm text-sanctuary-navy/60">
+        These came off a photo that never said whose schedule it was. Name the
+        batch and Exhale can reason about who needs to be where.
       </p>
 
-      <ul className="mb-4 max-h-40 space-y-1 overflow-y-auto">
-        {items.slice(0, 12).map((i) => (
-          <li key={i.extraction_id} className="font-micro text-xs text-sanctuary-navy/55">
-            {i.title}
-          </li>
-        ))}
-        {items.length > 12 && (
-          <li className="font-micro text-xs text-sanctuary-navy/40">
-            …and {items.length - 12} more
-          </li>
-        )}
-      </ul>
+      <div className="space-y-4">
+        {groups.map((g) => (
+          <div key={g.source_reference} className="rounded-2xl bg-pure-breath p-4">
+            <p className="font-micro text-sm font-medium text-sanctuary-navy/85">
+              {g.source}
+              <span className="ml-2 font-normal text-sanctuary-navy/45">
+                {g.count} item{g.count === 1 ? "" : "s"}
+              </span>
+            </p>
+            <ul className="mt-2 space-y-0.5">
+              {g.items.slice(0, 4).map((i) => (
+                <li
+                  key={i.extraction_id}
+                  className="font-micro text-xs text-sanctuary-navy/55"
+                >
+                  {i.title}
+                </li>
+              ))}
+              {g.count > 4 && (
+                <li className="font-micro text-xs text-sanctuary-navy/40">
+                  …and {g.count - 4} more
+                </li>
+              )}
+            </ul>
 
-      <div className="flex flex-wrap gap-2">
-        {children.map((name) => (
-          <button
-            key={name}
-            onClick={() => assign(name)}
-            disabled={busy}
-            className="rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-1.5 font-micro text-sm font-medium text-sanctuary-navy transition hover:bg-sage-release/20 disabled:opacity-50"
-          >
-            {busy ? "…" : `All ${name}'s`}
-          </button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {children.map((name) => (
+                <button
+                  key={name}
+                  onClick={() =>
+                    act(
+                      g,
+                      (ids) => assignUnattributed(ids, name, familyId),
+                      `Filed ${g.count} under ${name}.`
+                    )
+                  }
+                  disabled={busy === g.source_reference}
+                  className="rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-1.5 font-micro text-sm font-medium text-sanctuary-navy transition hover:bg-sage-release/20 disabled:opacity-50"
+                >
+                  {busy === g.source_reference ? "…" : `All ${name}'s`}
+                </button>
+              ))}
+              <button
+                onClick={() =>
+                  act(
+                    g,
+                    (ids) => leaveUnattributedAlone(ids, familyId),
+                    "Left as they are."
+                  )
+                }
+                disabled={busy === g.source_reference}
+                className="rounded-full border border-sanctuary-navy/15 px-4 py-1.5 font-micro text-sm text-sanctuary-navy transition hover:bg-surface disabled:opacity-50"
+              >
+                Not one person's
+              </button>
+            </div>
+          </div>
         ))}
       </div>
+
       {done && (
-        <p className="mt-3 font-micro text-xs text-sage-release">
-          Filed {done.count} under {done.person}.
-        </p>
+        <p className="mt-3 font-micro text-xs text-sage-release">{done}</p>
       )}
     </section>
   );

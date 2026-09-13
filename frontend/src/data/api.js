@@ -543,3 +543,9 @@ export function assignUnattributed(extractionIds, person, familyId = DEMO_FAMILY
     person,
   });
 }
+
+export function leaveUnattributedAlone(extractionIds, familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/unattributed/leave-alone`, {
+    extraction_ids: extractionIds,
+  });
+}

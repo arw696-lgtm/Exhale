@@ -1111,6 +1111,9 @@ def test_assign_unattributed_items_in_place():
             "event_date": (date.today() + timedelta(days=i + 2)).isoformat(),
             "action_required": False,
             "confidence_score": 0.95,
+            # Only photo-sourced items are offered for attribution.
+            "source_reference": "photo_season",
+            "source_document_name": "season schedule",
         })
         ids.append(r.json()["extraction_id"])
 
@@ -1147,3 +1150,80 @@ def test_assign_skips_already_superseded_without_failing_the_batch():
                         json={"extraction_ids": [eid, "ext_nope"], "person": "Stevie"})
     assert again.status_code == 200
     assert again.json()["skipped"] == 2
+
+
+
+def test_unattributed_offers_photos_only_never_the_inbox():
+    """The bulk button must never reach a parent's work meeting or a bank
+    statement. A schedule photo is one child's season; the inbox is not."""
+
+    from datetime import date, timedelta
+
+    fam = "family_unattr_scope"
+    soon = (date.today() + timedelta(days=5)).isoformat()
+    # Two items off one schedule photo, and three off the inbox.
+    for title, ref in [
+        ("Foxes (Purple) Practice", "photo_abc123"),
+        ("Foxes (Purple) vs Bears", "photo_abc123"),
+        ("Meeting with Hennepin County Right-of-Way team", "gmail_m1"),
+        ("Your Statement is Ready", "gmail_m2"),
+        ("Pick up Target Drive Up order", "gmail_m3"),
+    ]:
+        client.post(f"/v1/families/{fam}/extractions", json={
+            "extracted_event": title, "event_date": soon,
+            "action_required": False, "confidence_score": 0.95,
+            "source_reference": ref, "source_document_name": title,
+        })
+
+    body = client.get(f"/v1/families/{fam}/unattributed").json()
+    assert body["count"] == 2, "only the photo's items are offered"
+    titles = [i["title"] for g in body["groups"] for i in g["items"]]
+    assert all("Foxes" in x for x in titles)
+    assert "Your Statement is Ready" not in titles
+    assert len(body["groups"]) == 1
+    assert body["groups"][0]["source_reference"] == "photo_abc123"
+
+
+def test_unattributed_groups_one_batch_per_photo():
+    """Two kids' schedules uploaded together must not share one button."""
+
+    from datetime import date, timedelta
+
+    fam = "family_unattr_groups"
+    soon = (date.today() + timedelta(days=6)).isoformat()
+    for title, ref in [("Soccer practice", "photo_stevie"),
+                       ("Ballet", "photo_other")]:
+        client.post(f"/v1/families/{fam}/extractions", json={
+            "extracted_event": title, "event_date": soon,
+            "action_required": False, "confidence_score": 0.95,
+            "source_reference": ref, "source_document_name": title,
+        })
+    groups = client.get(f"/v1/families/{fam}/unattributed").json()["groups"]
+    assert len(groups) == 2
+    assert {g["count"] for g in groups} == {1}
+
+
+def test_leaving_a_batch_alone_stops_the_asking():
+    """'These aren't anyone's' is a real answer — and it sticks."""
+
+    from datetime import date, timedelta
+
+    fam = "family_unattr_leave"
+    soon = (date.today() + timedelta(days=4)).isoformat()
+    client.post(f"/v1/families/{fam}/extractions", json={
+        "extracted_event": "Team fundraiser flyer", "event_date": soon,
+        "action_required": False, "confidence_score": 0.95,
+        "source_reference": "photo_zzz", "source_document_name": "flyer",
+    })
+    body = client.get(f"/v1/families/{fam}/unattributed").json()
+    ids = [i["extraction_id"] for g in body["groups"] for i in g["items"]]
+    assert ids
+
+    r = client.post(f"/v1/families/{fam}/unattributed/leave-alone",
+                    json={"extraction_ids": ids})
+    assert r.status_code == 200
+    after = client.get(f"/v1/families/{fam}/unattributed").json()
+    assert after["count"] == 0
+    # The items are still real and tracked — left alone, not dismissed.
+    ledger = client.get(f"/v1/families/{fam}/ledger").json()["entries"]
+    assert any(e["extracted_event"] == "Team fundraiser flyer" for e in ledger)
