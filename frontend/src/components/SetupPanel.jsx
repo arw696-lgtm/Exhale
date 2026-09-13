@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Icon from "./Icon.jsx";
 import { saveCoverageModel } from "../data/api.js";
 
 /**
@@ -93,8 +94,9 @@ export default function SetupPanel({ familyId, onSaved }) {
   return (
     <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
       <header className="mb-3">
-        <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-          🏠 Set Up Your Household
+        <h2 className="flex items-center gap-2 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+          <Icon name="home" className="h-4 w-4 text-sage-text" />
+          Set Up Your Household
         </h2>
       </header>
       <p className="mb-4 font-micro text-sm text-sanctuary-navy/70">
@@ -106,7 +108,7 @@ export default function SetupPanel({ familyId, onSaved }) {
       <form onSubmit={submit} className="space-y-4 font-micro text-sm">
         <div>
           <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/70">
-            Children who need supervision
+            Who needs looking after
           </label>
           <div className="space-y-2">
             {children.map((child, i) => (
@@ -135,7 +137,7 @@ export default function SetupPanel({ familyId, onSaved }) {
           </button>
           <p className="mt-1.5 text-xs text-sanctuary-navy/70">
             Birthdate is optional — it lets Exhale ask the right questions as
-            kids grow (and look up their grade), never decide for you.
+            they grow (and look up their grade), never decide for you.
           </p>
         </div>
 

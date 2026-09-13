@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Icon from "./Icon.jsx";
 import {
   createHelperInvite,
   fetchHelpers,
@@ -64,8 +65,9 @@ export default function HelperInvitePanel({ familyId }) {
   return (
     <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
       <header className="mb-3">
-        <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-          🧑‍🍼 Helpers
+        <h2 className="flex items-center gap-2 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+          <Icon name="users" className="h-4 w-4 text-sage-text" />
+          Helpers
         </h2>
       </header>
       <p className="mb-4 font-micro text-sm text-sanctuary-navy/70">

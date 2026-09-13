@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import Icon from "./Icon.jsx";
 import {
   addAwayPeriod,
   dismissTripSuggestion,
@@ -88,14 +89,15 @@ export default function AwayPanel({ familyId, onChanged }) {
   return (
     <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
       <header className="mb-3">
-        <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-          ✈️ Away
+        <h2 className="flex items-center gap-2 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+          <Icon name="plane" className="h-4 w-4 text-sage-text" />
+          Away
         </h2>
       </header>
 
       <p className="mb-3 font-micro text-sm text-sanctuary-navy/70">
         Tell Exhale when the family's away together. Coverage stops asking who's
-        watching the kids, weekly contributions pause, and the calendar feed
+        covering at home, weekly contributions pause, and the calendar feed
         shows the trip. Deadlines still stand — that's when they're easiest to
         forget.
       </p>
@@ -108,7 +110,8 @@ export default function AwayPanel({ familyId, onChanged }) {
           className="mb-3 rounded-2xl border border-sage-release/30 bg-sage-release/8 p-4"
         >
           <p className="font-micro text-sm text-sanctuary-navy/85">
-            ✈️ Looks like a trip:{" "}
+            <Icon name="plane" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />
+            Looks like a trip:{" "}
             <span className="font-semibold">{prettyRange(s)}</span>
             <span className="text-sanctuary-navy/70">
               {" "}— {s.artifact_count} travel booking{s.artifact_count === 1 ? "" : "s"}

@@ -1,4 +1,5 @@
 import React from "react";
+import Icon from "./Icon.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
 import { weekTenor } from "../data/tenor.js";
 
@@ -98,7 +99,8 @@ export default function BreathGlance({
         {/* Vacation mode — the family is together, elsewhere. */}
         {briefing.away && (
           <p className="mt-2 rounded-full bg-sage-release/12 px-4 py-1 font-micro text-xs font-medium text-sage-text">
-            ✈️ {briefing.away.label} — back{" "}
+            <Icon name="plane" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />
+            {briefing.away.label} — back{" "}
             {new Date(`${briefing.away.end}T00:00:00`).toLocaleDateString(undefined, {
               weekday: "long",
             })}

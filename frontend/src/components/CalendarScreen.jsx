@@ -1,4 +1,5 @@
 import React from "react";
+import { childrenPhrase } from "../data/household.js";
 
 /**
  * Calendar — the week ahead as one honest agenda.
@@ -54,7 +55,7 @@ export default function CalendarScreen({ briefing }) {
   const windowGroups = [
     [tfwm.windows, "Open window", "severity-dot--sage"],
     [tfwm.together_windows, "Together time", "severity-dot--sage"],
-    [tfwm.on_duty_windows, "With the kids", "severity-dot--navy"],
+    [tfwm.on_duty_windows, `With ${childrenPhrase(briefing)}`, "severity-dot--navy"],
   ];
   for (const [list, label, dot] of windowGroups) {
     for (const w of list ?? []) {

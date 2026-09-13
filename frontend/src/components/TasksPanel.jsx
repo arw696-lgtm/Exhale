@@ -85,7 +85,7 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
         </h2>
         {away && (
           <p className="mt-1 font-micro text-xs text-sanctuary-navy/70">
-            ✈️ Weekly contributions are paused — the family's away.
+            Weekly contributions are paused — the family's away.
           </p>
         )}
         {!away && tasks.length > 0 && when && (

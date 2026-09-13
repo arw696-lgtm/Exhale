@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Icon from "./Icon.jsx";
 import {
   fetchConnections,
   fetchFeedUrl,
@@ -120,8 +121,9 @@ export default function ConnectionsPanel({ familyId }) {
   return (
     <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
       <header className="mb-4">
-        <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-          🔗 Connections
+        <h2 className="flex items-center gap-2 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+          <Icon name="link" className="h-4 w-4 text-sage-text" />
+          Connections
         </h2>
       </header>
 
@@ -222,7 +224,10 @@ export default function ConnectionsPanel({ familyId }) {
 
       {notify && (
         <div className="mt-4 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/70">
-          <p className="font-semibold text-sanctuary-navy/80">🔴 Critical alerts by email</p>
+          <p className="flex items-center gap-2 font-semibold text-sanctuary-navy/80">
+            <Icon name="bell" className="h-4 w-4 text-sage-text" />
+            Critical alerts by email
+          </p>
           <p className="mt-0.5">
             When something urgent surfaces, Exhale emails you — each alert exactly
             once. Leave blank to keep alerts off.

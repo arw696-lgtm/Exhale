@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Icon from "./Icon.jsx";
 import { threatPresentation } from "../brand/tokens.js";
 import { fetchHelperView } from "../data/api.js";
 
@@ -71,8 +72,9 @@ export default function HelperHome({ familyId, displayName, onLogout }) {
       </header>
 
       <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
-        <h2 className="mb-4 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-          🧑‍🍼 Care needed on your days
+        <h2 className="flex items-center gap-2 mb-4 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+          <Icon name="users" className="h-4 w-4 text-sage-text" />
+          Care needed on your days
         </h2>
         {care.gaps.length === 0 ? (
           <p className="font-micro text-sm text-sanctuary-navy/70">
@@ -104,8 +106,9 @@ export default function HelperHome({ familyId, displayName, onLogout }) {
 
       {shared.length > 0 && (
         <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
-          <h2 className="mb-4 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-            📌 Shared with you
+          <h2 className="flex items-center gap-2 mb-4 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+            <Icon name="pin" className="h-4 w-4 text-sage-text" />
+            Shared with you
           </h2>
           <ul className="space-y-3">
             {shared.map((ob) => (

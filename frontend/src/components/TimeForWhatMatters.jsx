@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import Icon from "./Icon.jsx";
+import { childrenPhrase } from "../data/household.js";
 import {
   addIntention,
   answerIntentionFollowUp,
@@ -28,7 +30,9 @@ function fmtWindow(w) {
   return `${day} ${time(w.start)}–${time(w.end)}`;
 }
 
-export default function TimeForWhatMatters({ block, familyId, live = false, onRefresh }) {
+export default function TimeForWhatMatters({ briefing, block, familyId, live = false, onRefresh }) {
+  // Say the child's name rather than assuming a number of them.
+  const kids = childrenPhrase(briefing);
   const [text, setText] = useState("");
   const [kind, setKind] = useState("standing");
   const [context, setContext] = useState("alone");
@@ -149,8 +153,9 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
 
   return (
     <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
-      <h2 className="mb-3 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-        💛 Time For What Matters
+      <h2 className="flex items-center gap-2 mb-3 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+        <Icon name="heart" className="h-4 w-4 text-sage-text" />
+        Time For What Matters
       </h2>
 
       {/* For you — personal windows next to your solo intentions */}
@@ -176,7 +181,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
       {togetherIntentions.length > 0 && (
         <div className="mb-4 border-t border-sanctuary-navy/10 pt-3">
           <p className="mb-1 font-micro text-xs font-semibold uppercase text-sanctuary-navy/70">
-            🤝 Together
+            Together
           </p>
           {togetherWindows.length > 0 ? (
             <>
@@ -201,7 +206,8 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
       {onDutyIntentions.length > 0 && (
         <div className="mb-4 border-t border-sanctuary-navy/10 pt-3">
           <p className="mb-1 font-micro text-xs font-semibold uppercase text-sanctuary-navy/70">
-            🏠 While you've got the kids
+            <Icon name="home" className="h-4 w-4 text-sage-text" />
+            While you've got {kids}
           </p>
           {onDutyWindows.length > 0 ? (
             <>
@@ -239,7 +245,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
                 <span className="flex gap-2">
                   <button onClick={() => answer(fu, "happened")}
                           className="rounded-full border border-sage-release/40 bg-sage-release/10 px-3 py-1 text-xs font-medium text-sanctuary-navy transition hover:bg-sage-release/20">
-                    Yes 🎉
+                    Yes
                   </button>
                   <button onClick={() => answer(fu, "didnt_happen")}
                           className="rounded-full border border-sanctuary-navy/15 px-3 py-1 text-xs font-medium text-sanctuary-navy/70 transition hover:bg-sanctuary-navy/5">
@@ -295,11 +301,11 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
           </button>
           <select value={context} onChange={(e) => setContext(e.target.value)}
                   aria-label="What kind of time does this need?"
-                  title="Just you (child-free), the two of you together, or while you've got the kids."
+                  title="Just you, the two of you together, or while you're on duty."
                   className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-1.5 font-micro font-medium text-sanctuary-navy/70 outline-none focus:border-sage-release">
             <option value="alone">just me</option>
-            <option value="together">🤝 together</option>
-            <option value="on_duty">🏠 with kids</option>
+            <option value="together">together</option>
+            <option value="on_duty">while on duty</option>
           </select>
           <button type="submit" disabled={busy || !text.trim()}
                   className="rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-1.5 font-micro text-sm font-medium text-sanctuary-navy transition hover:bg-sage-release/20 disabled:opacity-50">

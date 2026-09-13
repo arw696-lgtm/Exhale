@@ -1,4 +1,5 @@
 import React from "react";
+import Icon from "./Icon.jsx";
 
 /**
  * What Exhale Handled This Week — the briefing's closing note.
@@ -16,7 +17,7 @@ import React from "react";
 const TYPE_ICON = {
   dependency_gap: "✓",
   waiting_on: "↩",
-  pattern_catch: "🧠",
+  pattern_catch: "✓",
 };
 
 function fmtDay(iso) {
@@ -30,8 +31,9 @@ export default function HandledRecap({ handled }) {
 
   return (
     <section className="mb-8 rounded-card bg-surface p-5 shadow-card">
-      <h2 className="mb-3 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
-        🌬 What Exhale Handled This Week
+      <h2 className="flex items-center gap-2 mb-3 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
+        <Icon name="breath" className="h-4 w-4 text-sage-text" />
+        What Exhale Handled This Week
       </h2>
       {count === 0 ? (
         (handled.open_urgent ?? 0) === 0 ? (

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Icon from "./Icon.jsx";
 import { scheduleEvent } from "../data/api.js";
 import WhyTrace from "./WhyTrace.jsx";
 
@@ -86,7 +87,8 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
       {/* Suppression is stated, never silent (honesty rails). */}
       {(careWatch.away_suppressed ?? 0) > 0 && (
         <p className="mb-3 font-micro text-xs text-sanctuary-navy/70">
-          ✈️ {careWatch.away_suppressed} gap
+          <Icon name="plane" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />
+          {careWatch.away_suppressed} gap
           {careWatch.away_suppressed === 1 ? "" : "s"} hidden — the family is
           away together then.
         </p>

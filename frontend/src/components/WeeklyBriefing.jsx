@@ -90,6 +90,7 @@ export default function WeeklyBriefing({
       {/* Time For What Matters — the emotional heart, right after what needs you:
           your time (alone / together / on-duty) next to what it's for. */}
       <TimeForWhatMatters
+        briefing={briefing}
         block={briefing.time_for_what_matters}
         familyId={familyId}
         live={live}

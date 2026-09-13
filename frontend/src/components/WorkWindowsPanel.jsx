@@ -99,7 +99,7 @@ export default function WorkWindowsPanel({ familyId }) {
           {plan.windows.length === 0 ? (
             <p className="font-micro text-sm text-sanctuary-navy/70">
               Couldn't find you a clear stretch this week — every free moment,
-              the kids need someone. Syncing more calendars sometimes surfaces
+              someone needs to be there. Syncing more calendars sometimes surfaces
               time you can't see from here.
             </p>
           ) : (
@@ -134,7 +134,7 @@ export default function WorkWindowsPanel({ familyId }) {
           <p className="mt-3 font-micro text-xs text-sanctuary-navy/70">
             {plan.windows.length} window{plan.windows.length === 1 ? "" : "s"} of
             real time this week — {plan.summary.total_hours} hours that are
-            genuinely yours: you're free, and the kids are looked after.
+            genuinely yours: you're free, and everyone's covered.
           </p>
         </div>
       )}
