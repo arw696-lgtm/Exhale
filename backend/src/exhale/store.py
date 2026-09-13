@@ -93,6 +93,24 @@ DERIVED_PROFILE_KEYS = frozenset({
     "learning_acks",           # acks of rules that will be learned again
 })
 
+#: Keys whose names are built at runtime, so a fixed set cannot name them.
+#: The sync watermarks are the dangerous case: "last_sync_at" and
+#: "last_sync_at:<provider>:<account>" record how far the ledger has read, so
+#: keeping them past a reset leaves a lie — an empty ledger that believes it
+#: is up to date. The next sync would then fetch only the last few minutes of
+#: mail and the household would be left permanently empty, with no way back
+#: short of waiting out the retro window. Cleared, the next sync falls through
+#: to the full 180-day scan, which is exactly what starting over means.
+DERIVED_PROFILE_KEY_PREFIXES = ("last_sync_at",)
+
+
+def is_derived_profile_key(key: str) -> bool:
+    """True when a profile key describes a scan rather than the household."""
+
+    return key in DERIVED_PROFILE_KEYS or any(
+        key == p or key.startswith(f"{p}:") for p in DERIVED_PROFILE_KEY_PREFIXES
+    )
+
 
 class HouseholdStore:
     """Thread-safe, per-family graph + ledger store."""
@@ -215,8 +233,9 @@ class HouseholdStore:
                 profile = self._profiles.get(family_id)
                 cleared = []
                 if profile:
-                    for key in sorted(DERIVED_PROFILE_KEYS):
-                        if profile.pop(key, None) is not None:
+                    for key in sorted(profile):
+                        if is_derived_profile_key(key):
+                            profile.pop(key, None)
                             cleared.append(key)
                 removed["profile_keys_cleared"] = cleared
             return removed

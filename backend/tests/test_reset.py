@@ -11,6 +11,8 @@ must not lose any of it because the mail scan was junk. These tests pin the
 boundary in both directions: the derived data goes, the household stays.
 """
 
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
 
 from exhale.api import app
@@ -108,6 +110,71 @@ def test_a_stale_dismissal_list_cannot_silently_hide_a_fresh_scan():
 
     dismissed = set(store.profile(fam).get("dismissed_extractions") or [])
     assert not dismissed
+
+
+def test_reset_clears_the_sync_watermarks():
+    """The failure that would have emptied the household permanently.
+
+    The watermark says how far the ledger has read. Kept past a reset it is a
+    lie: an empty ledger that believes it is current. The next sync would ask
+    Gmail only for the last few minutes and return almost nothing, leaving the
+    household blank with no way back inside the retro window.
+    """
+
+    store, fam = _loaded_store()
+    store.set_profile(
+        fam,
+        last_sync_at="2026-09-13T01:00:00+00:00",               # legacy/primary
+        **{"last_sync_at:google:andy@example.com": "2026-09-13T01:00:00+00:00"},
+    )
+
+    store.reset_ingested(fam)
+
+    profile = store.profile(fam)
+    assert "last_sync_at" not in profile
+    assert "last_sync_at:google:andy@example.com" not in profile
+
+
+def test_a_reset_household_re_reads_the_full_retro_window():
+    """End to end: the point of clearing the watermark, not just its absence."""
+
+    from exhale.retro_scan import RETRO_SCAN_DAYS, run_incremental_sync
+
+    store, fam = _loaded_store()
+    store.set_profile(fam, last_sync_at="2026-09-13T01:00:00+00:00")
+    store.reset_ingested(fam)
+
+    seen = {}
+
+    class _Spy:
+        def fetch(self, since=None):
+            seen["since"] = since
+            return iter(())
+
+    run_incremental_sync(_Spy(), store, fam)
+
+    window_days = (datetime.now(timezone.utc) - seen["since"]).days
+    assert window_days >= RETRO_SCAN_DAYS - 1, (
+        f"only asked for {window_days} days — the watermark survived the reset"
+    )
+
+
+def test_connection_credentials_survive_the_watermark_clearing():
+    """Clearing how-far-we-read must not clear how-we-connect."""
+
+    store, fam = _loaded_store()
+    store.set_profile(
+        fam,
+        last_sync_at="2026-09-13T01:00:00+00:00",
+        connections={"google": {"andy@example.com": {"refresh_token": "xyz"}}},
+        sync_configs=[{"provider": "google"}],
+    )
+
+    store.reset_ingested(fam)
+
+    profile = store.profile(fam)
+    assert profile["connections"]["google"]["andy@example.com"]["refresh_token"] == "xyz"
+    assert profile["sync_configs"] == [{"provider": "google"}]
 
 
 def test_derived_keys_are_an_allowlist_not_a_denylist():

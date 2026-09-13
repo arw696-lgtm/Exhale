@@ -577,3 +577,15 @@ export function resetHousehold(familyId = DEMO_FAMILY) {
     confirm_family_id: familyId,
   });
 }
+
+/**
+ * Read the connected inboxes now, rather than waiting for the next automatic
+ * cycle. Incremental: it picks up where the last sync left off, or covers the
+ * full retro window when there is no watermark (a new household, or one that
+ * just started over). Slow by nature — it is reading months of mail.
+ */
+export function syncGmailNow(knownChildren = [], familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/sync/gmail`, {
+    known_children: knownChildren,
+  });
+}

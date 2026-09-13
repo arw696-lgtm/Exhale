@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { resetHousehold } from "../data/api.js";
+import { resetHousehold, syncGmailNow } from "../data/api.js";
 
 /**
  * Start over — throw away everything Exhale read out of the mail.
@@ -27,6 +27,34 @@ export default function StartOverPanel({ familyId, onDone }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanned, setScanned] = useState(null);
+
+  // Clearing without rebuilding leaves an empty app, so the scan is offered
+  // right here rather than described and left somewhere else to find.
+  const scan = async () => {
+    setScanning(true);
+    setError(null);
+    try {
+      setScanned(await syncGmailNow([], familyId));
+      onDone?.();
+    } catch (e) {
+      // Reading six months of mail can outlast the connection — a phone
+      // locking the screen is enough. The server does not stop when the
+      // browser gives up, so a dropped connection must not be reported as a
+      // failed scan. A real API error (Gmail not connected, say) arrives as a
+      // message from the server and is shown as-is.
+      const dropped = /fetch|network|load failed|timeout/i.test(e.message ?? "");
+      setError(
+        dropped
+          ? "Lost the connection while reading — the scan usually keeps going " +
+            "on the server. Give it a few minutes, then check Today."
+          : e.message
+      );
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const armed = typed.trim().toLowerCase() === PHRASE;
 
@@ -60,10 +88,29 @@ export default function StartOverPanel({ familyId, onDone }) {
             {result.graph_nodes} record{result.graph_nodes === 1 ? "" : "s"}.
             Your household, connections and settings are untouched.
           </p>
-          <p className="mt-2 text-sanctuary-navy">
-            Next: run a scan from Household → Connections to read your mail
-            again with the current reader.
-          </p>
+
+          {scanned ? (
+            <p className="mt-3 text-sanctuary-navy">
+              Read {scanned.scanned} message
+              {scanned.scanned === 1 ? "" : "s"}: {scanned.committed} tracked,{" "}
+              {scanned.pending} waiting for you to confirm, {scanned.rejected}{" "}
+              left alone. Have a look at Today.
+            </p>
+          ) : (
+            <>
+              <p className="mt-3 text-sanctuary-navy">
+                Now read your mail again with the current reader. This covers
+                the last six months, so give it a few minutes.
+              </p>
+              <button
+                onClick={scan}
+                disabled={scanning}
+                className="mt-3 rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-2 font-micro text-sm font-semibold text-sanctuary-navy transition hover:bg-sage-release/20 disabled:opacity-50"
+              >
+                {scanning ? "Reading your mail…" : "Scan my email now"}
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <>

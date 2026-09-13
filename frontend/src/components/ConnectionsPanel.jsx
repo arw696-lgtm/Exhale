@@ -6,6 +6,7 @@ import {
   saveNotifications,
   sendTestNotification,
   startConnect,
+  syncGmailNow,
 } from "../data/api.js";
 
 /**
@@ -31,6 +32,31 @@ export default function ConnectionsPanel({ familyId }) {
   const [notify, setNotify] = useState(null); // prefs from the API
   const [notifyEmail, setNotifyEmail] = useState("");
   const [notifyStatus, setNotifyStatus] = useState(null); // transient feedback
+  const [scanning, setScanning] = useState(false);
+  const [scanReport, setScanReport] = useState(null);
+  const [scanError, setScanError] = useState(null);
+
+  const runScan = async () => {
+    setScanning(true);
+    setScanError(null);
+    setScanReport(null);
+    try {
+      setScanReport(await syncGmailNow([], familyId));
+    } catch (e) {
+      // A first scan reads six months and can outlast the connection — a
+      // locked phone is enough. The server keeps going, so a dropped
+      // connection is not a failed scan and must not be reported as one.
+      const dropped = /fetch|network|load failed|timeout/i.test(e.message ?? "");
+      setScanError(
+        dropped
+          ? "Lost the connection while reading — the scan usually keeps going " +
+            "on the server. Give it a few minutes, then check Today."
+          : e.message
+      );
+    } finally {
+      setScanning(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -125,6 +151,38 @@ export default function ConnectionsPanel({ familyId }) {
           );
         })}
       </ul>
+
+      {/* Exhale reads the inbox on its own schedule, but "read it now" had no
+          button anywhere — so after connecting an account, or changing
+          anything about how mail is read, there was nothing to press and no
+          way to tell whether it had worked. */}
+      {conns.google?.connected && (
+        <div className="mt-4 border-t border-sanctuary-navy/10 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="font-micro text-sm text-sanctuary-navy/70">
+              Exhale checks for new mail on its own. You can also read it now.
+            </p>
+            <button
+              onClick={runScan}
+              disabled={scanning}
+              className="whitespace-nowrap rounded-full border border-sage-release/40 bg-sage-release/10 px-4 py-1.5 font-micro text-sm font-medium text-sanctuary-navy transition hover:bg-sage-release/20 disabled:opacity-50"
+            >
+              {scanning ? "Reading…" : "Scan my email now"}
+            </button>
+          </div>
+          {scanReport && (
+            <p className="mt-2 font-micro text-sm text-sanctuary-navy/70">
+              Read {scanReport.scanned} message
+              {scanReport.scanned === 1 ? "" : "s"}: {scanReport.committed}{" "}
+              tracked, {scanReport.pending} waiting for you, {scanReport.rejected}{" "}
+              left alone.
+            </p>
+          )}
+          {scanError && (
+            <p className="mt-2 font-micro text-sm text-amber-text">{scanError}</p>
+          )}
+        </div>
+      )}
 
       {feedUrl && (
         <div className="mt-4 flex items-start justify-between gap-3 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/70">
