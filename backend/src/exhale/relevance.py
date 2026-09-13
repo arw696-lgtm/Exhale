@@ -58,3 +58,39 @@ def is_transactional_notice(text: str | None) -> bool:
     """
 
     return bool(text) and bool(_TRANSACTIONAL.search(text))
+
+
+# A thread, not an artifact. "Re: Around the World - ISLA Summer Camp" and
+# "Following Up - Meeting on 6/30 Regarding 8811 Nicollet Ave S" both became
+# committed obligations with deadlines on a real household — one a reply about
+# a camp that was already handled, one a realtor's follow-up that is not
+# household logistics at all. Neither is a primary source: a reply carries the
+# *conversation* about a fact, and the fact itself lives in the original.
+#
+# Anchored to the start of the title on purpose. These words are only evidence
+# when they are how the message announces itself — "Following Up" opening a
+# subject is thread machinery, while "following up" inside a real obligation's
+# name is just English, and a bare "Re" mid-title is usually "Re: " in a quote
+# or the word "regarding" truncated.
+_CONVERSATIONAL = re.compile(
+    r"^\s*("
+    r"re|re\[\d+\]|fw|fwd|aw|wg|res|enc"          # reply/forward prefixes, incl. non-English
+    r")\s*:"
+    r"|^\s*("
+    r"following up|follow-?up|checking in|touching base|circling back|"
+    r"just checking|quick question|thanks again|thank you again"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def is_conversational_thread(text: str | None) -> bool:
+    """True when the title reads as a reply or a nudge rather than a source.
+
+    Held for a human, never rejected: a reply genuinely can carry the only
+    statement of a new date ("moving Stevie's lesson to Thursday"), and the
+    cost of being wrong here is one confirmation tap against the cost of a
+    permanent fake obligation.
+    """
+
+    return bool(text) and bool(_CONVERSATIONAL.search(text))

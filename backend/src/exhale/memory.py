@@ -28,7 +28,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 
-from exhale.relevance import is_transactional_notice
+from exhale.relevance import is_conversational_thread, is_transactional_notice
 
 _WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -84,6 +84,11 @@ def learn_rules(entries, *, min_samples: int = 3) -> list[LearnedRule]:
         # recurs on Mondays" and it crowded out the school and practice
         # rhythms this surface exists to find.
         if is_transactional_notice(entry.payload.extracted_event):
+            continue
+        # Nor is a thread. Replies cluster hard on one stem ("Re: X" ×9) and
+        # recur on whatever weekday people happen to answer mail — a rhythm of
+        # the correspondence, never of the household.
+        if is_conversational_thread(entry.payload.extracted_event):
             continue
         stem = _stem(entry.payload.extracted_event)
         if stem:

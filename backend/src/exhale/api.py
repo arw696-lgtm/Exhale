@@ -1584,6 +1584,51 @@ class LeaveAloneRequest(BaseModel):
     extraction_ids: list[str]
 
 
+class ResetRequest(BaseModel):
+    """Deliberate confirmation for a destructive, irreversible reset."""
+
+    #: Must equal the family id. A reset cannot be reached by a stray POST, and
+    #: the caller has to name the household it means — the same discipline as
+    #: typing a repository name before deleting it.
+    confirm_family_id: str
+
+
+@app.post("/v1/families/{family_id}/reset")
+def reset_household(
+    req: ResetRequest, family_id: str = Depends(require_family_access)
+) -> dict:
+    """Throw away everything read out of the mail and start the scan over.
+
+    For the case where a scan ran before the filters that would have caught
+    its junk. Re-running a scan cannot fix that on its own: it dedupes on
+    message id and skips everything already seen, so the old extractions
+    simply persist. This clears the ledger and the graph so the next scan
+    reads the same mail with the current extractor.
+
+    The household survives: coverage model, members, helpers, connected
+    accounts, away periods, typed tasks, the feed token, notification
+    settings and the cost ledger are all untouched (see
+    ``HouseholdStore.reset_ingested``). Only what was derived from the mail
+    goes, and it does not come back without another scan.
+    """
+
+    if req.confirm_family_id != family_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "confirm_family_id must match the family being reset — this "
+                "deletes every extraction and obligation and cannot be undone."
+            ),
+        )
+    removed = store.reset_ingested(family_id)
+    _exhale_log.warning(
+        "reset %s: cleared %d ledger entries, %d nodes, %d edges",
+        family_id, removed["ledger_entries"], removed["graph_nodes"],
+        removed["graph_edges"],
+    )
+    return {"family_id": family_id, "reset": True, "removed": removed}
+
+
 @app.post("/v1/families/{family_id}/unattributed/leave-alone")
 def leave_unattributed_alone(
     req: LeaveAloneRequest, family_id: str = Depends(require_family_access)

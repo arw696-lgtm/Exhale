@@ -75,6 +75,25 @@ class LedgerEntry:
         }
 
 
+#: Profile keys that only make sense alongside a particular scan's output —
+#: they hold extraction ids, obligation ids, or conclusions drawn from them.
+#: Left behind after a reset they are dangling references at best and silent
+#: suppressions at worst (a dismissal list that hides freshly-scanned items).
+#: Everything NOT named here survives: see HouseholdStore.reset_ingested.
+DERIVED_PROFILE_KEYS = frozenset({
+    "dismissed_extractions",   # ids of extractions that will not exist
+    "retriage_seen",           # "already given a second read" — of what?
+    "retriage_reasons",
+    "unattributed_ok",         # "leave this one unassigned" — same
+    "trip_dismissed",          # derived from travel bookings, re-derived on scan
+    "waiting_on",              # derived from obligations
+    "resolved_log",            # resolutions of obligations that are gone
+    "notified_alerts",         # keyed by obligation id
+    "notified_alerts_by_member",
+    "learning_acks",           # acks of rules that will be learned again
+})
+
+
 class HouseholdStore:
     """Thread-safe, per-family graph + ledger store."""
 
@@ -160,6 +179,47 @@ class HouseholdStore:
     def ledger(self, family_id: str) -> list[LedgerEntry]:
         with self._lock:
             return list(self._ledger.get(family_id, []))
+
+    # -- start over -----------------------------------------------------------
+    def reset_ingested(self, family_id: str) -> dict:
+        """Drop everything read out of the household's mail. Keep the household.
+
+        A scan run before a filter existed cannot be repaired item by item, and
+        re-running it does nothing: the scan dedupes on message id, so it skips
+        every message it has already seen. Starting over is the only way to get
+        the benefit of a better extractor on mail already read.
+
+        What goes is what was *derived*: the graph, the ledger, and the profile
+        keys that point at extraction ids which will not exist afterwards. What
+        stays is everything a person entered or connected by hand — the
+        coverage model, members, helpers, Google connections, away periods,
+        typed tasks, the calendar feed token, notification settings, and the
+        running cost ledger, which is a record of money actually spent and is
+        not ours to erase.
+
+        The list below is an allowlist of what to REMOVE, deliberately: a key
+        added later defaults to surviving a reset. For a destructive operation,
+        the safe direction for an unknown is to keep it.
+        """
+
+        with self.family_lock(family_id):
+            with self._lock:
+                graph = self._graphs.get(family_id)
+                removed = {
+                    "ledger_entries": len(self._ledger.get(family_id) or []),
+                    "graph_nodes": len(graph.nodes) if graph else 0,
+                    "graph_edges": len(graph.edges) if graph else 0,
+                }
+                self._ledger[family_id] = []
+                self._graphs[family_id] = KnowledgeGraph()
+                profile = self._profiles.get(family_id)
+                cleared = []
+                if profile:
+                    for key in sorted(DERIVED_PROFILE_KEYS):
+                        if profile.pop(key, None) is not None:
+                            cleared.append(key)
+                removed["profile_keys_cleared"] = cleared
+            return removed
 
     # -- ingestion ------------------------------------------------------------
     def ingest(self, family_id: str, payload: ExtractionPayload) -> LedgerEntry:

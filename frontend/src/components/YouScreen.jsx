@@ -1,6 +1,7 @@
 import React from "react";
 import ThemeToggle from "./ThemeToggle.jsx";
 import WorkWindowsPanel from "./WorkWindowsPanel.jsx";
+import StartOverPanel from "./StartOverPanel.jsx";
 
 /**
  * You — the member's own corner. Their account, their personal time-finding
@@ -66,6 +67,10 @@ export default function YouScreen({ user, inviteCode, familyId, live, onLogout }
           </button>
         )}
       </section>
+
+      {/* Last, and only against a real backend: there is nothing to clear in
+          the offline preview, and it reads as a threat rather than a tool. */}
+      {live && <StartOverPanel familyId={familyId} />}
     </main>
   );
 }

@@ -54,8 +54,29 @@ the household: field trips, permission slips, registrations, practices, \
 appointments, deadlines, payments, supply lists, camp sessions. Marketing, \
 newsletters with no action, receipts for completed purchases, and pure \
 conversation are NOT trackable — set contains_trackable_item to false.
+1a. THE TEST IS CONSEQUENCE: would something actually go wrong for this \
+family if nobody saw this message? If the answer is "no", or "they would \
+simply be less informed", it is NOT trackable. An FYI that needs no action \
+from the household — a notice that something already happened, a status \
+update, a thread where the sender is handling it — fails this test even when \
+it names a real date. Being about a real event is not enough.
+1b. THIS HOUSEHOLD'S LOGISTICS, not the reader's work or business \
+correspondence. A client, colleague, contractor, agent or vendor following up \
+with an adult about a meeting, a property, a project or a sale is not a \
+household obligation, however concrete its date.
+1c. A REPLY OR FORWARD IS NOT A SOURCE. When the subject begins "Re:", \
+"Fwd:", "Following up", or the body is one turn of an ongoing exchange, the \
+fact lives in the message being answered. Extract from it only when the reply \
+itself states a NEW commitment ("moving the lesson to Thursday"), and set \
+event_date_stated_explicitly honestly.
 2. NEVER GUESS. Any field you cannot support directly from the message text \
 must be null. It is better to return null than a fabricated value.
+2a. THE TITLE NAMES THE OBLIGATION, NOT THE EMAIL. Never copy the subject \
+line. Write what the household must do or attend, as a person would say it: \
+"Return Stevie's camp permission slip", "Soccer practice — Foxes", "Dentist, \
+Stevie". Strip thread prefixes, marketing wrappers and sender names. If you \
+cannot name a concrete thing to do or attend, that is the strongest sign \
+contains_trackable_item should be false.
 3. Resolve relative dates ("tomorrow", "next week", "this Friday") against \
 the message's SENT date, which is provided. If a date has no year, choose the \
 occurrence closest to the sent date that makes sense in context.
@@ -66,7 +87,9 @@ canceled one.
 5. target_person_name: only when one of the known family members is clearly \
 the subject; otherwise null.
 6. action_required: true when a manual step is needed (sign, pay, register, \
-submit, reply, bring something).
+submit, bring something) — a step this household must take, with a real \
+consequence for skipping it. Not merely that a reply would be polite, and not \
+when the sender is telling you they have handled it.
 7. confidence_score calibration (drives automated routing): 0.92-1.0 only \
 when the event and its dates are explicit and unambiguous; 0.70-0.91 when \
 mostly clear but with one fuzzy element (relative date, implied person); \
@@ -84,7 +107,12 @@ class _LLMExtraction(BaseModel):
         description="False when the message holds no schedulable event or actionable obligation."
     )
     extracted_event: str | None = Field(
-        description="Human-readable title of the primary event/obligation; null if none."
+        description=(
+            "What the household must do or attend, named as a person would say "
+            "it ('Return Stevie's camp permission slip'). NEVER the email "
+            "subject line, and never a thread prefix like 'Re:' or 'Fwd:'. "
+            "Null if there is no trackable item."
+        )
     )
     target_person_name: str | None = Field(
         description="The known family member this concerns, or null."

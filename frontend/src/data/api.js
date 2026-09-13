@@ -566,3 +566,14 @@ export function applyRetailCleanup(obligationNodeIds, familyId = DEMO_FAMILY) {
     obligation_node_ids: obligationNodeIds,
   });
 }
+
+/**
+ * Throw away everything read out of the mail and start the scan over.
+ * The household — people, coverage, connections, away periods, tasks —
+ * survives; only what was derived from email goes. Irreversible.
+ */
+export function resetHousehold(familyId = DEMO_FAMILY) {
+  return postJson(`/v1/families/${familyId}/reset`, {
+    confirm_family_id: familyId,
+  });
+}

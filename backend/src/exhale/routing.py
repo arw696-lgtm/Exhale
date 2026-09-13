@@ -30,7 +30,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict
 
-from exhale.relevance import is_transactional_notice
+from exhale.relevance import is_conversational_thread, is_transactional_notice
 from exhale.schemas import ArtifactTier, ExtractionPayload, FactOrigin
 
 # Band boundaries (inclusive lower bounds), straight from §3.3.
@@ -134,6 +134,19 @@ def route_extraction(payload: ExtractionPayload) -> RoutingDecision:
                     "account notice) rather than a household obligation. It may "
                     "well be a real confirmation, so it isn't rejected — but it "
                     "doesn't silently enter the graph either."
+                ),
+            )
+        if is_conversational_thread(payload.extracted_event):
+            return RoutingDecision(
+                band=ConfidenceBand.MEDIUM,
+                status=RecordStatus.PENDING_VERIFICATION,
+                commits_to_graph=False,
+                requires_user_review=True,
+                rationale=(
+                    "Reads as a reply or a follow-up rather than the artifact "
+                    "that establishes the fact — the primary source is the "
+                    "message being answered. A thread can still carry a real "
+                    "new date, so it is held for a human rather than rejected."
                 ),
             )
         if payload.event_date_origin is FactOrigin.INFERRED:

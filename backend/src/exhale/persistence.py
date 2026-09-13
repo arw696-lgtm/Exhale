@@ -288,6 +288,31 @@ class PersistentHouseholdStore(HouseholdStore):
                  env.key_verification_tag, env.wrapped_dek, family_id),
             )
 
+    def reset_ingested(self, family_id: str) -> dict:
+        """Start over, in the database too.
+
+        Without the DELETEs this would look like it worked and then undo
+        itself: the in-memory copy would be empty, but ``_hydrated`` is per
+        process, so the next restart would read the old rows straight back.
+        The family row itself is left alone — it holds the KEK and the profile,
+        and dropping it would orphan every other table keyed to it.
+        """
+
+        self._hydrate(family_id)
+        removed = super().reset_ingested(family_id)
+        with self._db_lock, self._conn.transaction():
+            for table in (
+                "family_secure_edges",
+                "family_secure_nodes",
+                "extraction_ledger",
+            ):
+                self._conn.execute(
+                    f"DELETE FROM {table} WHERE family_id = %s", (family_id,)
+                )
+        # Re-encrypt the trimmed profile through the normal write path.
+        self.set_profile(family_id)
+        return removed
+
     def ingest(self, family_id: str, payload: ExtractionPayload) -> LedgerEntry:
         self._hydrate(family_id)
         entry = super().ingest(family_id, payload)
