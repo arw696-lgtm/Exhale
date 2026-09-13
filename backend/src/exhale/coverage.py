@@ -170,6 +170,18 @@ class Caregiver:
         cuts = [(s, e) for s, e, _why, _origin in self._blocks(day)]
         return _subtract([span], cuts)
 
+    @property
+    def has_schedule_information(self) -> bool:
+        """Do we know anything at all about how this person spends their days?
+
+        Without a work pattern or a connected calendar, ``available_on``
+        returns the whole span forever — this person is never busy because
+        nothing has ever been recorded about them. That silence must not be
+        read as "free to take the child".
+        """
+
+        return self.work_pattern is not None or bool(self.events)
+
 
 @dataclass
 class SchoolCalendar:
@@ -339,11 +351,21 @@ class CoverageEngine:
         raise KeyError(f"No caregiver named {name!r}")
 
     def coverage_by_others(
-        self, day: date, span: _Interval, exclude_names: set[str]
+        self,
+        day: date,
+        span: _Interval,
+        exclude_names: set[str],
+        *,
+        require_information: bool = False,
     ) -> list[tuple[_Interval, str]]:
         """Who/what covers the recipient on ``day``, excluding a *set* of
         caregivers. One name → the work-window case; the whole going-out set →
-        the together-time case (who's got the kids while both parents are out)."""
+        the together-time case (who's got the child while both parents are out).
+
+        ``require_information`` drops caregivers we know nothing about. See
+        :meth:`informed_coverage_on` for why the default must stay False for
+        gap detection and must be True for anything claiming free time.
+        """
 
         out: list[tuple[_Interval, str]] = []
         if self.school is not None:
@@ -357,6 +379,11 @@ class CoverageEngine:
         for cg in self.caregivers:
             if cg.name in exclude_names:
                 continue
+            # Nothing known about this person's day: "available" here means
+            # only that no commitment has been recorded, which is not evidence
+            # that they have the child.
+            if require_information and not cg.has_schedule_information:
+                continue
             for iv in cg.available_on(day, span):
                 out.append((iv, f"{cg.name} has {self.recipient.name}"))
         return out
@@ -365,6 +392,42 @@ class CoverageEngine:
         """Who/what covers the recipient on ``day``, other than ``exclude``."""
 
         return self.coverage_by_others(day, span, {exclude})
+
+    def informed_coverage_on(
+        self, day: date, span: _Interval, exclude_names: set[str]
+    ) -> list[tuple[_Interval, str]]:
+        """Coverage we have some actual basis to believe in.
+
+        The two questions this class answers need opposite defaults, and the
+        bug was that they shared one answer.
+
+        *Is there a care gap?* Only when every caregiver is positively known to
+        be unavailable — unknown must never raise an alarm. That is
+        :meth:`coverage_by_others`, which treats un-busy as coverage, and it is
+        right for gaps.
+
+        *Is this caregiver free?* Only when there is some reason to believe
+        someone else has the child — unknown must never make a promise. That is
+        this method.
+
+        The difference between them is one line: a caregiver we know nothing
+        about is dropped. ``available_on`` returns the span minus known
+        commitments, so a caregiver with no work pattern and no connected
+        calendar is "available" every minute of every day — not because anyone
+        said they have the child, but because nothing has claimed them.
+        Counting that as coverage invents free time out of ignorance.
+
+        A caregiver whose working pattern we *do* know is a different case:
+        "Ali works 7:30–4:30, so she is home before that" is a real inference
+        from real information. It can still be wrong, which is what
+        ``child_covered_by`` is for — every window records what it rests on, so
+        the interface can say "while Stevie's at school" and "if Ali has
+        Stevie" differently instead of calling both "time that's yours".
+        """
+
+        return self.coverage_by_others(
+            day, span, exclude_names, require_information=True
+        )
 
     def open_windows_on(self, day: date, caregiver_name: str) -> list["WorkWindow"]:
         """When ``caregiver_name`` is free *and* the child is covered by others.
@@ -381,7 +444,9 @@ class CoverageEngine:
         span: _Interval = (span_start, span_end)
 
         free = target.available_on(day, span)
-        coverers = self._coverers_on(day, span, exclude=caregiver_name)
+        # Informed coverage only — see informed_coverage_on. A caregiver with
+        # an empty calendar and no work pattern is not someone having the child.
+        coverers = self.informed_coverage_on(day, span, {caregiver_name})
         workable = _intersect(free, _union([iv for iv, _ in coverers]))
 
         windows: list[WorkWindow] = []
@@ -588,7 +653,10 @@ class FamilyCoverage:
         for e in self.engines:
             span = (datetime.combine(day, e.recipient.supervised_start),
                     datetime.combine(day, e.recipient.supervised_end))
-            cov = e.coverage_by_others(day, span, names)
+            # Same rule as a solo window: an evening out together has to rest
+            # on someone we know something about, not on a third caregiver who
+            # simply has nothing recorded against them.
+            cov = e.informed_coverage_on(day, span, names)
             all_labels.extend(cov)
             child_cov = _union([iv for iv, _ in cov])
             covered = child_cov if covered is None else _intersect(covered, child_cov)

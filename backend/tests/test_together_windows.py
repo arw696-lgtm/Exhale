@@ -72,15 +72,52 @@ def test_no_together_window_when_only_a_parent_could_cover():
     assert fam.shared_windows(["Andy", "Ali"], saturday, saturday) == []
 
 
-def test_a_grandparent_staying_home_opens_a_together_window():
-    # No school (weekend) but a relative caregiver is free to hold Stevie.
+def test_a_caregiver_we_know_nothing_about_does_not_open_a_window():
+    """Being listed is not the same as being on duty.
+
+    This used to pass, and the comment on it read "grandma covering should
+    free both parents" — but nothing in the data said Grandma was covering.
+    She had no work pattern and no calendar, so `available_on` returned the
+    whole day, and a household that had merely *named* a relative was told
+    both parents were free all Saturday.
+
+    That is the same fault a real household hit from the other direction: a
+    16-hour "open window" on a weekend with no school, while the child was
+    with them the entire time.
+    """
+
     andy = Caregiver(name="Andy", role="PARENT")
     ali = Caregiver(name="Ali", role="PARENT")
-    grandma = Caregiver(name="Grandma", role="RELATIVE")  # free all day
+    grandma = Caregiver(name="Grandma", role="RELATIVE")  # nothing known
     fam = _family([andy, ali, grandma], school=False)
     saturday = date(2026, 9, 19)
+
+    assert fam.shared_windows(["Andy", "Ali"], saturday, saturday, min_hours=1.0) == []
+
+
+def test_a_grandparent_whose_week_we_know_opens_a_together_window():
+    """The feature still works — it just needs something to rest on.
+
+    Grandma works weekdays, so Saturday is genuinely free for her. That is an
+    inference from real information, not from silence, and every window records
+    what it rests on so the interface can say so.
+    """
+
+    andy = Caregiver(name="Andy", role="PARENT")
+    ali = Caregiver(name="Ali", role="PARENT")
+    grandma = Caregiver(
+        name="Grandma",
+        role="RELATIVE",
+        work_pattern=WorkPattern(
+            weekdays=frozenset({0, 1, 2, 3, 4}), start=time(9, 0), end=time(17, 0)
+        ),
+    )
+    fam = _family([andy, ali, grandma], school=False)
+    saturday = date(2026, 9, 19)
+
     windows = fam.shared_windows(["Andy", "Ali"], saturday, saturday, min_hours=1.0)
-    assert windows, "grandma covering should free both parents"
+
+    assert windows, "a relative with a known week should still open a window"
     assert any("Grandma" in label for label in windows[0].child_covered_by)
 
 
