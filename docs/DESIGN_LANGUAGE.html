@@ -16,15 +16,19 @@
     --ink: 26 43 76;        /* Sanctuary Navy */
     --canvas: 244 246 249;  /* Pure Breath ground */
     --surface: 255 255 255;
-    --sage: 124 157 150;    /* Sage Release */
-    --amber: 226 149 120;   /* Looming Amber */
+    --sage: 124 157 150;    /* Sage Release — DECORATIVE: fills, halos, borders */
+    --amber: 226 149 120;   /* Looming Amber — DECORATIVE: fills, dots, halos */
+    --sage-text: 89 119 113;  /* the readable sage — 4.88:1 on white */
+    --amber-text: 187 80 40;  /* the readable amber — 4.89:1 on white */
     --ink-solid: 26 43 76;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --ink: 226 232 240; --canvas: 12 20 32; --surface: 22 35 59;
-      --sage: 166 195 188; --amber: 237 171 144; --ink-solid: 42 62 100;
+      --sage: 166 195 188; --amber: 237 171 144;
+      --sage-text: 166 195 188; --amber-text: 237 171 144;
+      --ink-solid: 42 62 100;
       color-scheme: dark;
     }
   }
@@ -48,16 +52,16 @@
          border-bottom: 1px solid rgb(var(--ink) / 0.10); padding-bottom: 16px; }
   .brandmark { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 28px; }
   .doctype { font-family: "Inter Tight", sans-serif; text-transform: uppercase; letter-spacing: .17em;
-             font-size: 11px; font-weight: 700; color: rgb(var(--sage)); filter: brightness(.85); }
+             font-size: 11px; font-weight: 700; color: rgb(var(--sage-text)); }
 
   h1 { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400;
        font-size: clamp(30px, 5.5vw, 46px); line-height: 1.06; margin: 28px 0 14px;
        letter-spacing: -.01em; text-wrap: balance; }
-  .thesis { font-size: clamp(15px, 2.3vw, 17px); line-height: 1.62; color: rgb(var(--ink) / .65); max-width: 66ch; }
+  .thesis { font-size: clamp(15px, 2.3vw, 17px); line-height: 1.62; color: rgb(var(--ink) / .70); max-width: 66ch; }
   .thesis b { color: rgb(var(--ink)); font-weight: 600; }
 
   h2 { font-family: "Inter Tight", sans-serif; font-size: 11.5px; text-transform: uppercase;
-       letter-spacing: .14em; font-weight: 700; color: rgb(var(--sage)); filter: brightness(.85); margin: 0 0 14px; }
+       letter-spacing: .14em; font-weight: 700; color: rgb(var(--sage-text)); margin: 0 0 14px; }
   .sec { margin-top: clamp(30px, 4.5vw, 48px); }
   .card { background: rgb(var(--surface)); border: 1px solid rgb(var(--ink) / 0.10);
           border-radius: 22px; padding: clamp(18px, 3vw, 26px);
@@ -72,19 +76,19 @@
   .sw .chip { height: 74px; }
   .sw .meta { padding: 10px 12px; }
   .sw .nm { font-family: "Inter Tight", sans-serif; font-weight: 600; font-size: 13.5px; }
-  .sw .hx { font-size: 11.5px; color: rgb(var(--ink) / .5); font-variant-numeric: tabular-nums; margin-top: 1px; }
-  .sw .use { font-size: 11.5px; color: rgb(var(--ink) / .62); line-height: 1.45; margin-top: 6px; }
+  .sw .hx { font-size: 11.5px; color: rgb(var(--ink) / .70); font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .sw .use { font-size: 11.5px; color: rgb(var(--ink) / .70); line-height: 1.45; margin-top: 6px; }
 
   /* -- type specimens -- */
   .spec { display: grid; gap: 18px; }
   .spec .row { display: grid; grid-template-columns: 150px 1fr; gap: 14px; align-items: baseline; }
   @media (max-width: 620px) { .spec .row { grid-template-columns: 1fr; gap: 4px; } }
   .spec .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600;
-               color: rgb(var(--ink) / .45); font-family: "Inter Tight", sans-serif; }
+               color: rgb(var(--ink) / .70); font-family: "Inter Tight", sans-serif; }
   .ex-display { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 30px; line-height: 1.15; }
   .ex-interface { font-family: "Inter Tight", sans-serif; font-weight: 600; font-size: 15px; letter-spacing: -0.02em; }
   .ex-label { font-family: "Inter Tight", sans-serif; font-weight: 700; font-size: 11px;
-              text-transform: uppercase; letter-spacing: .14em; color: rgb(var(--sage)); filter: brightness(.85); }
+              text-transform: uppercase; letter-spacing: .14em; color: rgb(var(--sage-text)); }
   .ex-micro { font-family: "Plus Jakarta Sans", sans-serif; font-size: 14px; line-height: 1.6; color: rgb(var(--ink) / .8); }
 
   /* -- live component demos -- */
@@ -93,17 +97,25 @@
   .demo { background: rgb(var(--surface)); border: 1px solid rgb(var(--ink) / 0.10); border-radius: 22px;
           padding: 20px; box-shadow: 0 12px 24px rgba(26,43,76,.04); }
   .demo .cap { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600;
-               color: rgb(var(--ink) / .40); font-family: "Inter Tight", sans-serif; margin-bottom: 12px; }
+               color: rgb(var(--ink) / .70); font-family: "Inter Tight", sans-serif; margin-bottom: 12px; }
 
   @keyframes exhale-breathe {
-    0%, 100% { transform: scale(1); opacity: 0.75; }
-    50% { transform: scale(1.14); opacity: 1; }
+    0%, 100% { transform: scale(0.86); }
+    50%      { transform: scale(1); }
   }
   .breath-orb {
     width: 96px; height: 96px; border-radius: 50%;
-    background: radial-gradient(circle at 40% 40%, rgb(var(--sage) / 0.45), transparent 66%);
+    flex: none;  /* a breath that a flex parent can squash is an egg, not a ball */
+    background:
+      radial-gradient(circle at 38% 34%,
+        rgb(var(--sage) / 0.95) 0%,
+        rgb(var(--sage) / 0.85) 42%,
+        rgb(var(--sage) / 0.55) 72%,
+        rgb(var(--sage) / 0.35) 100%);
+    box-shadow: 0 0 0 1px rgb(var(--sage) / 0.28),
+                0 18px 40px rgb(var(--sage) / 0.30);
     animation: exhale-breathe 7s ease-in-out infinite;
-    transform-origin: 40% 40%;
+    transform-origin: center;
   }
   @media (prefers-reduced-motion: reduce) { .breath-orb { animation: none; } }
 
@@ -124,7 +136,7 @@
 
   .pill { display: inline-block; border-radius: 9999px; padding: 3px 9px; font-size: 10px; font-weight: 600;
           text-transform: uppercase; letter-spacing: .06em; font-family: "Plus Jakarta Sans", sans-serif; }
-  .pill-sage  { background: rgb(var(--sage) / 0.12); color: rgb(var(--sage)); filter: brightness(.85); }
+  .pill-sage  { background: rgb(var(--sage) / 0.12); color: rgb(var(--sage-text)); }
   .pill-navy  { background: rgb(var(--ink) / 0.05); color: rgb(var(--ink) / 0.45); }
 
   .input-demo { border: 1px solid rgb(var(--ink) / 0.15); background: rgb(var(--canvas));
@@ -134,7 +146,7 @@
 
   /* -- principles / rails -- */
   .rails { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
-  .rails li { font-size: 13.5px; line-height: 1.58; color: rgb(var(--ink) / .65); padding-left: 21px; position: relative; }
+  .rails li { font-size: 13.5px; line-height: 1.58; color: rgb(var(--ink) / .70); padding-left: 21px; position: relative; }
   .rails li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 7px; height: 7px;
                       border-radius: 50%; background: rgb(var(--sage)); box-shadow: 0 0 0 4px rgb(var(--sage) / 0.14); }
   .rails li b { color: rgb(var(--ink)); font-weight: 600; }
@@ -142,15 +154,15 @@
   .dd { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 620px) { .dd { grid-template-columns: 1fr; } }
   .dd h3 { font-family: "Inter Tight", sans-serif; font-size: 13px; font-weight: 700; margin: 0 0 8px; }
-  .dd .no h3 { color: rgb(var(--amber)); filter: brightness(.8); }
-  .dd .yes h3 { color: rgb(var(--sage)); filter: brightness(.8); }
+  .dd .no h3 { color: rgb(var(--amber-text)); }
+  .dd .yes h3 { color: rgb(var(--sage-text)); }
   .dd ul { margin: 0; padding-left: 16px; }
-  .dd li { font-size: 13px; line-height: 1.55; color: rgb(var(--ink) / .68); margin-bottom: 6px; }
+  .dd li { font-size: 13px; line-height: 1.55; color: rgb(var(--ink) / .70); margin-bottom: 6px; }
 
   /* -- token table + code -- */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th { text-align: left; font-family: "Inter Tight", sans-serif; font-size: 11px; text-transform: uppercase;
-       letter-spacing: .08em; color: rgb(var(--ink) / .45); padding: 6px 10px 8px 0; border-bottom: 1px solid rgb(var(--ink) / 0.12); }
+       letter-spacing: .08em; color: rgb(var(--ink) / .70); padding: 6px 10px 8px 0; border-bottom: 1px solid rgb(var(--ink) / 0.12); }
   td { padding: 8px 10px 8px 0; border-bottom: 1px solid rgb(var(--ink) / 0.06);
        color: rgb(var(--ink) / .78); vertical-align: top; }
   td code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
@@ -162,7 +174,7 @@
         padding: 16px 18px; overflow-x: auto; font-size: 12px; line-height: 1.6;
         font-family: ui-monospace, "SF Mono", Menlo, monospace; color: rgb(var(--ink) / .85); }
 
-  .foot { margin-top: 44px; font-size: 11px; color: rgb(var(--ink) / .4); line-height: 1.6;
+  .foot { margin-top: 44px; font-size: 11px; color: rgb(var(--ink) / .70); line-height: 1.6;
           border-top: 1px solid rgb(var(--ink) / 0.10); padding-top: 14px; }
 </style>
 </head>
@@ -171,7 +183,7 @@
 
   <div class="top">
     <span class="brandmark">Exhale</span>
-    <span class="doctype">Design language · v2 · August 2026</span>
+    <span class="doctype">Design language · v3 · September 2026</span>
   </div>
 
   <h1>Sensory relief, rendered.</h1>
@@ -236,10 +248,47 @@
         <tr><td><code>--ink</code></td><td><span class="tint" style="background:#1A2B4C"></span>26 43 76</td><td><span class="tint" style="background:#E2E8F0"></span>226 232 240</td><td>Text, borders (via alpha)</td></tr>
         <tr><td><code>--canvas</code></td><td><span class="tint" style="background:#F4F6F9"></span>244 246 249</td><td><span class="tint" style="background:#0C1420"></span>12 20 32</td><td>Page ground</td></tr>
         <tr><td><code>--surface</code></td><td><span class="tint" style="background:#FFFFFF"></span>255 255 255</td><td><span class="tint" style="background:#16233B"></span>22 35 59</td><td>Cards, panels</td></tr>
-        <tr><td><code>--sage</code></td><td><span class="tint" style="background:#7C9D96"></span>124 157 150</td><td><span class="tint" style="background:#A6C3BC"></span>166 195 188</td><td>Accent, success, halos</td></tr>
-        <tr><td><code>--amber</code></td><td><span class="tint" style="background:#E29578"></span>226 149 120</td><td><span class="tint" style="background:#EDAB90"></span>237 171 144</td><td>Attention</td></tr>
+        <tr><td><code>--sage</code></td><td><span class="tint" style="background:#7C9D96"></span>124 157 150</td><td><span class="tint" style="background:#A6C3BC"></span>166 195 188</td><td><b>Decorative only</b> — fills, halos, borders, dots</td></tr>
+        <tr><td><code>--amber</code></td><td><span class="tint" style="background:#E29578"></span>226 149 120</td><td><span class="tint" style="background:#EDAB90"></span>237 171 144</td><td><b>Decorative only</b> — fills, halos, dots</td></tr>
+        <tr><td><code>--sage-text</code></td><td><span class="tint" style="background:#597771"></span>89 119 113</td><td><span class="tint" style="background:#A6C3BC"></span>166 195 188</td><td>Sage <b>as text</b> — links, active tab, accents</td></tr>
+        <tr><td><code>--amber-text</code></td><td><span class="tint" style="background:#BB5028"></span>187 80 40</td><td><span class="tint" style="background:#EDAB90"></span>237 171 144</td><td>Amber <b>as text</b> — deadlines, errors, counts</td></tr>
         <tr><td><code>--ink-solid</code></td><td><span class="tint" style="background:#1A2B4C"></span>26 43 76</td><td><span class="tint" style="background:#2A3E64"></span>42 62 100</td><td>Filled primary buttons (white text in both themes)</td></tr>
       </table></div>
+    </div>
+  </section>
+
+  <!-- ===================== LEGIBILITY ===================== -->
+  <section class="sec">
+    <h2>Legibility — calm is not a licence for low contrast</h2>
+    <div class="card">
+      <p class="lead"><b>This is the rule the first two versions got wrong,</b> so it is
+        written down before anything else about type. Exhale shipped with body copy at
+        3.97:1, section labels at 2.63:1, and — worst — its two <i>information-bearing</i>
+        accents below even the 3:1 large-text floor: sage at <b>2.95:1</b> on every link,
+        amber at <b>2.39:1</b> on every deadline. The pale palette read as serene in a
+        mockup and as unreadable on a phone, in daylight, to the person it was built for.
+        Softness had been applied to exactly the pixels carrying the information.</p>
+      <div class="tablewrap"><table>
+        <tr><th>Rule</th><th>Floor</th><th>Why</th></tr>
+        <tr><td>Ink text never drops below <code>/70</code></td><td>5.37:1 light · 6.94:1 dark</td>
+            <td>Clears WCAG AA (4.5:1) with headroom for a dimmed screen</td></tr>
+        <tr><td>Decorative accents are never text</td><td>—</td>
+            <td><code>--sage</code>/<code>--amber</code> are fills. Text uses the <code>-text</code> pair</td></tr>
+        <tr><td>White is never knocked out of a pale fill</td><td>—</td>
+            <td>White on decorative amber is 2.1:1. Use <code>--amber-text</code> as the ground</td></tr>
+        <tr><td>Base interface size</td><td>17px</td>
+            <td>Was 14px. The whole scale lifted with it (13/15/17/19)</td></tr>
+      </table></div>
+      <p class="lead" style="margin:14px 0 0"><b>The rule is enforced, not remembered.</b>
+        <code>backend/tests/test_ui_contrast.py</code> greps every <span class="mono">.jsx</span>
+        file in the suite and fails the build on a faint ink value, a decorative accent used
+        as text, white on a pale fill, or a hover that resolves to the colour it started
+        from. It caught seven offenders a manual sweep had missed — an unenforced
+        accessibility rule lasts exactly one refactor.</p>
+      <p class="lead" style="margin:14px 0 0"><b>The dark theme needed no second palette.</b>
+        Sage and amber already lift and desaturate on the dark ground (8.3:1 and 8.1:1), so
+        <code>--sage-text</code> and <code>--amber-text</code> simply resolve to the same
+        values there. The split exists only because light grounds are unforgiving.</p>
     </div>
   </section>
 
@@ -258,12 +307,12 @@
         <div class="row"><span class="tag">Labels · Inter Tight 700 caps</span>
           <span class="ex-label">What the family carried</span></div>
         <div class="row"><span class="tag">Micro · Plus Jakarta Sans</span>
-          <span class="ex-micro">Body copy, data rows, captions — humanist and clean down to 12px.
+          <span class="ex-micro">Body copy, data rows, captions — humanist and clean, and never below 13px.
           Numbers in columns get <span class="mono">tabular-nums</span>.</span></div>
       </div>
       <p class="lead" style="margin:16px 0 0">Conventions: display is <b>always italic, never
         bold</b> — headlines are spoken, not shouted. Section labels are uppercase with wide
-        tracking (.13–.17em) in sage or muted ink. Interface text tightens (−0.02em); micro
+        tracking (.13–.17em) in sage-text or muted ink. Interface text tightens (−0.02em); micro
         text never fakes smallcaps. Loaded from Google Fonts
         (<span class="mono">Instrument Serif ital · Inter Tight 400–700 · Plus Jakarta Sans 400–600</span>)
         with serif/system fallbacks.</p>
@@ -278,14 +327,19 @@
         <div class="cap">The breath orb — the thesis, made literal</div>
         <div style="display:flex;align-items:center;gap:20px">
           <div class="breath-orb"></div>
-          <p style="font-size:13px;line-height:1.55;color:rgb(var(--ink)/.65);margin:0">
-            A soft sage radial glow behind the header, scaling 1 → 1.14 over a
+          <p style="font-size:13px;line-height:1.55;color:rgb(var(--ink)/.70);margin:0">
+            A <b>solid lit sphere</b> that fills and empties, scaling 0.86 → 1 over a
             <b>7-second</b> ease-in-out cycle — the cadence of a calm human breath.
-            It is the app's only ambient animation.</p>
+            It is the app's only ambient animation.<br /><br />
+            <b>v3:</b> it used to be a transparent radial glow fading its opacity, which
+            read as a smudge rather than a breath — an edgeless shape has nothing to
+            measure its own growth against. A sphere that holds its edge does, at any
+            size. The only place the soft form survives is <i>behind</i> the week header,
+            where text sits on top and an opaque ball would fight it.</p>
         </div>
         <pre style="margin:14px 0 0">@keyframes exhale-breathe {
-  0%, 100% { transform: scale(1);    opacity: .75; }
-  50%      { transform: scale(1.14); opacity: 1;   }
+  0%, 100% { transform: scale(0.86); }
+  50%      { transform: scale(1);    }
 }
 .breath-orb { animation: exhale-breathe 7s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
@@ -322,24 +376,24 @@
                   border:1px solid rgb(var(--ink)/.10);border-radius:26px;background:rgb(var(--canvas))">
         <div class="breath-orb" style="margin:0 auto 18px"></div>
         <div style="font-family:'Inter Tight',sans-serif;font-size:10px;font-weight:600;
-                    letter-spacing:.2em;text-transform:uppercase;color:rgb(var(--ink)/.45)">
+                    letter-spacing:.2em;text-transform:uppercase;color:rgb(var(--ink)/.70)">
           Friday afternoon · Andy</div>
         <div style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:31px;
                     line-height:1.08;margin:10px 0 0;color:rgb(var(--ink))">
           A lighter week.<br>Breathe out.</div>
-        <div style="font-size:12.5px;line-height:1.55;color:rgb(var(--ink)/.55);margin:12px auto 0;max-width:19rem">
+        <div style="font-size:12.5px;line-height:1.55;color:rgb(var(--ink)/.70);margin:12px auto 0;max-width:19rem">
           2 things want you this week. Everything else is handled or watched.</div>
         <div style="margin-top:20px;text-align:left;display:grid;gap:2px">
           <div class="sevrow" style="margin:0;padding:7px 10px;border-radius:14px;font-size:13px">
             <span class="severity-dot dot-amber"></span>
             <span style="flex:1">Field Trip Permission Slip</span>
-            <span style="font-size:11.5px;color:rgb(var(--amber));filter:brightness(.9)">Sat</span></div>
+            <span style="font-size:11.5px;color:rgb(var(--amber-text))">Sat</span></div>
           <div class="sevrow" style="margin:0;padding:7px 10px;border-radius:14px;font-size:13px">
             <span class="severity-dot dot-amber"></span>
             <span style="flex:1">State Immunization Record</span>
-            <span style="font-size:11.5px;color:rgb(var(--amber));filter:brightness(.9)">Sat</span></div>
+            <span style="font-size:11.5px;color:rgb(var(--amber-text))">Sat</span></div>
         </div>
-        <div style="margin-top:20px;font-size:11px;color:rgb(var(--ink)/.4)">see the full week ↓</div>
+        <div style="margin-top:20px;font-size:11px;color:rgb(var(--ink)/.70)">see the full week ↓</div>
       </div>
 
       <p class="lead" style="margin:18px 0 0">Rules the glance holds: at most <b>three</b>
@@ -393,7 +447,7 @@
         <div class="sevrow"><span class="severity-dot dot-amber"></span> Needs you — deadlines, hard weeks, dying threads</div>
         <div class="sevrow"><span class="severity-dot dot-sage"></span> Safe / covered / verified / success</div>
         <div class="sevrow"><span class="severity-dot dot-navy"></span> Advisory — worth knowing, not worth worrying</div>
-        <p style="font-size:12.5px;color:rgb(var(--ink)/.55);line-height:1.55;margin:10px 0 0">
+        <p style="font-size:12.5px;color:rgb(var(--ink)/.70);line-height:1.55;margin:10px 0 0">
           7px dot, 4px halo at 12–16% tint. Severity is stated once, quietly, next to the
           section title — never as a count badge, never blinking.</p>
       </div>
@@ -404,7 +458,7 @@
           <button class="btn btn-action">+ Keep this time</button>
           <button class="btn btn-quiet">Let it go</button>
         </div>
-        <p style="font-size:12.5px;color:rgb(var(--ink)/.55);line-height:1.55;margin:12px 0 0">
+        <p style="font-size:12.5px;color:rgb(var(--ink)/.70);line-height:1.55;margin:12px 0 0">
           All fully rounded. Filled navy (<span class="mono">--ink-solid</span>) for the one
           primary act on a screen; sage-tint outline for affirmative actions; quiet outline
           for everything reversible. <b>Labels say exactly what happens</b> — the same button
@@ -424,7 +478,7 @@
       <div class="demo">
         <div class="cap">Inputs</div>
         <input class="input-demo" placeholder="The house needs…" />
-        <p style="font-size:12.5px;color:rgb(var(--ink)/.55);line-height:1.55;margin:12px 0 0">
+        <p style="font-size:12.5px;color:rgb(var(--ink)/.70);line-height:1.55;margin:12px 0 0">
           Fully rounded, canvas-tinted fill, ink-15% border warming to sage on focus.
           Placeholders are invitations ("The house needs…"), not formats ("Enter task name").</p>
       </div>
@@ -513,13 +567,18 @@
   --ink: 26 43 76;            /* Sanctuary Navy — text, borders */
   --canvas: 244 246 249;      /* Pure Breath — page ground */
   --surface: 255 255 255;     /* cards / panels */
-  --sage: 124 157 150;        /* Sage Release — safe, shared, success */
-  --amber: 226 149 120;       /* Looming Amber — attention, not alarm */
+  --sage: 124 157 150;        /* Sage Release — DECORATIVE: fills, halos, borders */
+  --amber: 226 149 120;       /* Looming Amber — DECORATIVE: fills, dots, halos */
+  --sage-text: 89 119 113;    /* the same hues darkened until they clear 4.5:1 */
+  --amber-text: 187 80 40;    /* on white AND on canvas. Anything READ uses these. */
   --ink-solid: 26 43 76;      /* filled primary button */
 }
 @media (prefers-color-scheme: dark) { :root {
   --ink: 226 232 240; --canvas: 12 20 32; --surface: 22 35 59;
-  --sage: 166 195 188; --amber: 237 171 144; --ink-solid: 42 62 100;
+  --sage: 166 195 188; --amber: 237 171 144;
+  --sage-text: 166 195 188;   /* already 8.3:1 on the dark surface */
+  --amber-text: 237 171 144;  /* 8.1:1 — no darkening needed here */
+  --ink-solid: 42 62 100;
 } }
 /* data-theme (user toggle) repeats both sets and wins over the media query */
 
@@ -540,7 +599,18 @@ body {
 /* Type roles */
 --display:   "Instrument Serif", ui-serif, Georgia, serif;   /* italic, never bold */
 --interface: "Inter Tight", system-ui, sans-serif;           /* -0.02em; labels 700 caps +.14em */
---micro:     "Plus Jakarta Sans", system-ui, sans-serif;     /* body & data; tabular-nums */</pre>
+--micro:     "Plus Jakarta Sans", system-ui, sans-serif;     /* body & data; tabular-nums */
+
+/* Type scale — lifted in v3. Tailwind's defaults start at 12/14/16; every
+   step here is one notch up, because the base size is what a tired parent
+   reads at arm's length on a phone. */
+xs   13px / 1.15rem      sm   15px / 1.4rem
+base 17px / 1.6rem       lg   19px / 1.75rem
+
+/* Contrast floor — enforced by backend/tests/test_ui_contrast.py */
+ink text          >= /70   (5.37:1 light, 6.94:1 dark)
+links, deadlines  --sage-text / --amber-text, never --sage / --amber
+white knockout    only on --ink-solid or the -text accents, never a pale fill</pre>
     </div>
   </section>
 

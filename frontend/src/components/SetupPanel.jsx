@@ -97,7 +97,7 @@ export default function SetupPanel({ familyId, onSaved }) {
           🏠 Set Up Your Household
         </h2>
       </header>
-      <p className="mb-4 font-micro text-sm text-sanctuary-navy/60">
+      <p className="mb-4 font-micro text-sm text-sanctuary-navy/70">
         Tell Exhale who needs looking after and who's around. Two minutes — then
         Exhale starts spotting the gaps that need covering and the time that's
         actually yours.
@@ -105,7 +105,7 @@ export default function SetupPanel({ familyId, onSaved }) {
 
       <form onSubmit={submit} className="space-y-4 font-micro text-sm">
         <div>
-          <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/50">
+          <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/70">
             Children who need supervision
           </label>
           <div className="space-y-2">
@@ -121,7 +121,7 @@ export default function SetupPanel({ familyId, onSaved }) {
                 {children.length > 1 && (
                   <button type="button" aria-label={`Remove child ${i + 1}`}
                           onClick={() => setChildren((cs) => cs.filter((_, j) => j !== i))}
-                          className="text-sanctuary-navy/40 hover:text-looming-amber">
+                          className="text-sanctuary-navy/70 hover:text-amber-text">
                     ✕
                   </button>
                 )}
@@ -130,10 +130,10 @@ export default function SetupPanel({ familyId, onSaved }) {
           </div>
           <button type="button"
                   onClick={() => setChildren((cs) => [...cs, { name: "", birthdate: "" }])}
-                  className="mt-2 text-xs font-medium text-sanctuary-navy/60 underline-offset-2 hover:underline">
+                  className="mt-2 text-xs font-medium text-sanctuary-navy/70 underline-offset-2 hover:underline">
             + Add another child
           </button>
-          <p className="mt-1.5 text-xs text-sanctuary-navy/50">
+          <p className="mt-1.5 text-xs text-sanctuary-navy/70">
             Birthdate is optional — it lets Exhale ask the right questions as
             kids grow (and look up their grade), never decide for you.
           </p>
@@ -141,7 +141,7 @@ export default function SetupPanel({ familyId, onSaved }) {
 
         {caregivers.map((cg, i) => (
           <div key={i} className="rounded-xl border border-sanctuary-navy/10 p-3">
-            <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/50">
+            <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/70">
               Caregiver {i + 1}{i > 0 ? " (optional)" : ""}
             </label>
             <div className="flex flex-wrap items-center gap-2">
@@ -182,7 +182,7 @@ export default function SetupPanel({ familyId, onSaved }) {
                           "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
                           (on
                             ? "border-sage-release/60 bg-sage-release/20 text-sanctuary-navy"
-                            : "border-sanctuary-navy/15 text-sanctuary-navy/50 hover:bg-sanctuary-navy/5")
+                            : "border-sanctuary-navy/15 text-sanctuary-navy/70 hover:bg-sanctuary-navy/5")
                         }>
                         {label}
                       </button>
@@ -196,7 +196,7 @@ export default function SetupPanel({ familyId, onSaved }) {
                   <input type="time" value={cg.end} className={input}
                          onChange={(e) => setCg(i, { end: e.target.value })} />
                 </div>
-                <p className="mt-1.5 text-xs text-sanctuary-navy/50">
+                <p className="mt-1.5 text-xs text-sanctuary-navy/70">
                   Tap the days they work — shift and weekend schedules welcome. Same
                   hours each workday; sync their calendar for anything irregular.
                 </p>
@@ -206,10 +206,10 @@ export default function SetupPanel({ familyId, onSaved }) {
         ))}
 
         <div className="rounded-xl border border-sanctuary-navy/10 p-3">
-          <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/50">
+          <label className="mb-1 block text-xs font-semibold uppercase text-sanctuary-navy/70">
             School year (optional — or snap the calendar later)
           </label>
-          <p className="mb-2 text-xs text-sanctuary-navy/50">
+          <p className="mb-2 text-xs text-sanctuary-navy/70">
             Applies to every child above. Different schools or a non-school-age
             kid? Save now, then snap each school's calendar photo to set them
             per child.
@@ -229,7 +229,7 @@ export default function SetupPanel({ familyId, onSaved }) {
                 className="rounded-full border border-sage-release/40 bg-sage-release/10 px-5 py-2 font-medium text-sanctuary-navy transition hover:bg-sage-release/20 disabled:opacity-50">
           {busy ? "Saving…" : "Save household"}
         </button>
-        {error && <p className="text-xs text-looming-amber">{error}</p>}
+        {error && <p className="text-xs text-amber-text">{error}</p>}
       </form>
     </section>
   );

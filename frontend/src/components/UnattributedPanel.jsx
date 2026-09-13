@@ -53,7 +53,7 @@ export default function UnattributedPanel({ familyId, onChanged }) {
           Who is this for?
         </h2>
       </header>
-      <p className="mb-4 font-micro text-sm text-sanctuary-navy/60">
+      <p className="mb-4 font-micro text-sm text-sanctuary-navy/70">
         These came off a photo that never said whose schedule it was. Name the
         batch and Exhale can reason about who needs to be where.
       </p>
@@ -63,7 +63,7 @@ export default function UnattributedPanel({ familyId, onChanged }) {
           <div key={g.source_reference} className="rounded-2xl bg-pure-breath p-4">
             <p className="font-micro text-sm font-medium text-sanctuary-navy/85">
               {g.source}
-              <span className="ml-2 font-normal text-sanctuary-navy/45">
+              <span className="ml-2 font-normal text-sanctuary-navy/70">
                 {g.count} item{g.count === 1 ? "" : "s"}
               </span>
             </p>
@@ -71,13 +71,13 @@ export default function UnattributedPanel({ familyId, onChanged }) {
               {g.items.slice(0, 4).map((i) => (
                 <li
                   key={i.extraction_id}
-                  className="font-micro text-xs text-sanctuary-navy/55"
+                  className="font-micro text-xs text-sanctuary-navy/70"
                 >
                   {i.title}
                 </li>
               ))}
               {g.count > 4 && (
-                <li className="font-micro text-xs text-sanctuary-navy/40">
+                <li className="font-micro text-xs text-sanctuary-navy/70">
                   …and {g.count - 4} more
                 </li>
               )}
@@ -119,7 +119,7 @@ export default function UnattributedPanel({ familyId, onChanged }) {
       </div>
 
       {done && (
-        <p className="mt-3 font-micro text-xs text-sage-release">{done}</p>
+        <p className="mt-3 font-micro text-xs text-sage-text">{done}</p>
       )}
     </section>
   );

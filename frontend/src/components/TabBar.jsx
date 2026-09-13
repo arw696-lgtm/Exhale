@@ -41,7 +41,9 @@ export default function TabBar({ active, onChange, todayCount = 0 }) {
       className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2"
       aria-label="Sections"
     >
-      <div className="flex w-full max-w-md justify-around rounded-[26px] border border-sanctuary-navy/10 bg-surface/85 px-2 py-2.5 shadow-card backdrop-blur-xl">
+      {/* /95, not /85: at 85% the page scrolls *through* the bar and ghost
+          text sits under live navigation. Frosted, not see-through. */}
+      <div className="flex w-full max-w-md justify-around rounded-[26px] border border-sanctuary-navy/10 bg-surface/95 px-2 py-2.5 shadow-card backdrop-blur-xl">
         {TABS.map((t) => {
           const on = active === t.key;
           return (
@@ -50,14 +52,17 @@ export default function TabBar({ active, onChange, todayCount = 0 }) {
               onClick={() => onChange(t.key)}
               aria-current={on ? "page" : undefined}
               className={
-                "relative flex flex-1 flex-col items-center gap-1 font-interface text-[10px] font-semibold transition " +
-                (on ? "text-sage-release" : "text-sanctuary-navy/40 hover:text-sanctuary-navy/70")
+                "relative flex flex-1 flex-col items-center gap-1 font-interface text-[11px] font-semibold transition " +
+                (on ? "text-sage-text" : "text-sanctuary-navy/70 hover:text-sanctuary-navy")
               }
             >
               <span className="relative">
                 {ICONS[t.key]}
+                {/* White on decorative amber is 2.1:1 — unreadable, and this
+                    badge is a count, not an ornament. amber-text carries it at
+                    4.9:1, one size up. */}
                 {t.key === "today" && todayCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-looming-amber px-1 text-[8px] font-bold text-white">
+                  <span className="absolute -right-2 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-amber-text px-1 text-[9px] font-bold leading-none text-white">
                     {todayCount}
                   </span>
                 )}

@@ -93,7 +93,7 @@ export default function AwayPanel({ familyId, onChanged }) {
         </h2>
       </header>
 
-      <p className="mb-3 font-micro text-sm text-sanctuary-navy/60">
+      <p className="mb-3 font-micro text-sm text-sanctuary-navy/70">
         Tell Exhale when the family's away together. Coverage stops asking who's
         watching the kids, weekly contributions pause, and the calendar feed
         shows the trip. Deadlines still stand — that's when they're easiest to
@@ -110,11 +110,11 @@ export default function AwayPanel({ familyId, onChanged }) {
           <p className="font-micro text-sm text-sanctuary-navy/85">
             ✈️ Looks like a trip:{" "}
             <span className="font-semibold">{prettyRange(s)}</span>
-            <span className="text-sanctuary-navy/55">
+            <span className="text-sanctuary-navy/70">
               {" "}— {s.artifact_count} travel booking{s.artifact_count === 1 ? "" : "s"}
             </span>
           </p>
-          <p className="mt-1 font-micro text-xs text-sanctuary-navy/50">
+          <p className="mt-1 font-micro text-xs text-sanctuary-navy/70">
             {s.artifacts.slice(0, 3).join(" · ")}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -153,12 +153,12 @@ export default function AwayPanel({ familyId, onChanged }) {
             >
               <span className="min-w-0 font-micro text-sm text-sanctuary-navy/85">
                 <span className="font-semibold">{p.label}</span>
-                <span className="ml-2 text-sanctuary-navy/55">{prettyRange(p)}</span>
+                <span className="ml-2 text-sanctuary-navy/70">{prettyRange(p)}</span>
               </span>
               <button
                 onClick={() => remove(p.away_id)}
                 disabled={busy}
-                className="shrink-0 font-micro text-xs text-sanctuary-navy/45 underline-offset-2 hover:underline disabled:opacity-50"
+                className="shrink-0 font-micro text-xs text-sanctuary-navy/70 underline-offset-2 hover:underline disabled:opacity-50"
               >
                 Remove
               </button>
@@ -172,7 +172,7 @@ export default function AwayPanel({ familyId, onChanged }) {
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Where to? (optional)"
-          className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/35 focus:border-sage-release focus:outline-none"
+          className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
         />
         <input
           type="date"
@@ -181,7 +181,7 @@ export default function AwayPanel({ familyId, onChanged }) {
           aria-label="First day away"
           className="rounded-full border border-sanctuary-navy/15 bg-pure-breath px-3 py-2 font-micro text-sm text-sanctuary-navy focus:border-sage-release focus:outline-none"
         />
-        <span className="font-micro text-xs text-sanctuary-navy/45">to</span>
+        <span className="font-micro text-xs text-sanctuary-navy/70">to</span>
         <input
           type="date"
           value={end}
@@ -197,7 +197,7 @@ export default function AwayPanel({ familyId, onChanged }) {
           {busy ? "Saving…" : "Add"}
         </button>
       </div>
-      {error && <p className="mt-2 font-micro text-xs text-looming-amber">{error}</p>}
+      {error && <p className="mt-2 font-micro text-xs text-amber-text">{error}</p>}
     </section>
   );
 }

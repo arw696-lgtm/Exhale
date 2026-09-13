@@ -35,11 +35,11 @@ export default function HandledRecap({ handled }) {
       </h2>
       {count === 0 ? (
         (handled.open_urgent ?? 0) === 0 ? (
-          <p className="font-micro text-sm text-sanctuary-navy/60">
+          <p className="font-micro text-sm text-sanctuary-navy/70">
             A quiet week — nothing needed catching.
           </p>
         ) : (
-          <p className="font-micro text-sm text-sanctuary-navy/60">
+          <p className="font-micro text-sm text-sanctuary-navy/70">
             Nothing resolved yet this week — the items above are still open.
           </p>
         )
@@ -55,12 +55,12 @@ export default function HandledRecap({ handled }) {
                 key={`${e.resolved_type}-${e.item_id}`}
                 className="flex items-baseline gap-2 border-l-2 border-sage-release/50 pl-3 font-micro text-sm text-sanctuary-navy/80"
               >
-                <span className="text-sage-release" aria-hidden="true">
+                <span className="text-sage-text" aria-hidden="true">
                   {TYPE_ICON[e.resolved_type] ?? "✓"}
                 </span>
                 <span>
                   {e.brief_description}
-                  <span className="ml-2 text-xs text-sanctuary-navy/40">
+                  <span className="ml-2 text-xs text-sanctuary-navy/70">
                     {fmtDay(e.resolved_at)}
                   </span>
                 </span>

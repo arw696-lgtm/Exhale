@@ -56,13 +56,13 @@ export default function BreathGlance({
       style={{ minHeight: "calc(100dvh - env(safe-area-inset-top))" }}
     >
       {/* top bar — household left, theme + logout right */}
-      <div className="flex items-center justify-between pt-5 font-micro text-xs text-sanctuary-navy/50">
+      <div className="flex items-center justify-between pt-5 font-micro text-xs text-sanctuary-navy/70">
         <span>
           {user ? (
             <>
               {user.display_name}'s household
               {inviteCode && (
-                <span className="ml-2 rounded-full bg-sage-release/15 px-2 py-0.5 font-semibold text-sanctuary-navy/60">
+                <span className="ml-2 rounded-full bg-sage-release/15 px-2 py-0.5 font-semibold text-sanctuary-navy/70">
                   invite: {inviteCode}
                 </span>
               )}
@@ -83,24 +83,19 @@ export default function BreathGlance({
 
       {/* the glance — centered breath, tenor, and only what needs you */}
       <div className="flex flex-1 flex-col items-center justify-center text-center">
-        <div
-          aria-hidden="true"
-          className="breath-orb h-52 w-52 rounded-full sm:h-60 sm:w-60"
-          style={{
-            background:
-              "radial-gradient(circle at 42% 42%, rgb(var(--sage) / 0.42), rgb(var(--sage) / 0.10) 55%, transparent 70%)",
-            filter: "blur(6px)",
-          }}
-        />
+        {/* The breath: a solid ball that fills and empties. Styling lives in
+            index.css (.breath-orb) — an inline background here would override
+            it and put the old smudge back. */}
+        <div aria-hidden="true" className="breath-orb h-44 w-44 sm:h-52 sm:w-52" />
 
-        <p className="mt-7 font-interface text-[11px] font-semibold uppercase tracking-[0.2em] text-sanctuary-navy/45">
+        <p className="mt-7 font-interface text-[11px] font-semibold uppercase tracking-[0.2em] text-sanctuary-navy/70">
           {timeLabel()}
           {first && ` · ${first}`}
         </p>
 
         {/* Vacation mode — the family is together, elsewhere. */}
         {briefing.away && (
-          <p className="mt-2 rounded-full bg-sage-release/12 px-4 py-1 font-micro text-xs font-medium text-sage-release">
+          <p className="mt-2 rounded-full bg-sage-release/12 px-4 py-1 font-micro text-xs font-medium text-sage-text">
             ✈️ {briefing.away.label} — back{" "}
             {new Date(`${briefing.away.end}T00:00:00`).toLocaleDateString(undefined, {
               weekday: "long",
@@ -114,7 +109,7 @@ export default function BreathGlance({
           {tenor.headline[1]}
         </h1>
 
-        <p className="mx-auto mt-4 max-w-[19.5rem] font-micro text-sm leading-relaxed text-sanctuary-navy/55">
+        <p className="mx-auto mt-4 max-w-[19.5rem] font-micro text-sm leading-relaxed text-sanctuary-navy/70">
           {tenor.sub}
         </p>
 
@@ -132,7 +127,7 @@ export default function BreathGlance({
                     <span className="severity-dot severity-dot--amber" aria-hidden="true" />
                     <span className="min-w-0 flex-1 truncate">{item.title}</span>
                     {item.deadline && (
-                      <span className="shrink-0 text-xs text-looming-amber">
+                      <span className="shrink-0 text-xs text-amber-text">
                         {shortDay(item.deadline)}
                       </span>
                     )}
@@ -141,7 +136,7 @@ export default function BreathGlance({
               );
             })}
             {tenor.needs > items.length && (
-              <li className="px-3 pt-1 text-center font-micro text-xs text-sanctuary-navy/40">
+              <li className="px-3 pt-1 text-center font-micro text-xs text-sanctuary-navy/70">
                 and {tenor.needs - items.length} more below
               </li>
             )}
@@ -162,7 +157,7 @@ export default function BreathGlance({
         {isSunday && onOpenReview && (
           <button
             onClick={onOpenReview}
-            className="mt-4 font-micro text-xs font-medium text-sage-release transition hover:text-sanctuary-navy"
+            className="mt-4 font-micro text-xs font-medium text-sage-text transition hover:text-sanctuary-navy"
           >
             Your week, in review →
           </button>
@@ -173,7 +168,7 @@ export default function BreathGlance({
       <div className="pb-24 text-center">
         <button
           onClick={reveal}
-          className="font-micro text-xs text-sanctuary-navy/40 transition hover:text-sanctuary-navy/70"
+          className="font-micro text-xs text-sanctuary-navy/70 transition hover:text-sanctuary-navy"
           aria-label="See the full week"
         >
           see the full week ↓

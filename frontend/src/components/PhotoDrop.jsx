@@ -113,7 +113,7 @@ export default function PhotoDrop({ familyId, knownChildren = [], onChanged }) {
         </h2>
       </header>
 
-      <p className="mb-3 font-micro text-sm text-sanctuary-navy/60">
+      <p className="mb-3 font-micro text-sm text-sanctuary-navy/70">
         Snap a flyer, a practice schedule, a screenshot — or select a whole
         batch at once. Exhale reads each one and tracks what it finds. Anything
         it isn't sure about waits for your confirmation instead of being
@@ -141,7 +141,7 @@ export default function PhotoDrop({ familyId, knownChildren = [], onChanged }) {
       </button>
 
       {result && (
-        <div className="mt-3 space-y-1 font-micro text-xs text-sanctuary-navy/60">
+        <div className="mt-3 space-y-1 font-micro text-xs text-sanctuary-navy/70">
           <p>
             {result.items.length === 0
               ? "Nothing trackable found."
@@ -151,7 +151,7 @@ export default function PhotoDrop({ familyId, knownChildren = [], onChanged }) {
                   .join(" · ")}
           </p>
           {result.failures.map((f) => (
-            <p key={f.name} className="text-looming-amber">
+            <p key={f.name} className="text-amber-text">
               {f.name} couldn't be read — {f.message}
             </p>
           ))}
@@ -179,7 +179,7 @@ export default function PhotoDrop({ familyId, knownChildren = [], onChanged }) {
             </div>
           )}
           {result.attributedTo && (
-            <p className="text-sage-release">Filed under {result.attributedTo}.</p>
+            <p className="text-sage-text">Filed under {result.attributedTo}.</p>
           )}
         </div>
       )}
@@ -190,7 +190,7 @@ export default function PhotoDrop({ familyId, knownChildren = [], onChanged }) {
           <p className="font-micro text-sm font-medium text-sanctuary-navy/80">
             Is it a school-year calendar?
           </p>
-          <p className="mt-1 font-micro text-xs leading-relaxed text-sanctuary-navy/55">
+          <p className="mt-1 font-micro text-xs leading-relaxed text-sanctuary-navy/70">
             Send it here instead. Exhale reads the whole year — first day, last
             day, teacher workshops, breaks — and files it as that child's school
             calendar. Then a random day off stops being a mystery: Exhale knows
@@ -224,7 +224,7 @@ export default function PhotoDrop({ familyId, knownChildren = [], onChanged }) {
             </button>
           </div>
           {schoolResult && (
-            <p className="mt-2 font-micro text-xs text-sage-release">
+            <p className="mt-2 font-micro text-xs text-sage-text">
               {schoolChild}'s school year is set —{" "}
               {schoolResult.no_school_days ?? schoolResult.synced_no_school_days ?? 0}{" "}
               no-school days are now days Exhale knows are yours to cover.
@@ -233,7 +233,7 @@ export default function PhotoDrop({ familyId, knownChildren = [], onChanged }) {
         </div>
       )}
 
-      {error && <p className="mt-3 font-micro text-xs text-looming-amber">{error}</p>}
+      {error && <p className="mt-3 font-micro text-xs text-amber-text">{error}</p>}
     </section>
   );
 }

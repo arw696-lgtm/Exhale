@@ -72,7 +72,7 @@ export default function CalendarScreen({ briefing }) {
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <header className="mb-6">
-        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-release">
+        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-text">
           The week ahead
         </p>
         <h1 className="mt-2 font-display text-[2rem] italic text-sanctuary-navy">
@@ -83,7 +83,7 @@ export default function CalendarScreen({ briefing }) {
       {days.length === 0 ? (
         <div className="rounded-[22px] border border-sanctuary-navy/10 bg-surface p-8 text-center shadow-card">
           <p className="font-display text-xl italic text-sanctuary-navy">Nothing on the horizon.</p>
-          <p className="mx-auto mt-2 max-w-xs font-micro text-sm text-sanctuary-navy/55">
+          <p className="mx-auto mt-2 max-w-xs font-micro text-sm text-sanctuary-navy/70">
             No deadlines, gaps, or open windows in view. Connect a calendar and
             Exhale fills this in.
           </p>
@@ -99,7 +99,7 @@ export default function CalendarScreen({ briefing }) {
                   <span className="text-base font-semibold">
                     {d.toLocaleDateString(undefined, { weekday: "long" })}
                   </span>
-                  <span className="font-micro text-xs text-sanctuary-navy/45">
+                  <span className="font-micro text-xs text-sanctuary-navy/70">
                     {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </span>
                 </h2>
@@ -109,7 +109,7 @@ export default function CalendarScreen({ briefing }) {
                       <span className={`severity-dot ${e.dot} mt-[6px]`} aria-hidden="true" />
                       <div>
                         <p className="font-semibold text-sanctuary-navy">{e.title}</p>
-                        <p className="mt-0.5 text-sanctuary-navy/60">{e.sub}</p>
+                        <p className="mt-0.5 text-sanctuary-navy/70">{e.sub}</p>
                       </div>
                     </li>
                   ))}

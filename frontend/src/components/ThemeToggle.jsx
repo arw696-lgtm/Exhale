@@ -35,7 +35,7 @@ export default function ThemeToggle({ className = "" }) {
       aria-label={dark ? "Switch to light" : "Switch to dark"}
       title={dark ? "Switch to light" : "Switch to dark"}
       className={
-        "grid h-7 w-7 place-items-center rounded-full text-sanctuary-navy/55 transition hover:bg-sanctuary-navy/5 hover:text-sanctuary-navy " +
+        "grid h-7 w-7 place-items-center rounded-full text-sanctuary-navy/70 transition hover:bg-sanctuary-navy/5 hover:text-sanctuary-navy " +
         className
       }
     >

@@ -27,23 +27,21 @@ export default function BreathHeader({ user, briefing, inviteCode, onLogout }) {
       {/* the breath */}
       <div
         aria-hidden="true"
-        className="breath-orb pointer-events-none absolute -left-16 -top-24 h-64 w-64 rounded-full"
-        style={{
-          background:
-            "radial-gradient(circle at 40% 40%, rgba(124,157,150,0.28), transparent 66%)",
-          filter: "blur(8px)",
-        }}
+        /* Decorative wash behind the header — this one stays soft and
+           blurred on purpose: text sits on top of it, so a hard-edged
+           sphere here would fight the words. */
+        className="breath-orb pointer-events-none absolute -left-16 -top-24 h-64 w-64 opacity-40 blur-2xl"
       />
 
       <div className="relative">
         {/* top bar — household on the left, theme + logout on the right */}
-        <div className="mb-6 flex items-center justify-between font-micro text-xs text-sanctuary-navy/50">
+        <div className="mb-6 flex items-center justify-between font-micro text-xs text-sanctuary-navy/70">
           <span>
             {user ? (
               <>
                 {user.display_name}'s household
                 {inviteCode && (
-                  <span className="ml-2 rounded-full bg-sage-release/15 px-2 py-0.5 font-semibold text-sanctuary-navy/60">
+                  <span className="ml-2 rounded-full bg-sage-release/15 px-2 py-0.5 font-semibold text-sanctuary-navy/70">
                     invite code: {inviteCode}
                   </span>
                 )}
@@ -62,7 +60,7 @@ export default function BreathHeader({ user, briefing, inviteCode, onLogout }) {
           </div>
         </div>
 
-        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-release">
+        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-text">
           {briefing.week_of
             ? /^week of/i.test(briefing.week_of)
               ? briefing.week_of
@@ -79,7 +77,7 @@ export default function BreathHeader({ user, briefing, inviteCode, onLogout }) {
           <br />
           {headline[1]}
         </p>
-        <p className="mt-3 max-w-md font-micro text-sm leading-relaxed text-sanctuary-navy/60">
+        <p className="mt-3 max-w-md font-micro text-sm leading-relaxed text-sanctuary-navy/70">
           {sub}
         </p>
       </div>

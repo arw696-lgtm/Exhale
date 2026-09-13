@@ -13,7 +13,7 @@ export default function YouScreen({ user, inviteCode, familyId, live, onLogout }
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <header className="mb-6">
-        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-release">
+        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-text">
           You
         </p>
         <h1 className="mt-2 font-display text-[2rem] italic text-sanctuary-navy">
@@ -25,18 +25,18 @@ export default function YouScreen({ user, inviteCode, familyId, live, onLogout }
         <section className="mb-8 rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
           <dl className="space-y-2 font-micro text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-sanctuary-navy/50">Name</dt>
+              <dt className="text-sanctuary-navy/70">Name</dt>
               <dd className="font-semibold text-sanctuary-navy">{user.display_name}</dd>
             </div>
             {user.email && (
               <div className="flex justify-between gap-4">
-                <dt className="text-sanctuary-navy/50">Email</dt>
+                <dt className="text-sanctuary-navy/70">Email</dt>
                 <dd className="text-sanctuary-navy/80">{user.email}</dd>
               </div>
             )}
             {inviteCode && (
               <div className="flex items-center justify-between gap-4 border-t border-sanctuary-navy/10 pt-2">
-                <dt className="text-sanctuary-navy/50">Family invite code</dt>
+                <dt className="text-sanctuary-navy/70">Family invite code</dt>
                 <dd className="rounded-full bg-sage-release/15 px-2.5 py-0.5 font-semibold tracking-widest text-sanctuary-navy">
                   {inviteCode}
                 </dd>
@@ -50,7 +50,7 @@ export default function YouScreen({ user, inviteCode, familyId, live, onLogout }
       {live && <WorkWindowsPanel familyId={familyId} />}
 
       <section className="mb-8 rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
-        <h2 className="mb-3 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+        <h2 className="mb-3 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
           Settings
         </h2>
         <div className="flex items-center justify-between font-micro text-sm">

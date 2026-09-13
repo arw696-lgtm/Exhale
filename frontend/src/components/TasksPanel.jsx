@@ -84,19 +84,19 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
           Contributions
         </h2>
         {away && (
-          <p className="mt-1 font-micro text-xs text-sanctuary-navy/50">
+          <p className="mt-1 font-micro text-xs text-sanctuary-navy/70">
             ✈️ Weekly contributions are paused — the family's away.
           </p>
         )}
         {!away && tasks.length > 0 && when && (
-          <p className="mt-1 font-micro text-xs text-sage-release">
+          <p className="mt-1 font-micro text-xs text-sage-text">
             {when} looks open — got a little time?
           </p>
         )}
       </header>
 
       {tasks.length === 0 ? (
-        <p className="font-micro text-sm text-sanctuary-navy/50">
+        <p className="font-micro text-sm text-sanctuary-navy/70">
           {covered.length > 0
             ? "Everything's covered this week. Nicely done."
             : "Nothing on the pile. Add anything the house needs — mow the lawn, call the plumber — and whoever has a moment can grab it."}
@@ -115,12 +115,12 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
               <span className="min-w-0 flex-1 font-micro text-sm leading-relaxed text-sanctuary-navy/85">
                 {t.description}
                 {t.cadence === "weekly" && (
-                  <span className="ml-2 whitespace-nowrap rounded-full bg-sanctuary-navy/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sanctuary-navy/45">
+                  <span className="ml-2 whitespace-nowrap rounded-full bg-sanctuary-navy/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sanctuary-navy/70">
                     weekly
                   </span>
                 )}
                 {t.claimed_by && (
-                  <span className="ml-2 whitespace-nowrap rounded-full bg-sage-release/12 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sage-release">
+                  <span className="ml-2 whitespace-nowrap rounded-full bg-sage-release/12 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sage-text">
                     {t.claimed_by}'s got it
                   </span>
                 )}
@@ -130,7 +130,7 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
                   <button
                     onClick={() => act(() => claimTask(t.id, familyId))}
                     disabled={busy}
-                    className="rounded-full border border-sanctuary-navy/15 px-2.5 py-0.5 font-micro text-[11px] text-sanctuary-navy/60 transition hover:bg-pure-breath"
+                    className="rounded-full border border-sanctuary-navy/15 px-2.5 py-0.5 font-micro text-[11px] text-sanctuary-navy/70 transition hover:bg-pure-breath"
                   >
                     I've got this
                   </button>
@@ -138,7 +138,7 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
                 <button
                   onClick={() => act(() => dropTask(t.id, familyId))}
                   disabled={busy}
-                  className="px-1 font-micro text-xs text-sanctuary-navy/30 transition hover:text-sanctuary-navy/60"
+                  className="px-1 font-micro text-xs text-sanctuary-navy/70 transition hover:text-sanctuary-navy"
                   title="Let it go"
                   aria-label={`Let "${t.description}" go`}
                 >
@@ -153,13 +153,13 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
       {/* Weeklies already covered — quiet credit, back on the pile next week. */}
       {covered.length > 0 && (
         <div className="mt-4 border-t border-sanctuary-navy/10 pt-3">
-          <p className="mb-1.5 font-interface text-[10px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/40">
+          <p className="mb-1.5 font-interface text-[10px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
             Covered this week
           </p>
           <ul className="space-y-1">
             {covered.map((t) => (
-              <li key={t.id} className="font-micro text-xs text-sanctuary-navy/50">
-                <span className="mr-1.5 text-sage-release">✓</span>
+              <li key={t.id} className="font-micro text-xs text-sanctuary-navy/70">
+                <span className="mr-1.5 text-sage-text">✓</span>
                 {t.description}
                 {t.last_completed_by && ` — ${t.last_completed_by}'s contribution`}
               </li>
@@ -184,7 +184,7 @@ export default function TasksPanel({ familyId, window: suggestedWindow, onChange
             Add
           </button>
         </div>
-        <label className="mt-2 flex cursor-pointer items-center gap-2 font-micro text-xs text-sanctuary-navy/55">
+        <label className="mt-2 flex cursor-pointer items-center gap-2 font-micro text-xs text-sanctuary-navy/70">
           <input
             type="checkbox"
             checked={weekly}

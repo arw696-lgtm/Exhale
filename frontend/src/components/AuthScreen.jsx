@@ -31,7 +31,7 @@ export default function AuthScreen({ onAuthed }) {
 
   const field =
     "w-full rounded-xl border border-sanctuary-navy/15 bg-surface px-4 py-2.5 " +
-    "font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/35 " +
+    "font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/70 " +
     "focus:border-sage-release focus:outline-none";
 
   return (
@@ -39,7 +39,7 @@ export default function AuthScreen({ onAuthed }) {
       <div className="w-full max-w-sm">
         <header className="mb-8 text-center">
           <h1 className="font-display text-5xl italic text-sanctuary-navy">Exhale</h1>
-          <p className="mt-2 font-micro text-sm text-sanctuary-navy/60">
+          <p className="mt-2 font-micro text-sm text-sanctuary-navy/70">
             You aren't disorganized. You're just carrying too much data.
             <br />
             Let us remember it for you.
@@ -58,7 +58,7 @@ export default function AuthScreen({ onAuthed }) {
                   "rounded-full py-1.5 font-micro text-sm font-semibold transition " +
                   (mode === m
                     ? "bg-ink-solid text-white"
-                    : "text-sanctuary-navy/60 hover:text-sanctuary-navy")
+                    : "text-sanctuary-navy/70 hover:text-sanctuary-navy")
                 }
               >
                 {m === "login" ? "Log in" : "Create account"}
@@ -118,7 +118,7 @@ export default function AuthScreen({ onAuthed }) {
           </form>
 
           {mode === "signup" && (
-            <p className="mt-4 text-center font-micro text-xs text-sanctuary-navy/50">
+            <p className="mt-4 text-center font-micro text-xs text-sanctuary-navy/70">
               Have a partner's invite code? Enter it to join their household.
             </p>
           )}

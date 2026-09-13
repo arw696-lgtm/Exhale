@@ -37,7 +37,7 @@ export default function HelperHome({ familyId, displayName, onLogout }) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="font-display text-2xl italic text-sanctuary-navy/50">
+        <p className="font-display text-2xl italic text-sanctuary-navy/70">
           Loading your days…
         </p>
       </div>
@@ -56,7 +56,7 @@ export default function HelperHome({ familyId, displayName, onLogout }) {
           <h1 className="font-display text-3xl text-sanctuary-navy">
             {displayName ? `Hi, ${displayName}` : "Your care days"}
           </h1>
-          <p className="mt-1 font-micro text-sm text-sanctuary-navy/60">
+          <p className="mt-1 font-micro text-sm text-sanctuary-navy/70">
             {days.length
               ? `Helping with ${recipient} on ${days.join(" & ")}.`
               : "No care days assigned yet — the family will set these up."}
@@ -64,7 +64,7 @@ export default function HelperHome({ familyId, displayName, onLogout }) {
         </div>
         {onLogout && (
           <button onClick={onLogout}
-            className="font-micro text-xs text-sanctuary-navy/50 underline hover:text-sanctuary-navy/80">
+            className="font-micro text-xs text-sanctuary-navy/70 underline hover:text-sanctuary-navy/80">
             Sign out
           </button>
         )}
@@ -75,7 +75,7 @@ export default function HelperHome({ familyId, displayName, onLogout }) {
           🧑‍🍼 Care needed on your days
         </h2>
         {care.gaps.length === 0 ? (
-          <p className="font-micro text-sm text-sanctuary-navy/50">
+          <p className="font-micro text-sm text-sanctuary-navy/70">
             Nothing needs covering on your days right now. You're all set.
           </p>
         ) : (
@@ -90,7 +90,7 @@ export default function HelperHome({ familyId, displayName, onLogout }) {
                     <p className="font-semibold text-sanctuary-navy">
                       {band.indicator} {formatWindow(gap)}
                     </p>
-                    <span className="whitespace-nowrap text-xs text-sanctuary-navy/50">
+                    <span className="whitespace-nowrap text-xs text-sanctuary-navy/70">
                       {gap.duration_hours}h
                     </span>
                   </div>
@@ -111,7 +111,7 @@ export default function HelperHome({ familyId, displayName, onLogout }) {
             {shared.map((ob) => (
               <li key={ob.obligation_id} className="font-micro text-sm">
                 <p className="font-semibold text-sanctuary-navy">{ob.title}</p>
-                <p className="mt-0.5 text-sanctuary-navy/60">
+                <p className="mt-0.5 text-sanctuary-navy/70">
                   {[ob.person, ob.date && new Date(ob.date).toLocaleDateString(undefined, {
                     month: "short", day: "numeric",
                   })].filter(Boolean).join(" · ")}
@@ -122,7 +122,7 @@ export default function HelperHome({ familyId, displayName, onLogout }) {
         </section>
       )}
 
-      <p className="text-center font-micro text-xs text-sanctuary-navy/40">
+      <p className="text-center font-micro text-xs text-sanctuary-navy/70">
         You see only your care days and what the family shares — nothing else.
       </p>
     </main>

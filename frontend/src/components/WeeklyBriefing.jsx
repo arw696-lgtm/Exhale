@@ -36,7 +36,7 @@ export default function WeeklyBriefing({
     <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
       {/* Open with a breath — unless the Glance already did. */}
       {hideHero ? (
-        <p className="mb-6 font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-release">
+        <p className="mb-6 font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-text">
           {briefing.week_of
             ? /^week of/i.test(briefing.week_of)
               ? briefing.week_of
@@ -57,7 +57,7 @@ export default function WeeklyBriefing({
         <div className="-mt-2 mb-6 text-center">
           <button
             onClick={onOpenReview}
-            className="font-micro text-xs font-medium text-sage-release transition hover:text-sanctuary-navy"
+            className="font-micro text-xs font-medium text-sage-text transition hover:text-sanctuary-navy"
           >
             Your week, in review →
           </button>
@@ -117,7 +117,7 @@ export default function WeeklyBriefing({
       {/* Learned rules — the household's recurring rhythms, with evidence */}
       {(briefing.learned_rules?.length ?? 0) > 0 && (
         <section className="mb-8 rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
-          <h2 className="mb-3 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+          <h2 className="mb-3 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
             Patterns Exhale has learned
           </h2>
           <ul className="space-y-2">
@@ -144,7 +144,7 @@ export default function WeeklyBriefing({
       {/* Closing note — what resolved this week, so the family didn't carry it */}
       <HandledRecap handled={briefing.handled} />
 
-      <footer className="mt-10 text-center font-micro text-xs text-sanctuary-navy/40">
+      <footer className="mt-10 text-center font-micro text-xs text-sanctuary-navy/70">
         Take a deep breath — your memory systems are secure.
       </footer>
     </main>

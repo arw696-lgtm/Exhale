@@ -75,17 +75,17 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
   return (
     <section className="mb-8 rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
       <header className="mb-4 flex items-baseline justify-between">
-        <h2 className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+        <h2 className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
           Care watch · {recipient}
         </h2>
-        <span className="font-micro text-xs text-sanctuary-navy/50">
+        <span className="font-micro text-xs text-sanctuary-navy/70">
           {summary.total_gaps} gap{summary.total_gaps === 1 ? "" : "s"} to cover
         </span>
       </header>
 
       {/* Suppression is stated, never silent (honesty rails). */}
       {(careWatch.away_suppressed ?? 0) > 0 && (
-        <p className="mb-3 font-micro text-xs text-sanctuary-navy/50">
+        <p className="mb-3 font-micro text-xs text-sanctuary-navy/70">
           ✈️ {careWatch.away_suppressed} gap
           {careWatch.away_suppressed === 1 ? "" : "s"} hidden — the family is
           away together then.
@@ -106,7 +106,7 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
                   {multiChild && gap.recipient ? `${gap.recipient} · ` : ""}
                   {formatWindow(gap)}
                 </p>
-                <span className="whitespace-nowrap text-xs text-sanctuary-navy/50">
+                <span className="whitespace-nowrap text-xs text-sanctuary-navy/70">
                   {gap.duration_hours}h
                 </span>
               </div>
@@ -118,7 +118,7 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
                 </button>
                 {live &&
                   (added[gapKey(gap)] ? (
-                    <span className="text-xs font-medium text-sanctuary-navy/60">
+                    <span className="text-xs font-medium text-sanctuary-navy/70">
                       ✓ {coveredLabel(gap)} is handled — sitter reminder on your{" "}
                       {PROVIDER_LABEL[added[gapKey(gap)]] ?? added[gapKey(gap)]} calendar
                     </span>
@@ -145,7 +145,7 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
       </ul>
 
       {assumptionCount > 0 && (
-        <p className="mt-4 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/50">
+        <p className="mt-4 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/70">
           {assumptionCount} of these rest on an assumed schedule. Sync the calendars
           to turn them into confirmed facts.
         </p>
@@ -153,7 +153,7 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
 
       {agePrompts.length > 0 && (
         <div className="mt-4 border-t border-sanctuary-navy/10 pt-3">
-          <p className="mb-2 font-micro text-xs font-semibold uppercase text-sanctuary-navy/50">
+          <p className="mb-2 font-micro text-xs font-semibold uppercase text-sanctuary-navy/70">
             Worth a look as they grow
           </p>
           <ul className="space-y-2">
@@ -161,13 +161,13 @@ export default function CareWatch({ careWatch, familyId, live = false }) {
               <li key={`${p.kind}-${p.child}`}
                   className="border-l-2 border-sage-release/50 pl-3 font-micro text-xs text-sanctuary-navy/70">
                 {p.question}
-                <span className="mt-0.5 block text-sanctuary-navy/40">{p.basis}</span>
+                <span className="mt-0.5 block text-sanctuary-navy/70">{p.basis}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
-      {error && <p className="mt-3 font-micro text-xs text-looming-amber">{error}</p>}
+      {error && <p className="mt-3 font-micro text-xs text-amber-text">{error}</p>}
     </section>
   );
 }

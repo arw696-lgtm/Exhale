@@ -46,14 +46,14 @@ function CarriedItem({ it, canThank, viewerFirst, onThank }) {
           {canThank && it.item_id && !alreadyThanked && (
             <button
               onClick={() => onThank(it.item_id)}
-              className="rounded-full border border-sanctuary-navy/10 px-2 py-0.5 font-micro text-xs text-sanctuary-navy/45 transition hover:border-looming-amber/40 hover:text-looming-amber"
+              className="rounded-full border border-sanctuary-navy/10 px-2 py-0.5 font-micro text-xs text-sanctuary-navy/70 transition hover:border-looming-amber/40 hover:text-amber-text"
               title="Say thanks"
               aria-label={`Say thanks for "${it.text}"`}
             >
               ♡
             </button>
           )}
-          <span className="rounded-full bg-sage-release/12 px-2 py-0.5 font-micro text-[10px] font-medium uppercase tracking-wide text-sage-release">
+          <span className="rounded-full bg-sage-release/12 px-2 py-0.5 font-micro text-[10px] font-medium uppercase tracking-wide text-sage-text">
             {it.kind === "intention" && it.context
               ? CONTEXT_LABEL[it.context] ?? KIND_LABEL.intention
               : KIND_LABEL[it.kind] ?? "Done"}
@@ -61,7 +61,7 @@ function CarriedItem({ it, canThank, viewerFirst, onThank }) {
         </span>
       </div>
       {thanks.length > 0 && (
-        <p className="mt-0.5 font-micro text-[11px] text-looming-amber/80">
+        <p className="mt-0.5 font-micro text-[11px] text-amber-text">
           ♥ {thanks.join(", ")} said thanks
         </p>
       )}
@@ -129,7 +129,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
   if (!loaded) {
     return (
       <main className="flex min-h-[60vh] items-center justify-center">
-        <p className="font-display text-2xl italic text-sanctuary-navy/50">
+        <p className="font-display text-2xl italic text-sanctuary-navy/70">
           Looking back on your week…
         </p>
       </main>
@@ -159,17 +159,17 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
         <div className="mx-auto mb-5 h-14 w-14">
           <div className="breath-orb h-full w-full" aria-hidden="true" />
         </div>
-        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.18em] text-sage-release">
+        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.18em] text-sage-text">
           Your week · in review
         </p>
         <h1
           className={`mt-3 font-display text-[2.1rem] italic leading-tight ${
-            hard ? "text-looming-amber" : "text-sanctuary-navy"
+            hard ? "text-amber-text" : "text-sanctuary-navy"
           }`}
         >
           {tenor.headline}
         </h1>
-        <p className="mx-auto mt-3 max-w-md font-micro text-sm leading-relaxed text-sanctuary-navy/60">
+        <p className="mx-auto mt-3 max-w-md font-micro text-sm leading-relaxed text-sanctuary-navy/70">
           {tenor.subhead}
         </p>
       </header>
@@ -181,7 +181,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
             {grouped ? "What the family carried" : "What you carried"}
           </h2>
           {grouped && (
-            <p className="mb-4 font-micro text-xs text-sanctuary-navy/45">
+            <p className="mb-4 font-micro text-xs text-sanctuary-navy/70">
               Different hands, same direction — everything here kept the family
               on track. Not a competition; a chance to notice.
             </p>
@@ -200,7 +200,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
             <div className="space-y-5">
               {groups.map((g) => (
                 <div key={g.name ?? "household"}>
-                  <p className="mb-2 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sage-release">
+                  <p className="mb-2 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sage-text">
                     {g.name === "Together"
                       ? "Together"
                       : g.name === null
@@ -230,7 +230,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
           {carried.hard_won.length > 0 && (
             <div className="mt-4 rounded-2xl bg-sage-release/8 p-3">
               <p className="font-micro text-xs text-sanctuary-navy/70">
-                <span className="font-semibold text-sage-release">And the hard-won one{carried.hard_won.length === 1 ? "" : "s"}:</span>{" "}
+                <span className="font-semibold text-sage-text">And the hard-won one{carried.hard_won.length === 1 ? "" : "s"}:</span>{" "}
                 {carried.hard_won.map((h) => h.text).join(" · ")} — things you kept
                 meaning to do, and finally did.
               </p>
@@ -239,7 +239,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
 
           {carried.events?.length > 0 && (
             <div className="mt-4 border-t border-sanctuary-navy/10 pt-4">
-              <p className="mb-2 font-micro text-xs text-sanctuary-navy/45">
+              <p className="mb-2 font-micro text-xs text-sanctuary-navy/70">
                 And the week you lived — not tasks, just the days:
               </p>
               <div className="flex flex-wrap gap-2">
@@ -249,7 +249,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
                     className="rounded-full bg-sanctuary-navy/5 px-3 py-1 font-micro text-xs text-sanctuary-navy/75"
                   >
                     {e.name}
-                    <span className="ml-1.5 text-sanctuary-navy/40">{shortDay(e.date)}</span>
+                    <span className="ml-1.5 text-sanctuary-navy/70">{shortDay(e.date)}</span>
                   </span>
                 ))}
               </div>
@@ -264,7 +264,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
           <h2 className="mb-1 font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
             Still waiting
           </h2>
-          <p className="mb-4 font-micro text-xs text-sanctuary-navy/45">
+          <p className="mb-4 font-micro text-xs text-sanctuary-navy/70">
             Long-running things that didn't get their time. No pressure — just a
             chance to decide.
           </p>
@@ -274,19 +274,19 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
                 <span className="font-micro text-sm text-sanctuary-navy/85">
                   {it.text}
                   {it.kind === "waiting" && (
-                    <span className={`ml-2 text-xs ${it.dying ? "text-looming-amber" : "text-sanctuary-navy/45"}`}>
+                    <span className={`ml-2 text-xs ${it.dying ? "text-amber-text" : "text-sanctuary-navy/70"}`}>
                       · quiet {it.days_waiting} days{it.dying ? " — this thread is dying" : ""}
                     </span>
                   )}
                   {it.kind === "intention" && (
-                    <span className="ml-2 text-xs text-sanctuary-navy/45">
+                    <span className="ml-2 text-xs text-sanctuary-navy/70">
                       · come up {it.surfaced_count}×, never scheduled
                     </span>
                   )}
                 </span>
                 {it.action === "schedule" ? (
                   scheduled[it.id] ? (
-                    <span className="ml-auto whitespace-nowrap font-micro text-xs text-sage-release">
+                    <span className="ml-auto whitespace-nowrap font-micro text-xs text-sage-text">
                       ✓ back on your list — we'll find you a window
                     </span>
                   ) : (
@@ -298,7 +298,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
                     </button>
                   )
                 ) : (
-                  <span className="ml-auto whitespace-nowrap font-micro text-xs text-sanctuary-navy/50">
+                  <span className="ml-auto whitespace-nowrap font-micro text-xs text-sanctuary-navy/70">
                     {it.suggestion} →
                   </span>
                 )}
@@ -319,7 +319,7 @@ export default function WeeklyReflection({ familyId, live = true, user, onClose 
         </div>
       )}
 
-      <footer className="mt-10 text-center font-micro text-xs text-sanctuary-navy/40">
+      <footer className="mt-10 text-center font-micro text-xs text-sanctuary-navy/70">
         Breathe out. The week is behind you.
       </footer>
     </main>

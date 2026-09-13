@@ -94,7 +94,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
       <span className="text-sanctuary-navy/80">
         {it.description}
         {it.type === "standing" && (
-          <span className="ml-2 rounded-full bg-sanctuary-navy/5 px-2 py-0.5 text-xs text-sanctuary-navy/50">
+          <span className="ml-2 rounded-full bg-sanctuary-navy/5 px-2 py-0.5 text-xs text-sanctuary-navy/70">
             ongoing
           </span>
         )}
@@ -106,7 +106,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
             ✓ Scheduled it
           </button>
           <button onClick={() => mark(it, "dismissed")}
-                  className="rounded-full border border-sanctuary-navy/15 px-3 py-1 text-xs font-medium text-sanctuary-navy/60 transition hover:bg-sanctuary-navy/5">
+                  className="rounded-full border border-sanctuary-navy/15 px-3 py-1 text-xs font-medium text-sanctuary-navy/70 transition hover:bg-sanctuary-navy/5">
             Not anymore
           </button>
         </span>
@@ -165,7 +165,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
           </p>
           <ul className="mt-2 space-y-2">{aloneIntentions.map(renderIntention)}</ul>
           {windows.length === 0 && (
-            <p className="mt-2 font-micro text-xs text-sanctuary-navy/50">
+            <p className="mt-2 font-micro text-xs text-sanctuary-navy/70">
               No clear windows this week — Exhale keeps looking.
             </p>
           )}
@@ -175,7 +175,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
       {/* Together — the both-of-you windows next to shared intentions */}
       {togetherIntentions.length > 0 && (
         <div className="mb-4 border-t border-sanctuary-navy/10 pt-3">
-          <p className="mb-1 font-micro text-xs font-semibold uppercase text-sanctuary-navy/50">
+          <p className="mb-1 font-micro text-xs font-semibold uppercase text-sanctuary-navy/70">
             🤝 Together
           </p>
           {togetherWindows.length > 0 ? (
@@ -188,7 +188,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
               </p>
             </>
           ) : (
-            <p className="font-micro text-sm text-sanctuary-navy/50">
+            <p className="font-micro text-sm text-sanctuary-navy/70">
               No window with both of you free this week — connect both calendars
               so Exhale can find one.
             </p>
@@ -200,7 +200,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
       {/* On duty — the lull while you've got the kids, for with-kid tasks */}
       {onDutyIntentions.length > 0 && (
         <div className="mb-4 border-t border-sanctuary-navy/10 pt-3">
-          <p className="mb-1 font-micro text-xs font-semibold uppercase text-sanctuary-navy/50">
+          <p className="mb-1 font-micro text-xs font-semibold uppercase text-sanctuary-navy/70">
             🏠 While you've got the kids
           </p>
           {onDutyWindows.length > 0 ? (
@@ -211,7 +211,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
               </p>
             </>
           ) : (
-            <p className="font-micro text-sm text-sanctuary-navy/50">
+            <p className="font-micro text-sm text-sanctuary-navy/70">
               No easy lull this week — these can wait for one.
             </p>
           )}
@@ -221,7 +221,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
 
       {intentions.length === 0 &&
         checkIns.length === 0 && followUps.length === 0 && block.show_add_nudge && (
-          <p className="font-micro text-sm text-sanctuary-navy/50">
+          <p className="font-micro text-sm text-sanctuary-navy/70">
             No personal intentions logged — add one anytime.
           </p>
         )}
@@ -242,7 +242,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
                     Yes 🎉
                   </button>
                   <button onClick={() => answer(fu, "didnt_happen")}
-                          className="rounded-full border border-sanctuary-navy/15 px-3 py-1 text-xs font-medium text-sanctuary-navy/60 transition hover:bg-sanctuary-navy/5">
+                          className="rounded-full border border-sanctuary-navy/15 px-3 py-1 text-xs font-medium text-sanctuary-navy/70 transition hover:bg-sanctuary-navy/5">
                     Didn't get to it
                   </button>
                 </span>
@@ -269,7 +269,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
                     Keep it
                   </button>
                   <button onClick={() => mark(it, "dismissed")}
-                          className="rounded-full border border-sanctuary-navy/15 px-3 py-1 text-xs font-medium text-sanctuary-navy/60 transition hover:bg-sanctuary-navy/5">
+                          className="rounded-full border border-sanctuary-navy/15 px-3 py-1 text-xs font-medium text-sanctuary-navy/70 transition hover:bg-sanctuary-navy/5">
                     Let it go
                   </button>
                 </span>
@@ -307,7 +307,7 @@ export default function TimeForWhatMatters({ block, familyId, live = false, onRe
           </button>
         </form>
       )}
-      {error && <p className="mt-3 font-micro text-xs text-looming-amber">{error}</p>}
+      {error && <p className="mt-3 font-micro text-xs text-amber-text">{error}</p>}
     </section>
   );
 }

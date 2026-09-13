@@ -68,7 +68,7 @@ export default function HelperInvitePanel({ familyId }) {
           🧑‍🍼 Helpers
         </h2>
       </header>
-      <p className="mb-4 font-micro text-sm text-sanctuary-navy/60">
+      <p className="mb-4 font-micro text-sm text-sanctuary-navy/70">
         Invite a grandparent, relative, or regular sitter for specific days. They
         see only those care days and anything you choose to share — never your
         inbox, calendar, or the rest of the household.
@@ -83,7 +83,7 @@ export default function HelperInvitePanel({ familyId }) {
                 "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
                 (on
                   ? "border-sage-release/60 bg-sage-release/20 text-sanctuary-navy"
-                  : "border-sanctuary-navy/15 text-sanctuary-navy/50 hover:bg-sanctuary-navy/5")
+                  : "border-sanctuary-navy/15 text-sanctuary-navy/70 hover:bg-sanctuary-navy/5")
               }>
               {label}
             </button>
@@ -120,7 +120,7 @@ export default function HelperInvitePanel({ familyId }) {
                 <span className="font-semibold text-sanctuary-navy">
                   {h.display_name || "Helper"}
                 </span>
-                <span className="ml-2 text-sanctuary-navy/50">
+                <span className="ml-2 text-sanctuary-navy/70">
                   {h.weekday_labels?.join(", ") || "no days"}
                   {h.shared_obligation_ids?.length
                     ? ` · ${h.shared_obligation_ids.length} shared`
@@ -128,7 +128,7 @@ export default function HelperInvitePanel({ familyId }) {
                 </span>
               </div>
               <button onClick={() => revoke(h.user_id)}
-                className="text-xs text-looming-amber/90 underline hover:text-looming-amber">
+                className="text-xs font-medium text-amber-text underline decoration-1 underline-offset-2 hover:decoration-2">
                 Revoke
               </button>
             </li>
@@ -136,7 +136,7 @@ export default function HelperInvitePanel({ familyId }) {
         </ul>
       )}
 
-      {error && <p className="mt-3 font-micro text-xs text-looming-amber">{error}</p>}
+      {error && <p className="mt-3 font-micro text-xs text-amber-text">{error}</p>}
     </section>
   );
 }

@@ -18,11 +18,26 @@ export default {
         // Filled primary buttons — a solid navy that stays legible under white
         // text in BOTH themes (doesn't invert with the ink token).
         "ink-solid": "rgb(var(--ink-solid) / <alpha-value>)",
+        // Text-safe accents. sage-release/looming-amber are decorative values
+        // tuned for fills and halos; used as TEXT on a light ground they sit
+        // at 2.95:1 and 2.39:1 — unreadable. Anything a person reads uses
+        // these instead. See index.css.
+        "sage-text": "rgb(var(--sage-text) / <alpha-value>)",
+        "amber-text": "rgb(var(--amber-text) / <alpha-value>)",
       },
       fontFamily: {
         display: ["'Instrument Serif'", "ui-serif", "Georgia", "serif"],
         interface: ["'Inter Tight'", "system-ui", "-apple-system", "sans-serif"],
         micro: ["'Plus Jakarta Sans'", "system-ui", "sans-serif"],
+      },
+      // Type scale lifted for legibility: the old xs/sm (12/14px) carried
+      // most of the app's body copy, which is too small to read comfortably
+      // on a phone. Every step gains 1-2px and a roomier line-height.
+      fontSize: {
+        xs: ["0.8125rem", { lineHeight: "1.15rem" }],   // 13px (was 12)
+        sm: ["0.9375rem", { lineHeight: "1.4rem" }],    // 15px (was 14)
+        base: ["1.0625rem", { lineHeight: "1.6rem" }],  // 17px (was 16)
+        lg: ["1.1875rem", { lineHeight: "1.75rem" }],   // 19px (was 18)
       },
       borderRadius: {
         card: "16px",

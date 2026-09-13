@@ -123,7 +123,7 @@ export default function App() {
   if (phase === "loading" || !briefing) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="font-display text-2xl italic text-sanctuary-navy/50">
+        <p className="font-display text-2xl italic text-sanctuary-navy/70">
           Exhale is preparing your briefing…
         </p>
       </div>
@@ -199,7 +199,7 @@ export default function App() {
         )}
 
         {source === "fixture" && (
-          <p className="pb-2 text-center font-micro text-xs text-sanctuary-navy/30">
+          <p className="pb-2 text-center font-micro text-xs text-sanctuary-navy/70">
             offline preview · backend not connected
           </p>
         )}

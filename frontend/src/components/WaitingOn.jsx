@@ -60,7 +60,7 @@ export default function WaitingOn({ familyId }) {
           ⏱ Waiting On
         </h2>
         {watch.summary.need_nudge > 0 && (
-          <span className="font-micro text-xs text-looming-amber">
+          <span className="font-micro text-xs text-amber-text">
             {watch.summary.need_nudge} need a nudge
           </span>
         )}
@@ -74,7 +74,7 @@ export default function WaitingOn({ familyId }) {
                 <p className="font-semibold text-sanctuary-navy">
                   {item.indicator} {item.who} — {item.about}
                 </p>
-                <p className="text-xs text-sanctuary-navy/50">
+                <p className="text-xs text-sanctuary-navy/70">
                   quiet for {item.days_waiting} day{item.days_waiting === 1 ? "" : "s"} ·{" "}
                   {item.suggested_action}
                 </p>
@@ -101,7 +101,7 @@ export default function WaitingOn({ familyId }) {
           Track it
         </button>
       </form>
-      {error && <p className="mt-2 font-micro text-xs text-looming-amber">{error}</p>}
+      {error && <p className="mt-2 font-micro text-xs text-amber-text">{error}</p>}
     </section>
   );
 }

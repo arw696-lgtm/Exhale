@@ -87,7 +87,7 @@ export default function AskExhale({ familyId, live, onChanged }) {
             setOpen(true);
             setTimeout(() => inputRef.current?.focus(), 50);
           }}
-          className="w-full rounded-full border border-sanctuary-navy/12 bg-surface px-5 py-3 text-left font-micro text-sm text-sanctuary-navy/45 shadow-card transition hover:border-sage-release/40"
+          className="w-full rounded-full border border-sanctuary-navy/12 bg-surface px-5 py-3 text-left font-micro text-sm text-sanctuary-navy/70 shadow-card transition hover:border-sage-release/40"
         >
           Ask Exhale — "do I have any free time today?"
         </button>
@@ -99,19 +99,19 @@ export default function AskExhale({ familyId, live, onChanged }) {
     <div className="mx-auto max-w-2xl px-4 pb-4">
       <section className="rounded-card bg-surface p-4 shadow-card">
         <header className="mb-3 flex items-baseline justify-between">
-          <h2 className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+          <h2 className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
             Ask Exhale
           </h2>
           <button
             onClick={() => setOpen(false)}
-            className="font-micro text-xs text-sanctuary-navy/40 hover:text-sanctuary-navy"
+            className="font-micro text-xs text-sanctuary-navy/70 hover:text-sanctuary-navy"
           >
             Close
           </button>
         </header>
 
         {turns.length === 0 && (
-          <p className="mb-3 font-micro text-xs leading-relaxed text-sanctuary-navy/50">
+          <p className="mb-3 font-micro text-xs leading-relaxed text-sanctuary-navy/70">
             Ask about the week, who's covering what, or when you're free. If
             you ask for a time, Exhale will offer one you can hold — it never
             books anything on its own.
@@ -126,12 +126,12 @@ export default function AskExhale({ familyId, live, onChanged }) {
                   t.role === "user"
                     ? "font-micro text-sm text-sanctuary-navy/85"
                     : t.error
-                    ? "font-micro text-sm text-looming-amber"
+                    ? "font-micro text-sm text-amber-text"
                     : "font-micro text-sm leading-relaxed text-sanctuary-navy/70"
                 }
               >
                 {t.role === "user" ? (
-                  <span className="text-sanctuary-navy/45">You: </span>
+                  <span className="text-sanctuary-navy/70">You: </span>
                 ) : null}
                 {t.text}
               </p>
@@ -141,7 +141,7 @@ export default function AskExhale({ familyId, live, onChanged }) {
                   <p className="font-micro text-sm text-sanctuary-navy/85">
                     {t.proposal.title}
                   </p>
-                  <p className="mt-0.5 font-micro text-xs text-sanctuary-navy/55">
+                  <p className="mt-0.5 font-micro text-xs text-sanctuary-navy/70">
                     {prettySlot(t.proposal)}
                   </p>
                   <button
@@ -154,14 +154,14 @@ export default function AskExhale({ familyId, live, onChanged }) {
                 </div>
               )}
               {t.held && (
-                <p className="mt-1 font-micro text-xs text-sage-release">
+                <p className="mt-1 font-micro text-xs text-sage-text">
                   Held — it's on the calendar.
                 </p>
               )}
             </div>
           ))}
           {busy && (
-            <p className="font-micro text-sm text-sanctuary-navy/40">Thinking…</p>
+            <p className="font-micro text-sm text-sanctuary-navy/70">Thinking…</p>
           )}
         </div>
 
@@ -171,7 +171,7 @@ export default function AskExhale({ familyId, live, onChanged }) {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Do I have any free time today?"
-            className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/35 focus:border-sage-release focus:outline-none"
+            className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
           />
           <button
             type="submit"

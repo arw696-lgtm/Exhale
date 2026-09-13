@@ -19,7 +19,7 @@ export default function HouseholdScreen({ briefing, familyId, live, onRefresh })
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <header className="mb-6">
-        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-release">
+        <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.16em] text-sage-text">
           Household
         </p>
         <h1 className="mt-2 font-display text-[2rem] italic text-sanctuary-navy">
@@ -30,7 +30,7 @@ export default function HouseholdScreen({ briefing, familyId, live, onRefresh })
       {!live && (
         <div className="mb-8 rounded-[22px] border border-sanctuary-navy/10 bg-surface p-8 text-center shadow-card">
           <p className="font-display text-xl italic text-sanctuary-navy">Connect to set up.</p>
-          <p className="mx-auto mt-2 max-w-xs font-micro text-sm text-sanctuary-navy/55">
+          <p className="mx-auto mt-2 max-w-xs font-micro text-sm text-sanctuary-navy/70">
             Sign in to configure your household, connect calendars, and invite
             helpers.
           </p>

@@ -35,7 +35,7 @@ export default function DraftModal({ draft, busy, onApprove, onClose }) {
       >
         <header className="flex items-start justify-between gap-4 px-6 pt-5">
           <div>
-            <p className="font-micro text-xs font-semibold uppercase tracking-wide text-sanctuary-navy/50">
+            <p className="font-micro text-xs font-semibold uppercase tracking-wide text-sanctuary-navy/70">
               {draft.delivery_vector.replace("_", " ")} · Draft
             </p>
             <h3 className="mt-1 font-interface text-lg font-semibold tracking-interface text-sanctuary-navy">
@@ -44,7 +44,7 @@ export default function DraftModal({ draft, busy, onApprove, onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="font-micro text-xl leading-none text-sanctuary-navy/40 hover:text-sanctuary-navy"
+            className="font-micro text-xl leading-none text-sanctuary-navy/70 hover:text-sanctuary-navy"
             aria-label="Close"
           >
             ×
@@ -59,10 +59,10 @@ export default function DraftModal({ draft, busy, onApprove, onClose }) {
             in full before any button. Sent from the user's address, by them. */}
         {hasHandoff && (
           <section className="mx-6 mt-4 rounded-xl border border-sage-release/30 bg-pure-breath p-4">
-            <p className="font-micro text-[11px] font-semibold uppercase tracking-wide text-sage-release">
+            <p className="font-micro text-[11px] font-semibold uppercase tracking-wide text-sage-text">
               Your reply, ready to send
             </p>
-            <p className="mt-2 font-micro text-xs text-sanctuary-navy/55">
+            <p className="mt-2 font-micro text-xs text-sanctuary-navy/70">
               To: {draft.reply_to}
               <br />
               Subject: {draft.reply_subject}
@@ -70,7 +70,7 @@ export default function DraftModal({ draft, busy, onApprove, onClose }) {
             <pre className="mt-3 whitespace-pre-wrap font-micro text-sm leading-relaxed text-sanctuary-navy">
               {draft.reply_body}
             </pre>
-            <p className="mt-3 font-micro text-xs text-sanctuary-navy/45">
+            <p className="mt-3 font-micro text-xs text-sanctuary-navy/70">
               This opens in your own mail app — you can edit anything before it
               goes, and it sends from your address, not Exhale's.
             </p>

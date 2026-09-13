@@ -50,7 +50,7 @@ export default function RetailCleanupPanel({ familyId, onChanged }) {
           Tidy up the week
         </h2>
       </header>
-      <p className="mb-3 font-micro text-sm text-sanctuary-navy/60">
+      <p className="mb-3 font-micro text-sm text-sanctuary-navy/70">
         {items.length} item{items.length === 1 ? "" : "s"} in your week
         {items.length === 1 ? " looks" : " look"} like a company writing to a
         customer — orders, statements, account notices — rather than something
@@ -62,7 +62,7 @@ export default function RetailCleanupPanel({ familyId, onChanged }) {
         {items.map((i) => (
           <li
             key={i.obligation_node_id}
-            className="font-micro text-xs text-sanctuary-navy/55"
+            className="font-micro text-xs text-sanctuary-navy/70"
           >
             {i.title}
           </li>
@@ -76,12 +76,12 @@ export default function RetailCleanupPanel({ familyId, onChanged }) {
       >
         {busy ? "Clearing…" : `Clear ${items.length === 1 ? "it" : "these"}`}
       </button>
-      <p className="mt-2 font-micro text-xs text-sanctuary-navy/40">
+      <p className="mt-2 font-micro text-xs text-sanctuary-navy/70">
         They stay in the record — they just stop asking for your week.
       </p>
 
       {cleared != null && (
-        <p className="mt-3 font-micro text-xs text-sage-release">
+        <p className="mt-3 font-micro text-xs text-sage-text">
           Cleared {cleared}. Your week is about your family again.
         </p>
       )}

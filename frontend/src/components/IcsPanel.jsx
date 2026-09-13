@@ -75,7 +75,7 @@ export default function IcsPanel({ familyId, hasCoverageModel, onChanged }) {
         </h2>
       </header>
 
-      <p className="mb-3 font-micro text-sm text-sanctuary-navy/60">
+      <p className="mb-3 font-micro text-sm text-sanctuary-navy/70">
         For calendars that don't have a "Connect" button — a personal iPhone
         calendar, a shared family iCloud calendar, anything published as a
         link. Exhale reads it as real, observed time, so coverage gaps built
@@ -86,7 +86,7 @@ export default function IcsPanel({ familyId, hasCoverageModel, onChanged }) {
         <summary className="cursor-pointer font-micro text-sm font-medium text-sanctuary-navy/85">
           Where do I get an iPhone/iCloud calendar link?
         </summary>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 font-micro text-xs leading-relaxed text-sanctuary-navy/65">
+        <ol className="mt-2 list-decimal space-y-1 pl-5 font-micro text-xs leading-relaxed text-sanctuary-navy/70">
           <li>
             Open <span className="font-medium">icloud.com/calendar</span> in a
             browser (or the info button next to a calendar in the iPhone
@@ -104,7 +104,7 @@ export default function IcsPanel({ familyId, hasCoverageModel, onChanged }) {
             and paste it below.
           </li>
         </ol>
-        <p className="mt-2 font-micro text-xs text-sanctuary-navy/45">
+        <p className="mt-2 font-micro text-xs text-sanctuary-navy/70">
           No hosting to set up? Export the calendar to a .ics file instead and
           upload it below — same result, no link required.
         </p>
@@ -115,14 +115,14 @@ export default function IcsPanel({ familyId, hasCoverageModel, onChanged }) {
           value={attendees}
           onChange={(e) => setAttendees(e.target.value)}
           placeholder="Who is this calendar for? (e.g. Ali)"
-          className="w-full rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/35 focus:border-sage-release focus:outline-none"
+          className="w-full rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
         />
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://p.../published.ics"
-            className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/35 focus:border-sage-release focus:outline-none"
+            className="min-w-0 flex-1 rounded-full border border-sanctuary-navy/15 bg-pure-breath px-4 py-2 font-micro text-sm text-sanctuary-navy placeholder:text-sanctuary-navy/70 focus:border-sage-release focus:outline-none"
           />
           <button
             onClick={doUrlSync}
@@ -133,13 +133,13 @@ export default function IcsPanel({ familyId, hasCoverageModel, onChanged }) {
           </button>
         </div>
         {webcalHint(url) && (
-          <p className="font-micro text-xs text-looming-amber">
+          <p className="font-micro text-xs text-amber-text">
             Change "webcal://" to "https://" at the start of the link.
           </p>
         )}
 
         <div className="flex items-center gap-2 pt-1">
-          <span className="font-micro text-xs text-sanctuary-navy/45">or</span>
+          <span className="font-micro text-xs text-sanctuary-navy/70">or</span>
           <input
             ref={fileRef}
             type="file"
@@ -158,12 +158,12 @@ export default function IcsPanel({ familyId, hasCoverageModel, onChanged }) {
       </div>
 
       {result && (
-        <p className="mt-3 font-micro text-xs text-sanctuary-navy/60">
+        <p className="mt-3 font-micro text-xs text-sanctuary-navy/70">
           Synced {result.synced_busy_events} event
           {result.synced_busy_events === 1 ? "" : "s"} for {result.holder}.
         </p>
       )}
-      {error && <p className="mt-3 font-micro text-xs text-looming-amber">{error}</p>}
+      {error && <p className="mt-3 font-micro text-xs text-amber-text">{error}</p>}
     </section>
   );
 }

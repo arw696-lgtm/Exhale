@@ -68,7 +68,7 @@ export default function LearningScoreboard({ familyId }) {
         </h2>
         <p className="mt-2 font-display text-xl italic text-sanctuary-navy">{headline}</p>
         {data.signals_seen > 0 && (
-          <p className="mt-1 font-micro text-xs text-sanctuary-navy/45">
+          <p className="mt-1 font-micro text-xs text-sanctuary-navy/70">
             {data.signals_seen} signal{data.signals_seen === 1 ? "" : "s"} seen
             {data.days_observed > 0 && ` · listening for ${data.days_observed} day${data.days_observed === 1 ? "" : "s"}`}
           </p>
@@ -101,7 +101,7 @@ export default function LearningScoreboard({ familyId }) {
       {/* Patterns held — each cites its evidence; each can be marked "new to me". */}
       {held.count > 0 && (
         <div className="mb-4">
-          <p className="mb-2 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+          <p className="mb-2 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
             What it's learned
           </p>
           <ul className="space-y-2">
@@ -113,11 +113,11 @@ export default function LearningScoreboard({ familyId }) {
                     {r.detail}
                   </span>
                   {acked[id] ? (
-                    <span className="whitespace-nowrap font-micro text-xs text-sage-release">✓ new to us</span>
+                    <span className="whitespace-nowrap font-micro text-xs text-sage-text">✓ new to us</span>
                   ) : (
                     <button
                       onClick={() => ackRule(r.subject)}
-                      className="whitespace-nowrap rounded-full border border-sanctuary-navy/15 px-2.5 py-0.5 font-micro text-[11px] text-sanctuary-navy/60 transition hover:bg-pure-breath"
+                      className="whitespace-nowrap rounded-full border border-sanctuary-navy/15 px-2.5 py-0.5 font-micro text-[11px] text-sanctuary-navy/70 transition hover:bg-pure-breath"
                       title="Mark this as something you didn't already know"
                     >
                       I didn't know this
@@ -132,7 +132,7 @@ export default function LearningScoreboard({ familyId }) {
 
       {/* Emerging — honest "almost", so still-learning reads as motion. */}
       {held.emerging.length > 0 && (
-        <p className="mb-4 font-micro text-xs text-sanctuary-navy/45">
+        <p className="mb-4 font-micro text-xs text-sanctuary-navy/70">
           Almost there:{" "}
           {held.emerging
             .map((e) => `“${e.subject}” (${e.samples} of ${e.samples + e.needs} seen)`)
@@ -143,7 +143,7 @@ export default function LearningScoreboard({ familyId }) {
       {/* Trust — is it right, not just learning? The number Milo died on. */}
       {board.trust && (
         <div className="mb-4 border-t border-sanctuary-navy/10 pt-4">
-          <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+          <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
             Trust
           </p>
           {board.trust.confident_accuracy != null ? (
@@ -157,7 +157,7 @@ export default function LearningScoreboard({ familyId }) {
               {board.trust.corrected > 0 && ` (${board.trust.corrected} needed a fix)`}.
             </StatLine>
           ) : (
-            <p className="font-micro text-sm text-sanctuary-navy/45">
+            <p className="font-micro text-sm text-sanctuary-navy/70">
               Nothing asserted yet — no score is more honest than a perfect one.
             </p>
           )}
@@ -167,7 +167,7 @@ export default function LearningScoreboard({ familyId }) {
       {/* Coverage foresight + surprises — the two outcome measures. */}
       <div className="grid grid-cols-2 gap-3 border-t border-sanctuary-navy/10 pt-4">
         <div>
-          <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+          <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
             Coverage foresight
           </p>
           {foresight ? (
@@ -187,13 +187,13 @@ export default function LearningScoreboard({ familyId }) {
                 ` ${foresight.acted_on_this_week} caught & handled this week.`}
             </StatLine>
           ) : (
-            <p className="font-micro text-sm text-sanctuary-navy/45">
+            <p className="font-micro text-sm text-sanctuary-navy/70">
               Set up coverage to measure this.
             </p>
           )}
         </div>
         <div>
-          <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+          <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
             Surprises confirmed
           </p>
           {surprises.confirmed > 0 ? (
@@ -202,7 +202,7 @@ export default function LearningScoreboard({ familyId }) {
               thing{surprises.confirmed === 1 ? "" : "s"} you said you didn't know.
             </StatLine>
           ) : (
-            <p className="font-micro text-sm text-sanctuary-navy/45">
+            <p className="font-micro text-sm text-sanctuary-navy/70">
               None yet — mark a pattern above as new when it surprises you.
             </p>
           )}

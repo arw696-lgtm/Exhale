@@ -52,7 +52,7 @@ export default function ReviewQueue({ familyId, onChanged }) {
         <h2 className="font-interface text-sm font-semibold uppercase tracking-interface text-sanctuary-navy/70">
           ？ Needs Your Confirmation
         </h2>
-        <span className="font-micro text-xs text-sanctuary-navy/50">
+        <span className="font-micro text-xs text-sanctuary-navy/70">
           {review.count} held for review
         </span>
       </header>
@@ -62,15 +62,15 @@ export default function ReviewQueue({ familyId, onChanged }) {
           <li key={item.extraction_id} className="border-l-2 border-looming-amber/60 pl-3 font-micro text-sm">
             <div className="flex items-baseline justify-between gap-2">
               <p className="font-semibold text-sanctuary-navy">{item.extracted_event}</p>
-              <span className="whitespace-nowrap text-xs text-sanctuary-navy/50">{item.event_date}</span>
+              <span className="whitespace-nowrap text-xs text-sanctuary-navy/70">{item.event_date}</span>
             </div>
-            <p className="mt-1 text-xs text-sanctuary-navy/60">
+            <p className="mt-1 text-xs text-sanctuary-navy/70">
               Held because: {TIER_LABEL[item.artifact_tier] ?? item.artifact_tier}
               {item.event_date_origin === "INFERRED" && " · date was inferred, not read"}
               {item.source_document_name && ` · from “${item.source_document_name}”`}
             </p>
             {item.missing_fields?.length > 0 && (
-              <p className="mt-0.5 text-xs text-sanctuary-navy/45">
+              <p className="mt-0.5 text-xs text-sanctuary-navy/70">
                 Unknown: {item.missing_fields.join(", ").replaceAll("_", " ")}
               </p>
             )}
@@ -85,7 +85,7 @@ export default function ReviewQueue({ familyId, onChanged }) {
               <button
                 onClick={() => act(dismissExtraction, item.extraction_id)}
                 disabled={busyId === item.extraction_id}
-                className="rounded-full border border-sanctuary-navy/15 px-4 py-1.5 font-medium text-sanctuary-navy/60 transition hover:bg-sanctuary-navy/5 disabled:opacity-50"
+                className="rounded-full border border-sanctuary-navy/15 px-4 py-1.5 font-medium text-sanctuary-navy/70 transition hover:bg-sanctuary-navy/5 disabled:opacity-50"
               >
                 ✕ Not a real obligation
               </button>
@@ -94,7 +94,7 @@ export default function ReviewQueue({ familyId, onChanged }) {
         ))}
       </ul>
 
-      {error && <p className="mt-3 font-micro text-xs text-looming-amber">{error}</p>}
+      {error && <p className="mt-3 font-micro text-xs text-amber-text">{error}</p>}
     </section>
   );
 }

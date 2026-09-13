@@ -12,10 +12,10 @@ export default function DependencyWatch({ watchItems = [], completed = [] }) {
   if (completed.length === 0 && watchItems.length === 0) {
     return (
       <section className="rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
-        <h2 className="mb-3 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+        <h2 className="mb-3 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
           Dependency watch
         </h2>
-        <p className="font-micro text-sm text-sanctuary-navy/55">
+        <p className="font-micro text-sm text-sanctuary-navy/70">
           Every tracked prerequisite is clear.
         </p>
       </section>
@@ -24,14 +24,14 @@ export default function DependencyWatch({ watchItems = [], completed = [] }) {
 
   return (
     <section className="rounded-[22px] border border-sanctuary-navy/10 bg-surface p-5 shadow-card">
-      <h2 className="mb-4 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/45">
+      <h2 className="mb-4 font-interface text-[11px] font-semibold uppercase tracking-[0.13em] text-sanctuary-navy/70">
         Dependency watch
       </h2>
 
       <ul className="space-y-3">
         {completed.map((c) => (
           <li key={c.title} className="flex items-start gap-3 font-micro text-sm">
-            <span className="mt-0.5 grid h-[18px] w-[18px] flex-none place-items-center rounded-full bg-sage-release/15 text-[11px] font-bold text-sage-release">
+            <span className="mt-0.5 grid h-[18px] w-[18px] flex-none place-items-center rounded-full bg-sage-release/15 text-[11px] font-bold text-sage-text">
               ✓
             </span>
             <span className="text-sanctuary-navy/70">
@@ -46,12 +46,12 @@ export default function DependencyWatch({ watchItems = [], completed = [] }) {
             <div className="text-sanctuary-navy">
               <p className="font-semibold">
                 {w.title}
-                <span className="ml-2 font-medium text-sanctuary-navy/50">still open</span>
+                <span className="ml-2 font-medium text-sanctuary-navy/70">still open</span>
               </p>
               {w.detail && (
                 <p className="mt-1 text-sanctuary-navy/70">
                   {w.detail}{" "}
-                  <button className="ml-1 font-semibold text-sage-release underline-offset-2 hover:underline">
+                  <button className="ml-1 font-semibold text-sage-text underline-offset-2 hover:underline">
                     Add to cart
                   </button>
                 </p>

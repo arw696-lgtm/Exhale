@@ -52,8 +52,8 @@ export default function WhyTrace({ why, basis }) {
   if (lines.length === 0) return null;
 
   return (
-    <details className="mt-2 font-micro text-xs text-sanctuary-navy/60">
-      <summary className="cursor-pointer select-none font-medium text-sanctuary-navy/50 hover:text-sanctuary-navy/80">
+    <details className="mt-2 font-micro text-xs text-sanctuary-navy/70">
+      <summary className="cursor-pointer select-none font-medium text-sanctuary-navy/70 hover:text-sanctuary-navy/80">
         Why does Exhale think this?
       </summary>
       <ul className="mt-1.5 space-y-1 border-l border-sanctuary-navy/10 pl-3">

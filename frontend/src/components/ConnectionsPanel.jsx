@@ -96,7 +96,7 @@ export default function ConnectionsPanel({ familyId }) {
             <li key={key} className="flex items-center justify-between font-micro text-sm">
               <div>
                 <p className="font-semibold text-sanctuary-navy">{label}</p>
-                <p className="mt-0.5 text-sanctuary-navy/60">
+                <p className="mt-0.5 text-sanctuary-navy/70">
                   {status.connected
                     ? `Connected${
                         (status.accounts ?? 1) > 1 ? ` · ${status.accounts} accounts` : ""
@@ -127,11 +127,11 @@ export default function ConnectionsPanel({ familyId }) {
       </ul>
 
       {feedUrl && (
-        <div className="mt-4 flex items-start justify-between gap-3 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/60">
+        <div className="mt-4 flex items-start justify-between gap-3 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/70">
           <span>
             <span className="font-semibold text-sanctuary-navy/80">Family calendar feed</span>
             {" — what's protected, what's due, and where cover is needed. Subscribe on a phone, or paste it into a family display (Skylight: Sync new calendar → Calendar URL)."}
-            <span className="mt-1 block text-sanctuary-navy/45">
+            <span className="mt-1 block text-sanctuary-navy/70">
               Anyone with this link can read the feed — share it like a password.
             </span>
           </span>
@@ -149,7 +149,7 @@ export default function ConnectionsPanel({ familyId }) {
       )}
 
       {notify && (
-        <div className="mt-4 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/60">
+        <div className="mt-4 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/70">
           <p className="font-semibold text-sanctuary-navy/80">🔴 Critical alerts by email</p>
           <p className="mt-0.5">
             When something urgent surfaces, Exhale emails you — each alert exactly
@@ -177,10 +177,10 @@ export default function ConnectionsPanel({ familyId }) {
                 Send test
               </button>
             )}
-            {notifyStatus && <span className="text-sanctuary-navy/60">{notifyStatus}</span>}
+            {notifyStatus && <span className="text-sanctuary-navy/70">{notifyStatus}</span>}
           </div>
           {notify.email && !notify.smtp_configured && (
-            <p className="mt-1.5 text-looming-amber/90">
+            <p className="mt-1.5 text-amber-text">
               Address saved, but this server has no outgoing email configured yet
               (EXHALE_SMTP_HOST) — alerts will start once it does.
             </p>
@@ -188,13 +188,13 @@ export default function ConnectionsPanel({ familyId }) {
         </div>
       )}
 
-      <p className="mt-4 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/40">
+      <p className="mt-4 border-t border-sanctuary-navy/10 pt-3 font-micro text-xs text-sanctuary-navy/70">
         No account setup on your end — one click, the provider's own sign-in. Or
         paste a published calendar link / upload a `.ics` file.
       </p>
 
       {error && (
-        <p className="mt-3 font-micro text-xs text-looming-amber">
+        <p className="mt-3 font-micro text-xs text-amber-text">
           {error.includes("not configured")
             ? "That sign-in isn't set up on this server yet."
             : error}

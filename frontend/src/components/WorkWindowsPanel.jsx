@@ -97,7 +97,7 @@ export default function WorkWindowsPanel({ familyId }) {
       {plan && (
         <div className="mt-4">
           {plan.windows.length === 0 ? (
-            <p className="font-micro text-sm text-sanctuary-navy/60">
+            <p className="font-micro text-sm text-sanctuary-navy/70">
               Couldn't find you a clear stretch this week — every free moment,
               the kids need someone. Syncing more calendars sometimes surfaces
               time you can't see from here.
@@ -110,12 +110,12 @@ export default function WorkWindowsPanel({ familyId }) {
                     <span className="font-semibold text-sanctuary-navy">
                       {fmtDay(w.start)} · {fmt(w.start)}–{fmt(w.end)}
                     </span>
-                    <span className="ml-2 text-xs text-sanctuary-navy/50">
+                    <span className="ml-2 text-xs text-sanctuary-navy/70">
                       {w.child_covered_by.join(", ")} · {w.duration_hours}h
                     </span>
                   </span>
                   {added[w.start] ? (
-                    <span className="whitespace-nowrap text-xs font-medium text-sanctuary-navy/60">
+                    <span className="whitespace-nowrap text-xs font-medium text-sanctuary-navy/70">
                       ✓ {dayPart(w.start)} is yours — on your{" "}
                       {PROVIDER_LABEL[added[w.start]] ?? added[w.start]} calendar
                     </span>
@@ -131,14 +131,14 @@ export default function WorkWindowsPanel({ familyId }) {
               ))}
             </ul>
           )}
-          <p className="mt-3 font-micro text-xs text-sanctuary-navy/40">
+          <p className="mt-3 font-micro text-xs text-sanctuary-navy/70">
             {plan.windows.length} window{plan.windows.length === 1 ? "" : "s"} of
             real time this week — {plan.summary.total_hours} hours that are
             genuinely yours: you're free, and the kids are looked after.
           </p>
         </div>
       )}
-      {error && <p className="mt-3 font-micro text-xs text-looming-amber">{error}</p>}
+      {error && <p className="mt-3 font-micro text-xs text-amber-text">{error}</p>}
     </section>
   );
 }

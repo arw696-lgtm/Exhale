@@ -36,7 +36,7 @@ export default function CostMeterPanel({ familyId }) {
         Running costs
       </h2>
       {all_time.calls === 0 ? (
-        <p className="font-micro text-sm text-sanctuary-navy/55">
+        <p className="font-micro text-sm text-sanctuary-navy/70">
           No AI spend yet — everything so far ran on the free deterministic
           engine. When Exhale does call its AI (reading a tricky email, a
           photo), the real cost shows here.
@@ -48,7 +48,7 @@ export default function CostMeterPanel({ familyId }) {
               <p className="font-display text-2xl italic text-sanctuary-navy">
                 {usd(week.estimated_cost_usd)}
               </p>
-              <p className="font-micro text-xs text-sanctuary-navy/45">
+              <p className="font-micro text-xs text-sanctuary-navy/70">
                 this week · {week.calls} AI call{week.calls === 1 ? "" : "s"}
               </p>
             </div>
@@ -57,13 +57,13 @@ export default function CostMeterPanel({ familyId }) {
                 <p className="font-display text-2xl italic text-sanctuary-navy/80">
                   {usd(projected_monthly_usd)}
                 </p>
-                <p className="font-micro text-xs text-sanctuary-navy/45">
+                <p className="font-micro text-xs text-sanctuary-navy/70">
                   monthly pace
                 </p>
               </div>
             )}
           </div>
-          <p className="mt-3 font-micro text-xs text-sanctuary-navy/40">
+          <p className="mt-3 font-micro text-xs text-sanctuary-navy/70">
             Planning estimates from real token counts · {all_time.calls} calls
             all time ({usd(all_time.estimated_cost_usd)}). Routine extractions
             are free — only AI-assisted reads cost anything.

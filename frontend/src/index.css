@@ -9,8 +9,14 @@
   --ink: 26 43 76;        /* Sanctuary Navy — text, borders */
   --canvas: 244 246 249;  /* Pure Breath — page ground */
   --surface: 255 255 255; /* card / panel */
-  --sage: 124 157 150;    /* Sage Release — safe / shared / success */
-  --amber: 226 149 120;   /* Looming Amber — attention, not alarm */
+  --sage: 124 157 150;    /* Sage Release — fills, halos, borders */
+  --amber: 226 149 120;   /* Looming Amber — fills, dots, halos */
+  /* Text-safe accents. The decorative values above are far too light to read
+     on a light ground (sage 2.95:1, amber 2.39:1 — both below even the 3:1
+     large-text floor, on the links and deadlines that matter most). These are
+     the same hues darkened until they clear 4.5:1 on white AND on canvas. */
+  --sage-text: 89 119 113;
+  --amber-text: 187 80 40;
   --ink-solid: 26 43 76;  /* filled primary button (white text on it) */
   color-scheme: light;
 }
@@ -21,6 +27,8 @@
     --surface: 22 35 59;
     --sage: 166 195 188;
     --amber: 237 171 144;
+    --sage-text: 166 195 188;   /* 8.3:1 on dark surface — already legible */
+    --amber-text: 237 171 144;  /* 8.1:1 */
     --ink-solid: 42 62 100;
     color-scheme: dark;
   }
@@ -28,12 +36,14 @@
 /* The viewer's explicit toggle wins over the OS preference, both directions. */
 :root[data-theme="light"] {
   --ink: 26 43 76; --canvas: 244 246 249; --surface: 255 255 255;
-  --sage: 124 157 150; --amber: 226 149 120; --ink-solid: 26 43 76;
+  --sage: 124 157 150; --amber: 226 149 120;
+  --sage-text: 89 119 113; --amber-text: 187 80 40; --ink-solid: 26 43 76;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
   --ink: 226 232 240; --canvas: 12 20 32; --surface: 22 35 59;
-  --sage: 166 195 188; --amber: 237 171 144; --ink-solid: 42 62 100;
+  --sage: 166 195 188; --amber: 237 171 144;
+  --sage-text: 166 195 188; --amber-text: 237 171 144; --ink-solid: 42 62 100;
   color-scheme: dark;
 }
 
@@ -53,14 +63,30 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The breath — the header glow inhales and exhales. The thesis, made literal. */
+/* The breath — a ball that fills and empties. The thesis, made literal.
+   It was a blurred radial gradient fading its opacity, which read as a
+   smudge rather than a breath; a solid sphere that visibly grows and
+   shrinks is legible at a glance and holds its edge at any size. */
 @keyframes exhale-breathe {
-  0%, 100% { transform: scale(1); opacity: 0.75; }
-  50% { transform: scale(1.14); opacity: 1; }
+  0%, 100% { transform: scale(0.86); }
+  50%      { transform: scale(1); }
 }
 .breath-orb {
+  border-radius: 9999px;
+  /* The glance is a flex column — without this a short viewport shrinks the
+     orb's height and the ball breathes as an egg. */
+  flex: none;
+  /* A lit sphere: bright where the light falls, deepening to the rim. */
+  background:
+    radial-gradient(circle at 38% 34%,
+      rgb(var(--sage) / 0.95) 0%,
+      rgb(var(--sage) / 0.85) 42%,
+      rgb(var(--sage) / 0.55) 72%,
+      rgb(var(--sage) / 0.35) 100%);
+  box-shadow: 0 0 0 1px rgb(var(--sage) / 0.28),
+              0 18px 40px rgb(var(--sage) / 0.30);
   animation: exhale-breathe 7s ease-in-out infinite;
-  transform-origin: 40% 40%;
+  transform-origin: center;
 }
 @media (prefers-reduced-motion: reduce) {
   .breath-orb { animation: none; }
