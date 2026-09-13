@@ -8,6 +8,7 @@ AND the child is covered by someone/something else.
 from datetime import date, datetime, time
 
 from exhale.coverage import (
+    CareAssignment,
     Caregiver,
     CalendarEvent,
     CareRecipient,
@@ -41,22 +42,49 @@ def _andy(events=()):
     return Caregiver(name="Andy", role="PARENT", events=list(events))
 
 
+
+def _ali_holding(day, start, end, **kw):
+    """Ali, with an explicit statement that she has Stevie for a stretch.
+
+    Since a co-parent being off work no longer implies they have the child,
+    every test that wants "Ali covers this" has to say so — which is the point:
+    the engine can only report what the household actually told it.
+    """
+    cg = _ali(**kw)
+    cg.care_assignments.append(
+        CareAssignment(datetime.combine(day, start), datetime.combine(day, end),
+                       note="Ali has Stevie")
+    )
+    return cg
+
 def _engine(caregivers, now=BEFORE):
     return CoverageEngine(STEVIE, caregivers, school=ISLA, now=now)
 
 
 # --- school-day windows -----------------------------------------------------------
-def test_school_day_workable_covers_school_hours_excludes_pickup_pinch():
-    # Wed 9/16 in session. Andy free all day; Ali works 7:30-4:30. Andy can work
-    # while Stevie's at school and while Ali's home — but NOT the drop-off/pickup
-    # pinch (7:30-8:30, 3:30-4:30) when he's the only one with Stevie.
+def test_school_day_workable_is_exactly_the_school_block():
+    """School puts Stevie somewhere. Ali being off work does not.
+
+    This used to also assert 6:00-7:30 and 16:30-22:00 as workable, on the
+    grounds that Ali was home then. She may well have been — but nothing said
+    she had Stevie, and the two parents being home together is family time, not
+    a window either of them can spend. Only the school block survives.
+    """
     windows = _engine([_ali(), _andy()]).open_windows_on(date(2026, 9, 16), "Andy")
     spans = {(w.start.time(), w.end.time()) for w in windows}
-    assert (time(8, 30), time(15, 30)) in spans     # school block is workable
-    assert (time(6, 0), time(7, 30)) in spans        # Ali home before work
-    assert (time(16, 30), time(22, 0)) in spans      # Ali home after work
-    # The pinch is NOT workable — it's childcare, not a gap and not free time.
-    assert not any(s <= time(8, 0) < e for s, e in spans if s >= time(7, 30))
+    assert spans == {(time(8, 30), time(15, 30))}
+    # The drop-off/pickup pinch was never workable and still is not.
+    assert not any(s <= time(8, 0) < e for s, e in spans)
+
+
+def test_a_stated_handover_does_open_a_window():
+    """The feature is intact — it just has to rest on something stated."""
+    ali = _ali_holding(date(2026, 9, 16), time(16, 30), time(22, 0))
+    windows = _engine([ali, _andy()]).open_windows_on(date(2026, 9, 16), "Andy")
+    spans = {(w.start.time(), w.end.time()) for w in windows}
+    assert (time(16, 30), time(22, 0)) in spans
+    evening = next(w for w in windows if w.start.time() == time(16, 30))
+    assert any("Ali" in label for label in evening.child_covered_by)
 
 
 def test_school_block_names_what_covers_the_child():
@@ -74,14 +102,23 @@ def test_caregiver_event_removes_that_window():
 
 
 # --- no-school day ----------------------------------------------------------------
-def test_no_school_day_andy_can_work_only_when_ali_is_home():
-    # 10/15 MEA: no school. Ali works 7:30-4:30. Andy free. Andy can work only
-    # the fringes when Ali's home (before 7:30, after 4:30) — midday he's on duty.
+def test_no_school_day_offers_nothing_until_someone_says_who_has_him():
+    """The case that started this: a day off school is not a day off.
+
+    10/15 is MEA break. Ali works 7:30-4:30, so she is "available" at either
+    end of it — which used to be read as her having Stevie, handing Andy
+    fringe windows nobody had agreed to. On a no-school day with no handover
+    stated, the honest answer is that there is no window at all.
+    """
     windows = _engine([_ali(), _andy()]).open_windows_on(date(2026, 10, 15), "Andy")
+    assert windows == []
+
+
+def test_no_school_day_with_a_handover_offers_exactly_that():
+    ali = _ali_holding(date(2026, 10, 15), time(16, 30), time(22, 0))
+    windows = _engine([ali, _andy()]).open_windows_on(date(2026, 10, 15), "Andy")
     spans = {(w.start.time(), w.end.time()) for w in windows}
-    assert (time(6, 0), time(7, 30)) in spans
-    assert (time(16, 30), time(22, 0)) in spans
-    assert not any(s < time(12, 0) < e for s, e in spans)  # no midday work
+    assert spans == {(time(16, 30), time(22, 0))}
 
 
 # --- suggestion / ranking ---------------------------------------------------------
@@ -130,7 +167,8 @@ def test_live_window_is_trimmed_to_now():
     # At 6pm, the evening window that opened at 4:30 must not include the
     # 90 minutes already gone.
     from datetime import datetime as _dt
-    engine = CoverageEngine(STEVIE, [_ali(), _andy()], school=ISLA,
+    ali = _ali_holding(date(2026, 9, 16), time(16, 30), time(22, 0))
+    engine = CoverageEngine(STEVIE, [ali, _andy()], school=ISLA,
                             now=_dt(2026, 9, 16, 18, 0))
     windows = engine.open_windows_on(date(2026, 9, 16), "Andy")
     evening = next(w for w in windows if w.end.time() == time(22, 0))

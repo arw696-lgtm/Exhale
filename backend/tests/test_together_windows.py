@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from exhale.api import app
 from exhale.coverage import (
+    CareAssignment,
     Caregiver,
     CareRecipient,
     CoverageEngine,
@@ -95,29 +96,33 @@ def test_a_caregiver_we_know_nothing_about_does_not_open_a_window():
     assert fam.shared_windows(["Andy", "Ali"], saturday, saturday, min_hours=1.0) == []
 
 
-def test_a_grandparent_whose_week_we_know_opens_a_together_window():
-    """The feature still works — it just needs something to rest on.
+def test_a_grandparent_who_said_yes_opens_a_together_window():
+    """The feature still works — it just needs someone to have actually said so.
 
-    Grandma works weekdays, so Saturday is genuinely free for her. That is an
-    inference from real information, not from silence, and every window records
-    what it rests on so the interface can say so.
+    Grandma being free on a Saturday is not the same as Grandma having Stevie.
+    One is an absence of plans, the other is an arrangement. Only the second
+    can buy two parents an evening out, so only the second opens a window.
     """
 
     andy = Caregiver(name="Andy", role="PARENT")
     ali = Caregiver(name="Ali", role="PARENT")
+    saturday = date(2026, 9, 19)
     grandma = Caregiver(
         name="Grandma",
         role="RELATIVE",
-        work_pattern=WorkPattern(
-            weekdays=frozenset({0, 1, 2, 3, 4}), start=time(9, 0), end=time(17, 0)
-        ),
+        care_assignments=[
+            CareAssignment(
+                datetime.combine(saturday, time(17, 0)),
+                datetime.combine(saturday, time(22, 0)),
+                note="Grandma has Stevie",
+            )
+        ],
     )
     fam = _family([andy, ali, grandma], school=False)
-    saturday = date(2026, 9, 19)
 
     windows = fam.shared_windows(["Andy", "Ali"], saturday, saturday, min_hours=1.0)
 
-    assert windows, "a relative with a known week should still open a window"
+    assert windows, "a stated arrangement should open a window"
     assert any("Grandma" in label for label in windows[0].child_covered_by)
 
 

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from exhale.api import app
 from exhale.coverage import (
+    CareAssignment,
     Caregiver,
     CareRecipient,
     CoverageEngine,
@@ -93,16 +94,39 @@ def test_work_windows_require_every_child_covered():
 
     family = FamilyCoverage([schooled_f, toddler_f])
     windows = family.work_windows("Andy", MONDAY, MONDAY, min_hours=0.5)
-    # Ali works 9–3 (can't take Nora); school only has Stevie. With Nora
-    # uncovered 9–3, Andy's schooled-child window must NOT survive as 9–3.
-    # Ali is free 8–9 and 15–18 → those stretches cover BOTH kids only outside
-    # school hours for Stevie... Stevie is covered by Ali too when Ali is free.
+    # School has Stevie 9–3 but nothing has Nora, so the schooled child's window
+    # must not survive for the family.
     for w in windows:
         assert not (w.start.time() >= time(9, 0) and w.end.time() <= time(15, 0)), (
             f"window {w.start}–{w.end} exists while the toddler is uncovered")
-    # The surviving windows are exactly when Ali (free) has both kids: 8–9, 15–18.
-    spans = {(w.start.time(), w.end.time()) for w in windows}
-    assert spans == {(time(8, 0), time(9, 0)), (time(15, 0), time(18, 0))}
+    # And nothing survives at the edges either. This used to assert 8–9 and
+    # 15–18, on the grounds that Ali was free then and would therefore have
+    # both children. Nobody had said that; she was simply not at work.
+    assert windows == []
+
+
+def test_a_stated_handover_covers_every_child():
+    """One arrangement has to cover the whole household, not just one child."""
+
+    caregivers = _caregivers()
+    ali = caregivers[1]
+    free_andy = Caregiver(name="Andy")
+    ali.care_assignments.append(
+        CareAssignment(datetime.combine(MONDAY, time(15, 0)),
+                       datetime.combine(MONDAY, time(18, 0)),
+                       note="Ali has both")
+    )
+    schooled = CoverageEngine(CareRecipient("Stevie", time(8, 0), time(18, 0)),
+                              [free_andy, ali], school=_school(), now=NOW)
+    toddler = CoverageEngine(CareRecipient("Nora", time(8, 0), time(18, 0)),
+                             [free_andy, ali], now=NOW)
+
+    windows = FamilyCoverage([schooled, toddler]).work_windows(
+        "Andy", MONDAY, MONDAY, min_hours=0.5)
+
+    assert {(w.start.time(), w.end.time()) for w in windows} == {
+        (time(15, 0), time(18, 0))
+    }
 
 
 def test_family_care_watch_names_children():
